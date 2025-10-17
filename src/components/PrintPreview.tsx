@@ -5,6 +5,7 @@ import { PrinterIcon } from './icons/PrinterIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { FixedPanelPosition, ShutterConfigType, WindowType } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
+import html2pdf from 'html2pdf.js';
 
 interface PrintPreviewProps {
   isOpen: boolean;
@@ -12,12 +13,6 @@ interface PrintPreviewProps {
   items: QuotationItem[];
   settings: QuotationSettings;
   setSettings: (settings: QuotationSettings) => void;
-}
-
-declare global {
-  interface Window {
-    html2pdf: any;
-  }
 }
 
 const PrintDimensionLabel: React.FC<{ value: number; unit?: string, className?: string, style?: React.CSSProperties }> = ({ value, unit = "mm", className, style }) => (
@@ -470,7 +465,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
 
   const handleExportPdf = () => {
     const element = printContainerRef.current;
-    if (!element || !window.html2pdf || isExporting) {
+    if (!element || isExporting) {
         return;
     }
 
@@ -495,7 +490,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
         pagebreak: { mode: 'css', after: '.a4-page' }
     };
 
-    window.html2pdf().from(element).set(opt).save().then(() => {
+    html2pdf().from(element).set(opt).save().then(() => {
         setIsExporting(false);
         element.classList.remove('pdf-export-mode');
     }).catch((err: any) => {
@@ -507,7 +502,6 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
   };
   
   const handlePrint = () => {
-    // This is a standard browser API call to trigger the print dialog.
     window.print();
   };
 

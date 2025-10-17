@@ -7,19 +7,9 @@
     <title>WoodenMax Window Designer</title>
     <meta name="theme-color" content="#1e293b" />
     <link rel="apple-touch-icon" href="https://www.woodenmax.com/wp-content/uploads/2023/04/WoodenMax_Logo_Web_White_192x50.png" />
-    <link rel="manifest" href="data:application/manifest+json;base64,ewogICJzaG9ydF9uYW1lIjogIldvb2Rlbk1heCIsCiAgIm5hbWUiOiAiV29vZGVuTWF4IFdpbmRvdyBEZXNpZ25lciIsCiAgImRlc2NyaXB0aW9uIjogIkEgd2ViLWJhc2VkIHRvb2wgdG8gZGVzaWduIGFuZCB2aXN1YWxpemUgY3VzdG9tIGFsdW1pbml1bSB3aW5kb3dzLiBVc2VycyBjYW4gc3BlY2lmeSBkaW1lbnNpb25zLCBzZWxlY3QgcHJvZmlsZXMsIGFuZCBjb25maWd1cmUgdHJhY2tzIGFuZCBzaHV0dGVycyB0byBnZW5lcmF0ZSBhIGRldGFpbGVkIHZpc3VhbCBtb2RlbCBvZiB0aGVpciB3aW5kb3cgZGVzaWduLiIsCiAgImljb25zIjogWwogICAgewogICAgICAic3JjIjogImh0dHBzOi8vd3d3Lndvb2Rlbm1heC5jb20vd3AtY29udGVudC91cGxvYWRzLzIwMjMvMDQvV29vZGVuTWF4X0xvZ29fV2ViX1doaXRlXzE5Mng1MC5wbmciLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciLAogICAgICAic2l6ZXMiOiAiMTkyeDUwIiwKICAgICAgInB1cnBvc2UiOiAiYW55IG1hc2thYmxlIgogICAgfQogIF0sCiAgInN0YXJ0X3VybCI6ICIuIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAidGhlbWVfY29b3IiOiAiIzFlMjkyYiIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzBmMTcyYSIKfQ==">
+    <link rel="manifest" href="data:application/manifest+json;base64,ewogICJzaG9ydF9uYW1lIjogIldvb2Rlbk1heCIsCiAgIm5hbWUiOiAiV29vZGVuTWF4IFdpbmRvdyBEZXNpZ25lciIsCiAgImRlc2NyaXB0aW9uIjogIkEgd2ViLWJhc2VkIHRvb2wgdG8gZGVzaWduIGFuZCB2aXN1YWxpemUgY3VzdG9tIGFsdW1pbml1bSB3aW5kb3dzLiBVc2VycyBjYW4gc3BlY2lmeSBkaW1lbnNpb25zLCBzZWxlY3QgcHJvZmlsZXMsIGFuZCBjb25maWd1cmUgdHJhY2tzIGFuZCBzaHV0dGVycyB0byBnZW5lcmF0ZSBhIGRldGFpbGVkIHZpc3VhbCBtb2RlbCBvZiB0aGVpciB3aW5kb3cgZGVzaWduLiIsCiAgImljb25zIjogWwogICAgewogICAgICAic3JjIjogImh0dHBzOi8vd3d3Lndvb2Rlbm1heC5jb20vd3AtY29udGVudC91cGxvYWRzLzIwMjMvMDQvV29vZGVuTWF4X0xvZ29fV2ViX1doaXRlXzE5Mng1MC5wbmciLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciLAogICAgICAic2l6ZXMiOiAiMTkyeDUwIiwKICAgICAgInB1cnBvc2UiOiAiYW55IG1hc2thYmxlIgogICAgfQogIF0sCiAgInN0YXJ0X3VybCI6ICIuIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAidGhlbWVfY29sb3IiOiAiIzFlMjkyYiIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzBmMTcyYSIKfQ==">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script type="importmap">
-{
-  "imports": {
-    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
-  }
-}
-</script>
+
 <style>
     .custom-scrollbar::-webkit-scrollbar {
         width: 8px;
@@ -82,6 +72,17 @@
     }
     .print-item, .print-summary, .print-final-details {
         page-break-inside: avoid;
+    }
+
+    /* Styles for PDF Export cleanup */
+    .pdf-export-mode {
+        padding: 0 !important;
+        background-color: white !important;
+    }
+    .pdf-export-mode .a4-page {
+        margin: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
     }
 
     @media print {
@@ -182,10 +183,23 @@
         }
     }
 </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
+    "vite": "https://aistudiocdn.com/vite@^7.1.10",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.0.4",
+    "html2pdf.js": "https://aistudiocdn.com/html2pdf.js@^0.12.1"
+  }
+}
+</script>
 </head>
   <body class="bg-slate-900 text-slate-200">
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <script type="module" src="/src/index.tsx"></script>
     <footer class="text-center text-xs text-slate-500 py-3 bg-slate-900 no-print">
         <p>&copy; 2022 WoodenMax. All rights reserved. Designed by WoodenMax.</p>
         <p><a href="https://www.woodenmax.com" target="_blank" class="hover:text-indigo-400">www.woodenmax.com</a> | <a href="mailto:info@woodenmax.com" class="hover:text-indigo-400">info@woodenmax.com</a></p>
