@@ -1,0 +1,5 @@
+{
+  "name": "WoodenMax Window Designer",
+  "description": "A web-based tool to design and visualize custom aluminium windows. Users can specify dimensions, select profiles, and configure tracks and shutters to generate a detailed visual model of their window design.",
+  "requestFramePermissions": []
+}

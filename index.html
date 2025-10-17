@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WoodenMax Window Designer</title>
+    <meta name="theme-color" content="#1e293b" />
+    <link rel="apple-touch-icon" href="https://www.woodenmax.com/wp-content/uploads/2023/04/WoodenMax_Logo_Web_White_192x50.png" />
+    <link rel="manifest" href="data:application/manifest+json;base64,ewogICJzaG9ydF9uYW1lIjogIldvb2Rlbk1heCIsCiAgIm5hbWUiOiAiV29vZGVuTWF4IFdpbmRvdyBEZXNpZ25lciIsCiAgImRlc2NyaXB0aW9uIjogIkEgd2ViLWJhc2VkIHRvb2wgdG8gZGVzaWduIGFuZCB2aXN1YWxpemUgY3VzdG9tIGFsdW1pbml1bSB3aW5kb3dzLiBVc2VycyBjYW4gc3BlY2lmeSBkaW1lbnNpb25zLCBzZWxlY3QgcHJvZmlsZXMsIGFuZCBjb25maWd1cmUgdHJhY2tzIGFuZCBzaHV0dGVycyB0byBnZW5lcmF0ZSBhIGRldGFpbGVkIHZpc3VhbCBtb2RlbCBvZiB0aGVpciB3aW5kb3cgZGVzaWduLiIsCiAgImljb25zIjogWwogICAgewogICAgICAic3JjIjogImh0dHBzOi8vd3d3Lndvb2Rlbm1heC5jb20vd3AtY29udGVudC91cGxvYWRzLzIwMjMvMDQvV29vZGVuTWF4X0xvZ29fV2ViX1doaXRlXzE5Mng1MC5wbmciLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciLAogICAgICAic2l6ZXMiOiAiMTkyeDUwIiwKICAgICAgInB1cnBvc2UiOiAiYW55IG1hc2thYmxlIgogICAgfQogIF0sCiAgInN0YXJ0X3VybCI6ICIuIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAidGhlbWVfY29b3IiOiAiIzFlMjkyYiIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzBmMTcyYSIKfQ==">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script type="importmap">
+{
+  "imports": {
+    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+<style>
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background-color: rgba(100, 116, 139, 0);
+        border-radius: 20px;
+        border: 3px solid transparent;
+        background-clip: content-box;
+    }
+    .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+        background-color: rgba(100, 116, 139, 0.7);
+    }
+    .custom-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(100, 116, 139, 0) transparent;
+    }
+    .custom-scrollbar:hover {
+        scrollbar-color: rgba(100, 116, 139, 0.7) transparent;
+    }
+
+    /* Print Preview & Final Print Styles */
+    .print-preview-container {
+        font-family: 'Inter', sans-serif;
+    }
+    .a4-page {
+        background: white;
+        width: 210mm;
+        min-height: 297mm;
+        margin: 20px auto;
+        box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        color: #333;
+        padding: 15mm;
+        font-size: 10pt;
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+    }
+    .print-header {
+        height: 40mm;
+        border-bottom: 2px solid #000;
+        padding-bottom: 8px;
+        flex-shrink: 0;
+    }
+    .print-footer {
+        height: 10mm;
+        font-size: 8pt;
+        color: #666;
+        flex-shrink: 0;
+        position: relative;
+    }
+    .print-content {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    .print-item, .print-summary, .print-final-details {
+        page-break-inside: avoid;
+    }
+
+    @media print {
+        html, body {
+            width: 210mm;
+            height: 297mm;
+            margin: 0;
+            padding: 0;
+            background: #fff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            color: black;
+            counter-reset: page;
+        }
+        .no-print {
+            display: none !important;
+        }
+        .print-preview-modal {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            max-width: none !important;
+            max-height: none !important;
+            background: white !important;
+            color: black !important;
+            box-shadow: none !important;
+            border: none !important;
+            overflow: visible !important;
+        }
+        .print-preview-container {
+            background: none !important;
+            padding: 0 !important;
+        }
+        .a4-page {
+            box-shadow: none !important;
+            margin: 0 !important;
+            min-height: 0 !important;
+            height: 297mm;
+            width: 100% !important;
+            page-break-after: always;
+            color: black;
+            padding: 15mm;
+        }
+        .print-header-spacer {
+            display: none !important;
+        }
+        .print-header {
+            position: relative !important;
+            top: auto;
+            left: auto;
+            right: auto;
+            padding: 0;
+            margin: 0 0 8px 0;
+            height: auto;
+            border-bottom: 2px solid #000;
+            background-color: #fff !important;
+        }
+        .print-content {
+            padding-top: 0 !important;
+        }
+        .print-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 0 15mm 10mm 15mm;
+            margin: 0;
+            background-color: #fff !important;
+        }
+        
+        .print-window-title {
+            font-weight: bold !important;
+            color: black !important;
+            font-size: 11pt !important;
+        }
+        
+        .print-item-details td, .print-item-details th {
+            color: black !important;
+            font-weight: normal !important;
+        }
+
+        textarea.print-editable {
+            border-color: transparent !important;
+            background-color: transparent !important;
+            resize: none !important;
+        }
+
+        .print-footer .page-number::after {
+            counter-increment: page;
+            content: "Page " counter(page) " of " var(--total-pages);
+        }
+
+        @page {
+          size: A4;
+          margin: 0;
+        }
+    }
+</style>
+</head>
+  <body class="bg-slate-900 text-slate-200">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+    <footer class="text-center text-xs text-slate-500 py-3 bg-slate-900 no-print">
+        <p>&copy; 2022 WoodenMax. All rights reserved. Designed by WoodenMax.</p>
+        <p><a href="https://www.woodenmax.com" target="_blank" class="hover:text-indigo-400">www.woodenmax.com</a> | <a href="mailto:info@woodenmax.com" class="hover:text-indigo-400">info@woodenmax.com</a></p>
+    </footer>
+  </body>
+</html>
