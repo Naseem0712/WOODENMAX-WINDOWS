@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import type { FixedPanel, ProfileDimensions, ProfileSeries, GlassType, HardwareItem, VentilatorCell, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, PartitionPanelConfig, HandleConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType } from '../types';
 import { Button } from './ui/Button';
-import { Card } from './ui/Card';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
 import { PlusIcon } from './icons/PlusIcon';
@@ -10,6 +9,7 @@ import { TrashIcon } from './icons/TrashIcon';
 import { DimensionInput } from './ui/DimensionInput';
 import { v4 as uuidv4 } from 'uuid';
 import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
+import { CollapsibleCard } from './ui/CollapsibleCard';
 
 
 interface ControlsPanelProps {
@@ -139,6 +139,13 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
     });
   };
 
+  const handleGlassOptionChange = <K extends keyof ProfileSeries['glassOptions']>(key: K, value: any) => {
+      setConfig('series', {
+        ...series,
+        glassOptions: { ...series.glassOptions, [key]: value },
+      });
+  };
+
   const handleFixShutterChange = (index: number, isChecked: boolean) => {
       const newFixedShutters = [...config.fixedShutters];
       newFixedShutters[index] = isChecked;
@@ -195,7 +202,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
   };
 
   return (
-    <div className="w-full p-4 space-y-6 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
+    <div className="w-full lg:w-96 p-4 space-y-4 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-white">Window Configuration</h2>
         <button 
@@ -207,22 +214,23 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
         </button>
       </div>
 
-      <Card title="Design Type">
+      <div className="bg-slate-800 rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold text-slate-100 border-b border-slate-700 pb-3 mb-4">Design Type</h3>
           <div className="grid grid-cols-2 bg-slate-700 rounded-md p-1 gap-1">
               <button onClick={() => setConfig('windowType', WindowType.SLIDING)} className={`p-2 text-sm font-semibold rounded ${windowType === WindowType.SLIDING ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Sliding</button>
               <button onClick={() => setConfig('windowType', WindowType.CASEMENT)} className={`p-2 text-sm font-semibold rounded ${windowType === WindowType.CASEMENT ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Casement</button>
               <button onClick={() => setConfig('windowType', WindowType.VENTILATOR)} className={`p-2 text-sm font-semibold rounded ${windowType === WindowType.VENTILATOR ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Ventilator</button>
               <button onClick={() => setConfig('windowType', WindowType.GLASS_PARTITION)} className={`p-2 text-sm font-semibold rounded ${windowType === WindowType.GLASS_PARTITION ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Partition</button>
           </div>
-      </Card>
+      </div>
       
-      <Card title="Overall Dimensions">
+      <CollapsibleCard title="Overall Dimensions" defaultOpen>
         <DimensionInput label="Total Width" value_mm={config.width} onChange_mm={v => setConfig('width', v)} placeholder="e.g., 1800" />
         <DimensionInput label="Total Height" value_mm={config.height} onChange_mm={v => setConfig('height', v)} placeholder="e.g., 1200" />
-      </Card>
+      </CollapsibleCard>
 
       {windowType === WindowType.SLIDING && (
-        <Card title="Track & Shutter Setup">
+        <CollapsibleCard title="Track & Shutter Setup">
             <Select label="Track Type" value={config.trackType} onChange={(e) => setConfig('trackType', parseInt(e.target.value) as TrackType)}>
             <option value={TrackType.TWO_TRACK}>2-Track</option>
             <option value={TrackType.THREE_TRACK}>3-Track</option>
@@ -246,14 +254,14 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                 </div>
               </div>
             )}
-        </Card>
+        </CollapsibleCard>
       )}
 
       {(windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) && (
-          <Card title="Grid Layout">
+          <CollapsibleCard title="Grid Layout" defaultOpen>
               <div className="grid grid-cols-2 gap-4">
-                  <Input label="Rows" type="number" inputMode="numeric" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
-                  <Input label="Columns" type="number" inputMode="numeric" value={gridCols} min={1} onChange={e => setGridSize(gridRows, Math.max(1, parseInt(e.target.value) || 1))} />
+                  <Input label="Rows" type="number" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
+                  <Input label="Columns" type="number" value={gridCols} min={1} onChange={e => setGridSize(gridRows, Math.max(1, parseInt(e.target.value) || 1))} />
               </div>
               <div className="mt-4">
                   <label className="block text-sm font-medium text-slate-300 mb-2">Panel Configuration (Click to toggle)</label>
@@ -282,12 +290,12 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                     </div>
                   </div>
               </div>
-          </Card>
+          </CollapsibleCard>
       )}
 
       {windowType === WindowType.GLASS_PARTITION && (
-        <Card title="Partition Panel Setup">
-          <Input label="Number of Panels" type="number" min={1} max={8} inputMode="numeric" value={config.partitionPanels.count} onChange={e => setConfig('partitionPanels', {...config.partitionPanels, count: Math.max(1, parseInt(e.target.value) || 1) })}/>
+        <CollapsibleCard title="Partition Panel Setup">
+          <Input label="Number of Panels" type="number" min={1} max={8} value={config.partitionPanels.count} onChange={e => setConfig('partitionPanels', {...config.partitionPanels, count: Math.max(1, parseInt(e.target.value) || 1) })}/>
           {config.partitionPanels.count > 0 && (
             <div className="pt-2">
               <label className="block text-sm font-medium text-slate-300 mb-2">Panel Types (Click to cycle)</label>
@@ -304,11 +312,11 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
               </div>
             </div>
           )}
-        </Card>
+        </CollapsibleCard>
       )}
 
       {operablePanels.length > 0 && (
-          <Card title="Handle Configuration">
+          <CollapsibleCard title="Handle Configuration">
               <Select label="Select Panel" value={selectedPanelId} onChange={e => setSelectedPanelId(e.target.value)}>
                 {operablePanels.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
               </Select>
@@ -343,59 +351,32 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                       )}
                   </div>
               )}
-          </Card>
+          </CollapsibleCard>
       )}
 
-      <Card title="Appearance">
+      <CollapsibleCard title="Appearance">
         <Select label="Glass Tint" value={config.glassType} onChange={(e) => setConfig('glassType', e.target.value as GlassType)}>
           <option value="clear">Clear</option>
           <option value="frosted">Frosted</option>
           <option value="tinted-blue">Tinted Blue</option>
         </Select>
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Select label="Glass Thickness" value={config.glassThickness} onChange={e => setConfig('glassThickness', e.target.value as WindowConfig['glassThickness'])}>
-                <option value="">Auto</option>
-                {series.glassOptions.thicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
-                {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
-            </Select>
-            {config.glassThickness === 'custom' && (
-              <Input 
-                label="Custom Thickness" 
-                type="number"
-                inputMode="decimal"
-                unit="mm" 
-                className="mt-2 !bg-slate-700"
-                value={config.customGlassThickness} 
-                onChange={e => setConfig('customGlassThickness', e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="e.g., 7"
-              />
-            )}
-          </div>
-           <div>
-              <Select label="Special Type" value={config.glassSpecialType} onChange={e => setConfig('glassSpecialType', e.target.value as GlassSpecialType)}>
-                  <option value="none">None</option>
-                  {series.glassOptions.specialTypes.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-                  <option value="custom">Custom...</option>
-              </Select>
-              {config.glassSpecialType === 'custom' && (
-                  <Input 
-                      label="Custom Type Name"
-                      type="text"
-                      className="mt-2 !bg-slate-700"
-                      value={config.customGlassSpecialType}
-                      onChange={e => setConfig('customGlassSpecialType', e.target.value)}
-                      placeholder="e.g., Toughened"
-                  />
-              )}
-           </div>
+          <Select label="Glass Thickness" value={config.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))}>
+              <option value="">Auto</option>
+              {series.glassOptions.thicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
+              {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
+          </Select>
+           <Select label="Special Type" value={config.glassSpecialType} onChange={e => setConfig('glassSpecialType', e.target.value as GlassSpecialType)}>
+              <option value="none">None</option>
+              {series.glassOptions.specialTypes.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+           </Select>
         </div>
         
         <div className="pt-4 mt-4 border-t border-slate-700">
              <label className="block text-sm font-medium text-slate-300 mb-2">Glass Grid</label>
              <div className="grid grid-cols-2 gap-4">
-                <Input label="Rows" type="number" inputMode="numeric" min="0" value={config.glassGrid.rows} onChange={e => setConfig('glassGrid', {...config.glassGrid, rows: Math.max(0, parseInt(e.target.value) || 0)})} />
-                <Input label="Columns" type="number" inputMode="numeric" min="0" value={config.glassGrid.cols} onChange={e => setConfig('glassGrid', {...config.glassGrid, cols: Math.max(0, parseInt(e.target.value) || 0)})} />
+                <Input label="Rows" type="number" min="0" value={config.glassGrid.rows} onChange={e => setConfig('glassGrid', {...config.glassGrid, rows: Math.max(0, parseInt(e.target.value) || 0)})} />
+                <Input label="Columns" type="number" min="0" value={config.glassGrid.cols} onChange={e => setConfig('glassGrid', {...config.glassGrid, cols: Math.max(0, parseInt(e.target.value) || 0)})} />
             </div>
         </div>
 
@@ -422,10 +403,10 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                 </div>
             )}
         </div>
-      </Card>
+      </CollapsibleCard>
       
       {windowType !== WindowType.GLASS_PARTITION && (
-        <Card title="Fixed Panels">
+        <CollapsibleCard title="Fixed Panels">
            <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.TOP)}><PlusIcon className="w-4 h-4 mr-2" /> Top</Button>
               <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.BOTTOM)}><PlusIcon className="w-4 h-4 mr-2" /> Bottom</Button>
@@ -443,10 +424,10 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                    ))}
                </div>
            )}
-        </Card>
+        </CollapsibleCard>
       )}
 
-      <Card title="Profile Series Dimensions">
+      <CollapsibleCard title="Profile Series Dimensions">
         <div className="space-y-2">
           <Select label="Active Profile" value={series.id} onChange={(e) => onSeriesSelect(e.target.value)}>
             {filteredAvailableSeries.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -500,9 +481,33 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                 <DimensionInput label="Glass Grid Profile" value_mm={series.dimensions.glassGridProfile} onChange_mm={val => handleDimensionChange('glassGridProfile', val)} />
             </>
         )}
-      </Card>
 
-      <Card title="Hardware Configuration">
+        <div className="mt-4 pt-4 border-t border-slate-700">
+            <h4 className="text-md font-semibold text-slate-100 mb-2">Supported Glass</h4>
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <label className="flex items-center space-x-2 p-2 bg-slate-700 rounded-md cursor-pointer hover:bg-slate-600">
+                <input type="checkbox" checked={series.glassOptions.customThicknessAllowed} onChange={e => handleGlassOptionChange('customThicknessAllowed', e.target.checked)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                <span className="text-sm text-slate-200">Allow Custom</span>
+              </label>
+              <label className="flex items-center space-x-2 p-2 bg-slate-700 rounded-md cursor-pointer hover:bg-slate-600">
+                <input type="checkbox" checked={series.glassOptions.specialTypes.includes('laminated')} onChange={e => {
+                   const newS = e.target.checked ? [...series.glassOptions.specialTypes, 'laminated'] : series.glassOptions.specialTypes.filter(s => s !== 'laminated');
+                   handleGlassOptionChange('specialTypes', newS);
+                }} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                <span className="text-sm text-slate-200">Laminated</span>
+              </label>
+              <label className="flex items-center space-x-2 p-2 bg-slate-700 rounded-md cursor-pointer hover:bg-slate-600">
+                <input type="checkbox" checked={series.glassOptions.specialTypes.includes('dgu')} onChange={e => {
+                   const newS = e.target.checked ? [...series.glassOptions.specialTypes, 'dgu'] : series.glassOptions.specialTypes.filter(s => s !== 'dgu');
+                   handleGlassOptionChange('specialTypes', newS);
+                }} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                <span className="text-sm text-slate-200">DGU</span>
+              </label>
+            </div>
+        </div>
+      </CollapsibleCard>
+
+      <CollapsibleCard title="Hardware Configuration">
           <div className="space-y-3">
               {series.hardwareItems.map(item => (
                   <div key={item.id} className="p-3 bg-slate-700 rounded-md">
@@ -511,8 +516,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                           <Button variant="danger" onClick={() => onRemoveHardware(item.id)} className="p-1 h-7 w-7 flex-shrink-0 ml-2"><TrashIcon className="w-4 h-4"/></Button>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
-                          <Input label="Qty" type="number" inputMode="numeric" value={item.qtyPerShutter} onChange={e => onHardwareChange(item.id, 'qtyPerShutter', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 2"/>
-                          <Input label="Rate" type="number" inputMode="decimal" value={item.rate} onChange={e => onHardwareChange(item.id, 'rate', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 50"/>
+                          <Input label="Qty" type="number" value={item.qtyPerShutter} onChange={e => onHardwareChange(item.id, 'qtyPerShutter', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 2"/>
+                          <Input label="Rate" type="number" value={item.rate} onChange={e => onHardwareChange(item.id, 'rate', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 50"/>
                            <Select label="Unit" value={item.unit} onChange={(e) => onHardwareChange(item.id, 'unit', e.target.value)}>
                               <option value="per_shutter_or_door">Per Door/Panel</option>
                               <option value="per_window">Per Window</option>
@@ -522,7 +527,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
               ))}
           </div>
           <Button onClick={onAddHardware} variant="secondary" className="w-full mt-4"><PlusIcon className="w-4 h-4 mr-2"/> Add Hardware Item</Button>
-      </Card>
+      </CollapsibleCard>
     </div>
   );
 };

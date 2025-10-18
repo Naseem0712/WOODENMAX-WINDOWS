@@ -111,7 +111,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
         </div>
 
         <div className="flex-grow overflow-y-auto p-6 custom-scrollbar space-y-4">
-            <Input label="Quotation Title" value={settings.title} onChange={e => setSettings({...settings, title: e.target.value})} className="mb-4 text-xl" />
+            <Input label="" value={settings.title} onChange={e => setSettings({...settings, title: e.target.value})} className="mb-4 text-2xl font-bold !bg-transparent border-0 focus:ring-0 p-0" />
             <div className="grid md:grid-cols-2 gap-4">
                 <Section title="Your Company Details">
                     <div className="flex gap-4 items-center">
@@ -189,7 +189,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
                 <Section title="Bank & Signature">
                     <div className="grid grid-cols-2 gap-4">
                         <Input label="A/C Name" value={settings.bankDetails.name} onChange={e => handleSettingsChange('bankDetails', 'name', e.target.value)} />
-                        <Input label="A/C Number" type="text" inputMode="numeric" value={settings.bankDetails.accountNumber} onChange={e => handleSettingsChange('bankDetails', 'accountNumber', e.target.value)} />
+                        <Input label="A/C Number" value={settings.bankDetails.accountNumber} onChange={e => handleSettingsChange('bankDetails', 'accountNumber', e.target.value)} />
                     </div>
                     <div className="grid grid-cols-3 gap-4">
                         <Input label="IFSC Code" value={settings.bankDetails.ifsc} onChange={e => handleSettingsChange('bankDetails', 'ifsc', e.target.value)} />
@@ -213,7 +213,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
                 <span className="font-semibold text-white ml-2">₹{Math.round(subTotal).toLocaleString('en-IN')}</span>
             </div>
             <div className="flex gap-2 items-center">
-                <div className="w-32"><Input label="Discount" type="number" inputMode="decimal" value={settings.financials.discount} onChange={e => handleSettingsChange('financials', 'discount', e.target.value === '' ? '' : Number(e.target.value))}/></div>
+                <div className="w-32"><Input label="Discount" type="number" value={settings.financials.discount} onChange={e => handleSettingsChange('financials', 'discount', e.target.value === '' ? '' : Number(e.target.value))}/></div>
                 <Select label="" value={settings.financials.discountType} onChange={e => handleSettingsChange('financials', 'discountType', e.target.value as 'percentage' | 'fixed')} className="mt-5">
                     <option value="percentage">%</option>
                     <option value="fixed">₹</option>
@@ -221,7 +221,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
                  <span className="text-red-400 text-sm mt-5">(-₹{Math.round(discountAmount).toLocaleString('en-IN')})</span>
             </div>
              <div className="flex gap-2 items-center">
-                <div className="w-24"><Input label="GST" type="number" inputMode="decimal" value={settings.financials.gstPercentage} onChange={e => handleSettingsChange('financials', 'gstPercentage', e.target.value === '' ? '' : Number(e.target.value))} unit="%"/></div>
+                <div className="w-24"><Input label="GST" type="number" value={settings.financials.gstPercentage} onChange={e => handleSettingsChange('financials', 'gstPercentage', e.target.value === '' ? '' : Number(e.target.value))} unit="%"/></div>
                 <span className="text-green-400 text-sm mt-5">(+₹{Math.round(gstAmount).toLocaleString('en-IN')})</span>
             </div>
             <div className="text-right">

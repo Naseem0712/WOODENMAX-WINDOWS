@@ -3,6 +3,7 @@ import { AreaType } from '../types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
+import { XMarkIcon } from './icons/XMarkIcon';
 
 interface QuotationPanelProps {
     width: number;
@@ -19,6 +20,7 @@ interface QuotationPanelProps {
     hardwareCostPerWindow: number;
     quotationItemCount: number;
     onViewQuotation: () => void;
+    onClose?: () => void;
 }
 
 const CostDisplay: React.FC<{label:string, value: number, isTotal?: boolean}> = ({label, value, isTotal = false}) => (
@@ -32,7 +34,7 @@ const CostDisplay: React.FC<{label:string, value: number, isTotal?: boolean}> = 
 
 
 export const QuotationPanel: React.FC<QuotationPanelProps> = ({
-    width, height, quantity, setQuantity, areaType, setAreaType, rate, setRate, onSave, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount, onViewQuotation
+    width, height, quantity, setQuantity, areaType, setAreaType, rate, setRate, onSave, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount, onViewQuotation, onClose
 }) => {
 
     const numQuantity = Number(quantity) || 0;
@@ -46,10 +48,17 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = ({
     const totalCost = baseCost + totalHardwareCost;
 
     return (
-        <div className="flex-shrink-0 p-4 bg-slate-800 border-t-2 border-slate-700 shadow-inner">
+        <div className="flex-shrink-0 p-4 bg-slate-800 border-t-2 border-slate-700 shadow-inner h-full overflow-y-auto custom-scrollbar">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end max-w-7xl mx-auto">
                 <div className="md:col-span-3">
-                    <h4 className="text-lg font-semibold text-slate-100 mb-2">Quotation Details</h4>
+                    <div className="flex justify-between items-center mb-2">
+                        <h4 className="text-lg font-semibold text-slate-100">Quotation Details</h4>
+                        {onClose && (
+                            <button onClick={onClose} className="p-1 rounded-full hover:bg-slate-700 lg:hidden">
+                                <XMarkIcon className="w-5 h-5 text-slate-400" />
+                            </button>
+                        )}
+                    </div>
                     <div className="grid grid-cols-4 gap-2">
                         <div className="col-span-2">
                            <Input 
