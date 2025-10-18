@@ -91,7 +91,7 @@
             height: 297mm;
             margin: 0;
             padding: 0;
-            background: #fff;
+            background: #fff !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
             color: black;
@@ -113,10 +113,12 @@
             box-shadow: none !important;
             border: none !important;
             overflow: visible !important;
+            display: block !important;
         }
         .print-preview-container {
-            background: none !important;
+            background: white !important;
             padding: 0 !important;
+            overflow: visible !important;
         }
         .a4-page {
             box-shadow: none !important;
@@ -127,6 +129,9 @@
             page-break-after: always;
             color: black;
             padding: 15mm;
+        }
+        .a4-page:last-of-type {
+            page-break-after: avoid;
         }
         .print-header-spacer {
             display: none !important;

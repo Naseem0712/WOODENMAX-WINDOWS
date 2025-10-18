@@ -10,6 +10,7 @@ import { QuotationListModal } from './components/QuotationListModal';
 import { Logo } from './components/icons/Logo';
 import { Button } from './components/ui/Button';
 import { DownloadIcon } from './components/icons/DownloadIcon';
+import { AdjustmentsIcon } from './components/icons/AdjustmentsIcon';
 
 interface BeforeInstallPromptEvent extends Event {
     readonly platforms: Array<string>;
@@ -121,7 +122,7 @@ const App: React.FC = () => {
   const [width, setWidth] = useState<number | ''>(1800);
   const [height, setHeight] = useState<number | ''>(2100);
   const [fixedPanels, setFixedPanels] = useState<FixedPanel[]>([]);
-  const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const [isPanelOpen, setIsPanelOpen] = useState(window.innerWidth > 1024);
   const [glassType, setGlassType] = useState<GlassType>(GlassType.CLEAR);
   const [glassThickness, setGlassThickness] = useState<number | ''>(8);
   const [glassSpecialType, setGlassSpecialType] = useState<GlassSpecialType>('none');
@@ -244,18 +245,6 @@ const App: React.FC = () => {
     } catch (error) { console.error("Could not save quotation settings", error); }
   }, [quotationSettings]);
   
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isPanelOpen && panelRef.current && !panelRef.current.contains(event.target as Node)) {
-        setIsPanelOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isPanelOpen]);
-
   const SERIES_MAP: Record<WindowType, ProfileSeries> = {
     [WindowType.SLIDING]: DEFAULT_SLIDING_SERIES,
     [WindowType.CASEMENT]: DEFAULT_CASEMENT_SERIES,
@@ -601,15 +590,20 @@ const App: React.FC = () => {
                 <h1 className="text-2xl font-bold text-white tracking-wider">WoodenMax</h1>
                 <p className="text-sm text-indigo-300">Reshaping spaces</p>
             </div>
+            <Button onClick={() => setIsPanelOpen(true)} className="lg:hidden mr-4" variant="secondary">
+                <AdjustmentsIcon className="w-5 h-5 mr-2"/>
+                Configure
+            </Button>
              {installPrompt && (
-                <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse">
+                <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse hidden sm:inline-flex">
                     <DownloadIcon className="w-5 h-5 mr-2" /> Add to Home Screen
                 </Button>
             )}
         </header>
-        <div className="flex flex-row flex-grow min-h-0">
-            <div ref={panelRef} className={`flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isPanelOpen ? 'w-80 md:w-96' : 'w-0'}`}>
-                <div className={`h-full overflow-hidden ${isPanelOpen ? 'w-80 md:w-96' : 'w-0'}`}>
+        <div className="flex flex-row flex-grow min-h-0 relative">
+            {isPanelOpen && <div onClick={() => setIsPanelOpen(false)} className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-20"></div>}
+            <div ref={panelRef} className={`absolute lg:relative flex-shrink-0 h-full transform lg:transform-none transition-transform lg:transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isPanelOpen ? 'translate-x-0 lg:w-96' : '-translate-x-full lg:translate-x-0 lg:w-0'}`}>
+                <div className={`h-full overflow-hidden w-80 md:w-96 lg:w-full`}>
                     <ControlsPanel
                         config={windowConfig}
                         onClose={() => setIsPanelOpen(false)}
@@ -658,7 +652,7 @@ const App: React.FC = () => {
                 {!isPanelOpen && (
                   <button 
                     onClick={() => setIsPanelOpen(true)}
-                    className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex items-center justify-center transition-all duration-300 no-print"
+                    className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex"
                     aria-label="Expand panel"
                   >
                     <ChevronLeftIcon className="w-5 h-5 rotate-180" />
