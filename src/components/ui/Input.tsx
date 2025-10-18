@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -6,7 +5,9 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   unit?: string;
 }
 
-export const Input: React.FC<InputProps> = ({ label, id, unit, ...props }) => {
+export const Input: React.FC<InputProps> = ({ label, id, unit, className, ...props }) => {
+  const baseClasses = "w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm";
+  
   return (
     <div>
       <label htmlFor={id} className="block text-sm font-medium text-slate-300 mb-1">
@@ -15,7 +16,7 @@ export const Input: React.FC<InputProps> = ({ label, id, unit, ...props }) => {
       <div className="relative">
         <input
           id={id}
-          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          className={`${baseClasses} ${className || ''}`}
           {...props}
         />
         {unit && (

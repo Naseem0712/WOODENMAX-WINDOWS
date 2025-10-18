@@ -195,12 +195,12 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
   };
 
   return (
-    <div className="w-full lg:w-96 p-4 space-y-6 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
+    <div className="w-full p-4 space-y-6 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-white">Window Configuration</h2>
         <button 
             onClick={onClose} 
-            className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white lg:hidden" 
+            className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white hidden lg:block" 
             aria-label="Collapse panel"
         >
             <ChevronLeftIcon className="w-6 h-6" />
@@ -365,7 +365,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                 type="number"
                 inputMode="decimal"
                 unit="mm" 
-                className="mt-2"
+                className="mt-2 !bg-slate-700"
                 value={config.customGlassThickness} 
                 onChange={e => setConfig('customGlassThickness', e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="e.g., 7"
@@ -382,7 +382,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                   <Input 
                       label="Custom Type Name"
                       type="text"
-                      className="mt-2"
+                      className="mt-2 !bg-slate-700"
                       value={config.customGlassSpecialType}
                       onChange={e => setConfig('customGlassSpecialType', e.target.value)}
                       placeholder="e.g., Toughened"
@@ -500,7 +500,6 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                 <DimensionInput label="Glass Grid Profile" value_mm={series.dimensions.glassGridProfile} onChange_mm={val => handleDimensionChange('glassGridProfile', val)} />
             </>
         )}
-
       </Card>
 
       <Card title="Hardware Configuration">

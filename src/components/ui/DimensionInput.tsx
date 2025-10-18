@@ -112,6 +112,8 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
           onChange={handleInputChange}
           onFocus={() => setIsFocused(true)}
           onBlur={handleBlur}
+          type="text"
+          inputMode="decimal"
           {...props}
         />
         <div className="absolute inset-y-0 right-0 flex items-center">
