@@ -101,6 +101,8 @@ export interface HandleConfig {
   x: number; // 0-100 percentage
   y: number; // 0-100 percentage
   orientation: 'vertical' | 'horizontal';
+  width: number; // in mm
+  height: number; // in mm
 }
 
 export type VentilatorCellType = 'glass' | 'louvers' | 'door' | 'exhaust_fan';

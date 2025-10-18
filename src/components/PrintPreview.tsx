@@ -141,8 +141,8 @@ const PrintableMiteredFrame: React.FC<{
 
 const PrintableHandle: React.FC<{ config: WindowConfig['slidingHandles'][0], scale: number }> = ({ config, scale }) => {
     if (!config) return null;
-    const handleWidth = 25; // mm
-    const handleHeight = 150; // mm
+    const handleWidth = config.width;
+    const handleHeight = config.height;
     const isVertical = config.orientation === 'vertical';
     const style: React.CSSProperties = {
         position: 'absolute',

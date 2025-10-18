@@ -49,8 +49,8 @@ const ShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' }> = ({ 
 }
 
 const Handle: React.FC<{ config: HandleConfig, scale: number, color: string }> = ({ config, scale, color }) => {
-    const handleWidth = 25; // mm
-    const handleHeight = 150; // mm
+    const handleWidth = config.width;
+    const handleHeight = config.height;
     const isVertical = config.orientation === 'vertical';
     const style: React.CSSProperties = {
         position: 'absolute',

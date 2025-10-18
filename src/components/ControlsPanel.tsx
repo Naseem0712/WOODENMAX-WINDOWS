@@ -326,7 +326,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                           <input 
                               type="checkbox" 
                               checked={!!currentHandle} 
-                              onChange={e => onUpdateHandle(selectedPanelId, e.target.checked ? { x: 50, y: 50, orientation: 'vertical' } : null)}
+                              // FIX: Added width and height properties to the new HandleConfig object.
+                              onChange={e => onUpdateHandle(selectedPanelId, e.target.checked ? { x: 50, y: 50, orientation: 'vertical', width: 25, height: 150 } : null)}
                               className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"
                           />
                           <span className="text-sm text-slate-200">Enable Handle</span>

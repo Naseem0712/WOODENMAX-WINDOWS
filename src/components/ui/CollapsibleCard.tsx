@@ -12,7 +12,7 @@ export const CollapsibleCard: React.FC<CollapsibleCardProps> = ({ title, childre
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className={`bg-slate-800 rounded-lg shadow-md ${className}`}>
+    <div className={`bg-slate-700/50 rounded-lg shadow-md ${className}`}>
       <button
         className={`w-full flex justify-between items-center text-left text-lg font-semibold text-slate-100 p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${isOpen ? 'rounded-t-lg' : 'rounded-lg'}`}
         onClick={() => setIsOpen(!isOpen)}
