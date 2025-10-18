@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig } from './types';
+import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, GlassOptions } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
@@ -27,11 +27,10 @@ const BASE_DIMENSIONS = {
     mullion: 0, louverBlade: 0, topTrack: 0, bottomTrack: 0, glassGridProfile: 0,
 };
 
-const DEFAULT_GLASS_OPTIONS = {
+// FIX: Added GlassOptions type to ensure correct type inference for specialTypes.
+const DEFAULT_GLASS_OPTIONS: GlassOptions = {
     thicknesses: [5, 6, 8, 10, 12],
     customThicknessAllowed: true,
-    // FIX: Removed incorrect type assertion which caused type errors.
-    // The array literal is correctly inferred by TypeScript.
     specialTypes: ['laminated', 'dgu'],
 };
 
@@ -555,7 +554,6 @@ const App: React.FC = () => {
       onSeriesDelete: handleSeriesDelete, fixedPanels, addFixedPanel, removeFixedPanel,
       updateFixedPanelSize, onHardwareChange: handleHardwareChange, onAddHardware: addHardwareItem, onRemoveHardware: removeHardwareItem,
       toggleDoorPosition,
-      // FIX: Corrected typo. It should be `onVentilatorCellClick: handleVentilatorCellClick`.
       onVentilatorCellClick: handleVentilatorCellClick,
       savedColors, setSavedColors, onUpdateHandle: handleUpdateHandle,
   };

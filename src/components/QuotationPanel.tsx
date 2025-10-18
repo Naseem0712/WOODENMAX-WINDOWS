@@ -48,7 +48,7 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = ({
     const totalCost = baseCost + totalHardwareCost;
 
     return (
-        <div className="flex-shrink-0 p-4 bg-slate-800 border-t-2 border-slate-700 shadow-inner h-full overflow-y-auto custom-scrollbar">
+        <div className="p-4 bg-slate-800 border-t-2 border-slate-700 shadow-inner flex-grow min-h-0 overflow-y-auto custom-scrollbar">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end max-w-7xl mx-auto">
                 <div className="md:col-span-3">
                     <div className="flex justify-between items-center mb-2">
