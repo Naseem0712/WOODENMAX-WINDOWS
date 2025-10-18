@@ -19,12 +19,12 @@ export interface HardwareItem {
   unit: 'per_shutter_or_door' | 'per_window';
 }
 
-export type GlassSpecialType = 'none' | 'laminated' | 'dgu';
+export type GlassSpecialType = 'none' | 'laminated' | 'dgu' | 'custom';
 
 export interface GlassOptions {
     thicknesses: number[];
     customThicknessAllowed: boolean;
-    specialTypes: Exclude<GlassSpecialType, 'none'>[];
+    specialTypes: Exclude<GlassSpecialType, 'none' | 'custom'>[];
 }
 
 export interface ProfileDimensions {
@@ -123,8 +123,10 @@ export interface WindowConfig {
   series: ProfileSeries;
   fixedPanels: FixedPanel[];
   glassType: GlassType;
-  glassThickness: number | '';
+  glassThickness: number | '' | 'custom';
+  customGlassThickness: number | '';
   glassSpecialType: GlassSpecialType;
+  customGlassSpecialType: string;
   profileColor: string;
   glassGrid: { rows: number, cols: number };
   

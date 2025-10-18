@@ -11,6 +11,7 @@ import { Logo } from './components/icons/Logo';
 import { Button } from './components/ui/Button';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import { AdjustmentsIcon } from './components/icons/AdjustmentsIcon';
+import { XMarkIcon } from './components/icons/XMarkIcon';
 
 interface BeforeInstallPromptEvent extends Event {
     readonly platforms: Array<string>;
@@ -30,7 +31,7 @@ const BASE_DIMENSIONS = {
 const DEFAULT_GLASS_OPTIONS = {
     thicknesses: [5, 6, 8, 10, 12],
     customThicknessAllowed: true,
-    specialTypes: ['laminated', 'dgu'] as Exclude<GlassSpecialType, 'none'>[],
+    specialTypes: ['laminated', 'dgu'] as Exclude<GlassSpecialType, 'none' | 'custom'>[],
 };
 
 const DEFAULT_SLIDING_HARDWARE: HardwareItem[] = [
@@ -124,8 +125,10 @@ const App: React.FC = () => {
   const [fixedPanels, setFixedPanels] = useState<FixedPanel[]>([]);
   const [isPanelOpen, setIsPanelOpen] = useState(window.innerWidth > 1024);
   const [glassType, setGlassType] = useState<GlassType>(GlassType.CLEAR);
-  const [glassThickness, setGlassThickness] = useState<number | ''>(8);
+  const [glassThickness, setGlassThickness] = useState<number | '' | 'custom'>(8);
+  const [customGlassThickness, setCustomGlassThickness] = useState<number | ''>('');
   const [glassSpecialType, setGlassSpecialType] = useState<GlassSpecialType>('none');
+  const [customGlassSpecialType, setCustomGlassSpecialType] = useState<string>('');
   const [profileColor, setProfileColor] = useState<string>('#374151');
   const [glassGrid, setGlassGrid] = useState({ rows: 0, cols: 0 });
   
@@ -518,13 +521,15 @@ const App: React.FC = () => {
   }, [series.hardwareItems, numShutters, doorPositions.length, ventilatorGrid, windowType, partitionPanels, horizontalDividers, verticalDividers]);
 
   const windowConfig: WindowConfig = useMemo(() => ({
-    width: width,
-    height: height,
+    width,
+    height,
     series,
     fixedPanels,
     glassType,
-    glassThickness: Number(glassThickness) || 0,
+    glassThickness,
+    customGlassThickness,
     glassSpecialType,
+    customGlassSpecialType,
     profileColor,
     glassGrid,
     windowType,
@@ -537,7 +542,7 @@ const App: React.FC = () => {
     doorPositions,
     ventilatorGrid,
     partitionPanels,
-  }), [width, height, series, fixedPanels, glassType, glassThickness, glassSpecialType, profileColor, glassGrid, windowType, trackType, shutterConfig, fixedShutters, slidingHandles, verticalDividers, horizontalDividers, doorPositions, ventilatorGrid, partitionPanels]);
+  }), [width, height, series, fixedPanels, glassType, glassThickness, customGlassThickness, glassSpecialType, customGlassSpecialType, profileColor, glassGrid, windowType, trackType, shutterConfig, fixedShutters, slidingHandles, verticalDividers, horizontalDividers, doorPositions, ventilatorGrid, partitionPanels]);
 
   const handleSaveToQuotation = () => {
     const colorName = savedColors.find(c => c.hex === windowConfig.profileColor)?.name;
@@ -590,9 +595,9 @@ const App: React.FC = () => {
                 <h1 className="text-2xl font-bold text-white tracking-wider">WoodenMax</h1>
                 <p className="text-sm text-indigo-300">Reshaping spaces</p>
             </div>
-            <Button onClick={() => setIsPanelOpen(true)} className="lg:hidden mr-4" variant="secondary">
-                <AdjustmentsIcon className="w-5 h-5 mr-2"/>
-                Configure
+            <Button onClick={() => setIsPanelOpen(!isPanelOpen)} className="lg:hidden mr-4" variant="secondary">
+                {isPanelOpen ? <XMarkIcon className="w-5 h-5 mr-2"/> : <AdjustmentsIcon className="w-5 h-5 mr-2"/>}
+                {isPanelOpen ? 'Close' : 'Configure'}
             </Button>
              {installPrompt && (
                 <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse hidden sm:inline-flex">
@@ -600,85 +605,82 @@ const App: React.FC = () => {
                 </Button>
             )}
         </header>
-        <div className="flex flex-row flex-grow min-h-0 relative">
-            {isPanelOpen && <div onClick={() => setIsPanelOpen(false)} className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-20"></div>}
-            <div ref={panelRef} className={`absolute lg:relative flex-shrink-0 h-full transform lg:transform-none transition-transform lg:transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isPanelOpen ? 'translate-x-0 lg:w-96' : '-translate-x-full lg:translate-x-0 lg:w-0'}`}>
-                <div className={`h-full overflow-hidden w-80 md:w-96 lg:w-full`}>
-                    <ControlsPanel
-                        config={windowConfig}
-                        onClose={() => setIsPanelOpen(false)}
-                        setConfig={(field, value) => {
-                          // This is a simplified setter for demonstration. A more robust solution might use a reducer.
-                          switch(field) {
-                            case 'width': setWidth(value as number | ''); break;
-                            case 'height': setHeight(value as number | ''); break;
-                            case 'series': setSeries(value as ProfileSeries); break;
-                            case 'glassType': setGlassType(value as GlassType); break;
-                            case 'glassThickness': setGlassThickness(value as number | ''); break;
-                            case 'glassSpecialType': setGlassSpecialType(value as GlassSpecialType); break;
-                            case 'profileColor': setProfileColor(value as string); break;
-                            case 'glassGrid': setGlassGrid(value as {rows: number, cols: number}); break;
-                            case 'windowType': setWindowType(value as WindowType); break;
-                            case 'trackType': setTrackType(value as TrackType); break;
-                            case 'shutterConfig': setShutterConfig(value as ShutterConfigType); break;
-                            case 'fixedShutters': setFixedShutters(value as boolean[]); break;
-                            case 'slidingHandles': setSlidingHandles(value as (HandleConfig|null)[]); break;
-                            case 'doorPositions': setDoorPositions(value as {row: number, col: number, handle?: HandleConfig}[]); break;
-                            case 'ventilatorGrid': setVentilatorGrid(value as VentilatorCell[][]); break;
-                            case 'partitionPanels': setPartitionPanels(value as {count: number, types: PartitionPanelConfig[]}); break;
-                          }
-                        }}
-                        setGridSize={handleSetGridSize}
-                        availableSeries={availableSeries}
-                        onSeriesSelect={handleSeriesSelect}
-                        onSeriesSave={handleSeriesSave}
-                        onSeriesDelete={handleSeriesDelete}
-                        fixedPanels={fixedPanels}
-                        addFixedPanel={addFixedPanel}
-                        removeFixedPanel={removeFixedPanel}
-                        updateFixedPanelSize={updateFixedPanelSize}
-                        onHardwareChange={handleHardwareChange}
-                        onAddHardware={addHardwareItem}
-                        onRemoveHardware={removeHardwareItem}
-                        toggleDoorPosition={toggleDoorPosition}
-                        onVentilatorCellClick={handleVentilatorCellClick}
-                        savedColors={savedColors}
-                        setSavedColors={setSavedColors}
-                        onUpdateHandle={handleUpdateHandle}
-                    />
+
+        <div className="flex-grow min-h-0 overflow-y-auto lg:overflow-hidden">
+            <div className="flex flex-col lg:flex-row h-full">
+                <div ref={panelRef} className={`
+                    ${isPanelOpen ? 'block' : 'hidden'} 
+                    lg:block lg:w-96 lg:flex-shrink-0 lg:h-full no-print
+                `}>
+                    <div className="lg:h-full lg:overflow-y-auto custom-scrollbar">
+                        <ControlsPanel
+                            config={windowConfig}
+                            onClose={() => setIsPanelOpen(false)}
+                            setConfig={(field, value) => {
+                              switch(field) {
+                                case 'width': setWidth(value as number | ''); break;
+                                case 'height': setHeight(value as number | ''); break;
+                                case 'series': setSeries(value as ProfileSeries); break;
+                                case 'glassType': setGlassType(value as GlassType); break;
+                                case 'glassThickness': setGlassThickness(value as number | '' | 'custom'); break;
+                                case 'customGlassThickness': setCustomGlassThickness(value as number | ''); break;
+                                case 'glassSpecialType': setGlassSpecialType(value as GlassSpecialType); break;
+                                case 'customGlassSpecialType': setCustomGlassSpecialType(value as string); break;
+                                case 'profileColor': setProfileColor(value as string); break;
+                                case 'glassGrid': setGlassGrid(value as {rows: number, cols: number}); break;
+                                case 'windowType': setWindowType(value as WindowType); break;
+                                case 'trackType': setTrackType(value as TrackType); break;
+                                case 'shutterConfig': setShutterConfig(value as ShutterConfigType); break;
+                                case 'fixedShutters': setFixedShutters(value as boolean[]); break;
+                                case 'slidingHandles': setSlidingHandles(value as (HandleConfig|null)[]); break;
+                                case 'doorPositions': setDoorPositions(value as {row: number, col: number, handle?: HandleConfig}[]); break;
+                                case 'ventilatorGrid': setVentilatorGrid(value as VentilatorCell[][]); break;
+                                case 'partitionPanels': setPartitionPanels(value as {count: number, types: PartitionPanelConfig[]}); break;
+                              }
+                            }}
+                            setGridSize={handleSetGridSize}
+                            availableSeries={availableSeries}
+                            onSeriesSelect={handleSeriesSelect}
+                            onSeriesSave={handleSeriesSave}
+                            onSeriesDelete={handleSeriesDelete}
+                            fixedPanels={fixedPanels}
+                            addFixedPanel={addFixedPanel}
+                            removeFixedPanel={removeFixedPanel}
+                            updateFixedPanelSize={updateFixedPanelSize}
+                            onHardwareChange={handleHardwareChange}
+                            onAddHardware={addHardwareItem}
+                            onRemoveHardware={removeHardwareItem}
+                            toggleDoorPosition={toggleDoorPosition}
+                            onVentilatorCellClick={handleVentilatorCellClick}
+                            savedColors={savedColors}
+                            setSavedColors={setSavedColors}
+                            onUpdateHandle={handleUpdateHandle}
+                        />
+                    </div>
                 </div>
-            </div>
-            <div className="relative flex-1 flex flex-col min-w-0">
-                {!isPanelOpen && (
-                  <button 
-                    onClick={() => setIsPanelOpen(true)}
-                    className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex"
-                    aria-label="Expand panel"
-                  >
-                    <ChevronLeftIcon className="w-5 h-5 rotate-180" />
-                  </button>
-                )}
-              <WindowCanvas 
-                config={windowConfig} 
-                onRemoveVerticalDivider={handleRemoveVerticalDivider}
-                onRemoveHorizontalDivider={handleRemoveHorizontalDivider}
-              />
-              <QuotationPanel 
-                  width={Number(width) || 0}
-                  height={Number(height) || 0}
-                  quantity={quantity}
-                  setQuantity={setQuantity}
-                  areaType={areaType}
-                  setAreaType={setAreaType}
-                  rate={rate}
-                  setRate={setRate}
-                  onSave={handleSaveToQuotation}
-                  windowTitle={windowTitle}
-                  setWindowTitle={setWindowTitle}
-                  hardwareCostPerWindow={hardwareCostPerWindow}
-                  quotationItemCount={quotationItems.length}
-                  onViewQuotation={() => setIsQuotationModalOpen(true)}
-              />
+                <div className="relative flex-1 flex flex-col min-w-0">
+                  <WindowCanvas 
+                    config={windowConfig} 
+                    onRemoveVerticalDivider={handleRemoveVerticalDivider}
+                    onRemoveHorizontalDivider={handleRemoveHorizontalDivider}
+                  />
+                  <QuotationPanel 
+                      width={Number(width) || 0}
+                      height={Number(height) || 0}
+                      quantity={quantity}
+                      setQuantity={setQuantity}
+                      areaType={areaType}
+                      setAreaType={setAreaType}
+                      rate={rate}
+                      setRate={setRate}
+                      onSave={handleSaveToQuotation}
+                      windowTitle={windowTitle}
+                      setWindowTitle={setWindowTitle}
+                      hardwareCostPerWindow={hardwareCostPerWindow}
+                      quotationItemCount={quotationItems.length}
+                      onViewQuotation={() => setIsQuotationModalOpen(true)}
+                  />
+                </div>
             </div>
         </div>
       </div>

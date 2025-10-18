@@ -62,7 +62,8 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = ({
                         </div>
                         <Input 
                             label="Quantity" 
-                            type="number" 
+                            type="number"
+                            inputMode="numeric"
                             placeholder="1"
                             value={quantity}
                             onChange={e => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
@@ -81,7 +82,8 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = ({
                 <div className="md:col-span-2">
                      <Input 
                         label="Base Rate" 
-                        type="number" 
+                        type="number"
+                        inputMode="decimal"
                         placeholder="e.g., 550"
                         value={rate}
                         onChange={e => setRate(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}

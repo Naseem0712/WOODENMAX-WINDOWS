@@ -51,8 +51,6 @@ function getContrastYIQ(hexcolor: string){
     return (yiq >= 128) ? 'black' : 'white';
 }
 
-const standardGlassThicknesses = [5, 6, 8, 10, 12, 15, 18];
-
 const Slider: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string }> = ({ label, ...props }) => (
     <div>
         <label className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
@@ -141,13 +139,6 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
     });
   };
 
-  const handleGlassOptionChange = <K extends keyof ProfileSeries['glassOptions']>(key: K, value: any) => {
-      setConfig('series', {
-        ...series,
-        glassOptions: { ...series.glassOptions, [key]: value },
-      });
-  };
-
   const handleFixShutterChange = (index: number, isChecked: boolean) => {
       const newFixedShutters = [...config.fixedShutters];
       newFixedShutters[index] = isChecked;
@@ -209,7 +200,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
         <h2 className="text-2xl font-bold text-white">Window Configuration</h2>
         <button 
             onClick={onClose} 
-            className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white" 
+            className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white lg:hidden" 
             aria-label="Collapse panel"
         >
             <ChevronLeftIcon className="w-6 h-6" />
@@ -261,8 +252,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
       {(windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) && (
           <Card title="Grid Layout">
               <div className="grid grid-cols-2 gap-4">
-                  <Input label="Rows" type="number" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
-                  <Input label="Columns" type="number" value={gridCols} min={1} onChange={e => setGridSize(gridRows, Math.max(1, parseInt(e.target.value) || 1))} />
+                  <Input label="Rows" type="number" inputMode="numeric" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
+                  <Input label="Columns" type="number" inputMode="numeric" value={gridCols} min={1} onChange={e => setGridSize(gridRows, Math.max(1, parseInt(e.target.value) || 1))} />
               </div>
               <div className="mt-4">
                   <label className="block text-sm font-medium text-slate-300 mb-2">Panel Configuration (Click to toggle)</label>
@@ -296,7 +287,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
 
       {windowType === WindowType.GLASS_PARTITION && (
         <Card title="Partition Panel Setup">
-          <Input label="Number of Panels" type="number" min={1} max={8} value={config.partitionPanels.count} onChange={e => setConfig('partitionPanels', {...config.partitionPanels, count: Math.max(1, parseInt(e.target.value) || 1) })}/>
+          <Input label="Number of Panels" type="number" min={1} max={8} inputMode="numeric" value={config.partitionPanels.count} onChange={e => setConfig('partitionPanels', {...config.partitionPanels, count: Math.max(1, parseInt(e.target.value) || 1) })}/>
           {config.partitionPanels.count > 0 && (
             <div className="pt-2">
               <label className="block text-sm font-medium text-slate-300 mb-2">Panel Types (Click to cycle)</label>
@@ -362,22 +353,49 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
           <option value="tinted-blue">Tinted Blue</option>
         </Select>
         <div className="grid grid-cols-2 gap-4">
-          <Select label="Glass Thickness" value={config.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))}>
-              <option value="">Auto</option>
-              {series.glassOptions.thicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
-              {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
-          </Select>
-           <Select label="Special Type" value={config.glassSpecialType} onChange={e => setConfig('glassSpecialType', e.target.value as GlassSpecialType)}>
-              <option value="none">None</option>
-              {series.glassOptions.specialTypes.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-           </Select>
+          <div>
+            <Select label="Glass Thickness" value={config.glassThickness} onChange={e => setConfig('glassThickness', e.target.value as WindowConfig['glassThickness'])}>
+                <option value="">Auto</option>
+                {series.glassOptions.thicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
+                {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
+            </Select>
+            {config.glassThickness === 'custom' && (
+              <Input 
+                label="Custom Thickness" 
+                type="number"
+                inputMode="decimal"
+                unit="mm" 
+                className="mt-2"
+                value={config.customGlassThickness} 
+                onChange={e => setConfig('customGlassThickness', e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="e.g., 7"
+              />
+            )}
+          </div>
+           <div>
+              <Select label="Special Type" value={config.glassSpecialType} onChange={e => setConfig('glassSpecialType', e.target.value as GlassSpecialType)}>
+                  <option value="none">None</option>
+                  {series.glassOptions.specialTypes.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+                  <option value="custom">Custom...</option>
+              </Select>
+              {config.glassSpecialType === 'custom' && (
+                  <Input 
+                      label="Custom Type Name"
+                      type="text"
+                      className="mt-2"
+                      value={config.customGlassSpecialType}
+                      onChange={e => setConfig('customGlassSpecialType', e.target.value)}
+                      placeholder="e.g., Toughened"
+                  />
+              )}
+           </div>
         </div>
         
         <div className="pt-4 mt-4 border-t border-slate-700">
              <label className="block text-sm font-medium text-slate-300 mb-2">Glass Grid</label>
              <div className="grid grid-cols-2 gap-4">
-                <Input label="Rows" type="number" min="0" value={config.glassGrid.rows} onChange={e => setConfig('glassGrid', {...config.glassGrid, rows: Math.max(0, parseInt(e.target.value) || 0)})} />
-                <Input label="Columns" type="number" min="0" value={config.glassGrid.cols} onChange={e => setConfig('glassGrid', {...config.glassGrid, cols: Math.max(0, parseInt(e.target.value) || 0)})} />
+                <Input label="Rows" type="number" inputMode="numeric" min="0" value={config.glassGrid.rows} onChange={e => setConfig('glassGrid', {...config.glassGrid, rows: Math.max(0, parseInt(e.target.value) || 0)})} />
+                <Input label="Columns" type="number" inputMode="numeric" min="0" value={config.glassGrid.cols} onChange={e => setConfig('glassGrid', {...config.glassGrid, cols: Math.max(0, parseInt(e.target.value) || 0)})} />
             </div>
         </div>
 
@@ -483,43 +501,6 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
             </>
         )}
 
-        <div className="mt-4 pt-4 border-t border-slate-700">
-            <h4 className="text-md font-semibold text-slate-100 mb-2">Supported Glass</h4>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Standard Thicknesses (mm)</label>
-              <div className="grid grid-cols-4 gap-2">
-                {standardGlassThicknesses.map(t => (
-                  <label key={t} className="flex items-center space-x-2 p-2 bg-slate-700 rounded-md cursor-pointer hover:bg-slate-600">
-                    <input type="checkbox" checked={series.glassOptions.thicknesses.includes(t)} onChange={e => {
-                      const newT = e.target.checked ? [...series.glassOptions.thicknesses, t] : series.glassOptions.thicknesses.filter(th => th !== t);
-                      handleGlassOptionChange('thicknesses', newT.sort((a,b)=>a-b));
-                    }} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
-                    <span className="text-sm text-slate-200">{t}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 mt-3">
-              <label className="flex items-center space-x-2 p-2 bg-slate-700 rounded-md cursor-pointer hover:bg-slate-600">
-                <input type="checkbox" checked={series.glassOptions.customThicknessAllowed} onChange={e => handleGlassOptionChange('customThicknessAllowed', e.target.checked)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
-                <span className="text-sm text-slate-200">Allow Custom</span>
-              </label>
-              <label className="flex items-center space-x-2 p-2 bg-slate-700 rounded-md cursor-pointer hover:bg-slate-600">
-                <input type="checkbox" checked={series.glassOptions.specialTypes.includes('laminated')} onChange={e => {
-                   const newS = e.target.checked ? [...series.glassOptions.specialTypes, 'laminated'] : series.glassOptions.specialTypes.filter(s => s !== 'laminated');
-                   handleGlassOptionChange('specialTypes', newS);
-                }} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
-                <span className="text-sm text-slate-200">Laminated</span>
-              </label>
-              <label className="flex items-center space-x-2 p-2 bg-slate-700 rounded-md cursor-pointer hover:bg-slate-600">
-                <input type="checkbox" checked={series.glassOptions.specialTypes.includes('dgu')} onChange={e => {
-                   const newS = e.target.checked ? [...series.glassOptions.specialTypes, 'dgu'] : series.glassOptions.specialTypes.filter(s => s !== 'dgu');
-                   handleGlassOptionChange('specialTypes', newS);
-                }} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
-                <span className="text-sm text-slate-200">DGU</span>
-              </label>
-            </div>
-        </div>
       </Card>
 
       <Card title="Hardware Configuration">
@@ -531,8 +512,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                           <Button variant="danger" onClick={() => onRemoveHardware(item.id)} className="p-1 h-7 w-7 flex-shrink-0 ml-2"><TrashIcon className="w-4 h-4"/></Button>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
-                          <Input label="Qty" type="number" value={item.qtyPerShutter} onChange={e => onHardwareChange(item.id, 'qtyPerShutter', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 2"/>
-                          <Input label="Rate" type="number" value={item.rate} onChange={e => onHardwareChange(item.id, 'rate', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 50"/>
+                          <Input label="Qty" type="number" inputMode="numeric" value={item.qtyPerShutter} onChange={e => onHardwareChange(item.id, 'qtyPerShutter', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 2"/>
+                          <Input label="Rate" type="number" inputMode="decimal" value={item.rate} onChange={e => onHardwareChange(item.id, 'rate', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 50"/>
                            <Select label="Unit" value={item.unit} onChange={(e) => onHardwareChange(item.id, 'unit', e.target.value)}>
                               <option value="per_shutter_or_door">Per Door/Panel</option>
                               <option value="per_window">Per Window</option>

@@ -577,6 +577,14 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                 const hasMesh = item.config.windowType === WindowType.SLIDING && item.config.shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
                                 const keyHardware = item.hardwareItems.filter(h => h.name.toLowerCase().includes('handle') || h.name.toLowerCase().includes('lock')).map(h => h.name).join(', ');
                                 
+                                const glassThicknessText = item.config.glassThickness === 'custom' 
+                                    ? item.config.customGlassThickness 
+                                    : (item.config.glassThickness || 'Std.');
+
+                                const specialTypeText = item.config.glassSpecialType === 'custom'
+                                    ? item.config.customGlassSpecialType
+                                    : (item.config.glassSpecialType !== 'none' ? item.config.glassSpecialType : '');
+
                                 let panelSummary = '';
                                 if (item.config.windowType === WindowType.GLASS_PARTITION) {
                                     const typeCounts = item.config.partitionPanels.types.reduce((acc, panelConfig) => {
@@ -601,7 +609,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                 <div className="text-black text-[9pt] mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
                                                     <p><strong>Size (WxH):</strong> {item.config.width} x {item.config.height} mm</p>
                                                     <p><strong>Series:</strong> {item.config.series.name}</p>
-                                                    <p><strong>Glass:</strong> {item.config.glassThickness || 'Std.'}mm {item.config.glassSpecialType !== 'none' ? item.config.glassSpecialType : ''} {item.config.glassType}</p>
+                                                    <p><strong>Glass:</strong> {glassThicknessText}mm {specialTypeText} {item.config.glassType}</p>
                                                     <p><strong>Color:</strong> {item.profileColorName || item.config.profileColor}</p>
                                                     <p><strong>Mesh:</strong> {hasMesh ? 'Yes' : 'No'}</p>
                                                     {keyHardware && <p><strong>Hardware:</strong> {keyHardware}</p>}
