@@ -89,12 +89,29 @@
         box-shadow: none !important;
         border: none !important;
     }
+    /* Layout fixes for html2pdf.js which doesn't respect @media print */
+    .pdf-export-mode .print-item > .flex {
+        display: block !important;
+    }
+    .pdf-export-mode .print-item .w-1\/3,
+    .pdf-export-mode .print-item .w-2\/3 {
+        width: 100% !important;
+    }
+    .pdf-export-mode .print-item .w-1\/3 {
+        margin-bottom: 8px;
+    }
+    .pdf-export-mode textarea.print-editable {
+        border-color: transparent !important;
+        background-color: transparent !important;
+        resize: none !important;
+    }
+
 
     @media print {
         *, *::before, *::after {
             box-sizing: border-box !important;
         }
-        html, body {
+        html, body, #root { /* Added #root to prevent color bleed */
             margin: 0;
             padding: 0;
             background: #fff !important;
