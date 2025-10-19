@@ -48,13 +48,13 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = ({
     const totalCost = baseCost + totalHardwareCost;
 
     return (
-        <div className="p-4 bg-slate-800 border-t-2 border-slate-700 shadow-inner flex-grow min-h-0 overflow-y-auto custom-scrollbar">
+        <div className="p-4 bg-slate-800 border-t-2 border-slate-700 shadow-inner lg:rounded-none rounded-t-lg">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end max-w-7xl mx-auto">
                 <div className="md:col-span-3">
-                    <div className="flex justify-between items-center mb-2">
+                     <div className="flex justify-between items-center mb-2">
                         <h4 className="text-lg font-semibold text-slate-100">Quotation Details</h4>
                         {onClose && (
-                            <button onClick={onClose} className="p-1 rounded-full hover:bg-slate-700 lg:hidden">
+                            <button onClick={onClose} className="p-1 rounded-full hover:bg-slate-700 lg:hidden" aria-label="Close quotation panel">
                                 <XMarkIcon className="w-5 h-5 text-slate-400" />
                             </button>
                         )}

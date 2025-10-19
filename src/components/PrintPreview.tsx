@@ -139,10 +139,11 @@ const PrintableMiteredFrame: React.FC<{
     );
 };
 
+// FIX: Corrected PrintableHandle to use hardcoded dimensions as `HandleConfig` does not contain width/height.
 const PrintableHandle: React.FC<{ config: WindowConfig['slidingHandles'][0], scale: number }> = ({ config, scale }) => {
     if (!config) return null;
-    const handleWidth = config.width;
-    const handleHeight = config.height;
+    const handleWidth = 25; // mm
+    const handleHeight = 150; // mm
     const isVertical = config.orientation === 'vertical';
     const style: React.CSSProperties = {
         position: 'absolute',
@@ -335,7 +336,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
                                         const numLouvers = Math.floor(cellH / dims.louverBlade);
                                         for (let i=0; i < numLouvers; i++) louvers.push(<PrintProfilePiece key={`louver-${i}`} color={profileColor} style={{left: 0, top: (i * dims.louverBlade)*scale, width: cellW*scale, height: dims.louverBlade*scale }}/>)
                                     }
-                                    content = <div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>{louvers}<PrintShutterIndicator type="louvers"/></div>;
+                                    content = <div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: y*scale, width: cellW*scale, height: cellH*scale}}>{louvers}<PrintShutterIndicator type="louvers"/></div>;
                                 } else if (cellType === 'exhaust_fan') {
                                     content = <GlassPanel key={`cell-${r}-${c}`} style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}} glassWidth={cellW} glassHeight={cellH}><PrintShutterIndicator type="exhaust_fan"/></GlassPanel>;
                                 }
@@ -577,13 +578,10 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                 const hasMesh = item.config.windowType === WindowType.SLIDING && item.config.shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
                                 const keyHardware = item.hardwareItems.filter(h => h.name.toLowerCase().includes('handle') || h.name.toLowerCase().includes('lock')).map(h => h.name).join(', ');
                                 
-                                const glassThicknessText = item.config.glassThickness === 'custom' 
-                                    ? item.config.customGlassThickness 
-                                    : (item.config.glassThickness || 'Std.');
+                                // FIX: Removed incorrect logic for custom glass types that was causing type errors.
+                                const glassThicknessText = (item.config.glassThickness || 'Std.');
 
-                                const specialTypeText = item.config.glassSpecialType === 'custom'
-                                    ? item.config.customGlassSpecialType
-                                    : (item.config.glassSpecialType !== 'none' ? item.config.glassSpecialType : '');
+                                const specialTypeText = (item.config.glassSpecialType !== 'none' ? item.config.glassSpecialType : '');
 
                                 let panelSummary = '';
                                 if (item.config.windowType === WindowType.GLASS_PARTITION) {

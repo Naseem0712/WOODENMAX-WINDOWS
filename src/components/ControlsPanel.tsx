@@ -9,7 +9,7 @@ import { PlusIcon } from './icons/PlusIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { DimensionInput } from './ui/DimensionInput';
 import { v4 as uuidv4 } from 'uuid';
-import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
+import { XMarkIcon } from './icons/XMarkIcon';
 
 
 interface ControlsPanelProps {
@@ -215,15 +215,15 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
   };
 
   return (
-    <div className="w-full lg:w-96 p-4 space-y-6 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-white">Window Configuration</h2>
+    <div className="w-full p-4 space-y-6 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
+      <div className="flex justify-between items-center pb-2 border-b border-slate-700">
+        <h2 className="text-2xl font-bold text-white">Configuration</h2>
         <button 
             onClick={onClose} 
             className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white" 
-            aria-label="Collapse panel"
+            aria-label="Close panel"
         >
-            <ChevronLeftIcon className="w-6 h-6" />
+            <XMarkIcon className="w-6 h-6" />
         </button>
       </div>
 

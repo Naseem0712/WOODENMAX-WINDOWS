@@ -10,6 +10,8 @@ import { QuotationListModal } from './components/QuotationListModal';
 import { Logo } from './components/icons/Logo';
 import { Button } from './components/ui/Button';
 import { DownloadIcon } from './components/icons/DownloadIcon';
+import { AdjustmentsIcon } from './components/icons/AdjustmentsIcon';
+import { ListBulletIcon } from './components/icons/ListBulletIcon';
 
 interface BeforeInstallPromptEvent extends Event {
     readonly platforms: Array<string>;
@@ -129,7 +131,9 @@ const App: React.FC = () => {
   const [width, setWidth] = useState<number | ''>(1800);
   const [height, setHeight] = useState<number | ''>(2100);
   const [fixedPanels, setFixedPanels] = useState<FixedPanel[]>([]);
-  const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const [isPanelOpen, setIsPanelOpen] = useState(window.innerWidth >= 1024);
+  const [isMobileQuoteOpen, setIsMobileQuoteOpen] = useState(false);
+
   const [glassType, setGlassType] = useState<GlassType>(GlassType.CLEAR);
   const [glassThickness, setGlassThickness] = useState<number | ''>(8);
   const [glassSpecialType, setGlassSpecialType] = useState<GlassSpecialType>('none');
@@ -252,18 +256,6 @@ const App: React.FC = () => {
     } catch (error) { console.error("Could not save quotation settings", error); }
   }, [quotationSettings]);
   
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isPanelOpen && panelRef.current && !panelRef.current.contains(event.target as Node)) {
-        setIsPanelOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isPanelOpen]);
-
   const SERIES_MAP: Record<WindowType, ProfileSeries> = {
     [WindowType.SLIDING]: DEFAULT_SLIDING_SERIES,
     [WindowType.CASEMENT]: DEFAULT_CASEMENT_SERIES,
@@ -590,6 +582,47 @@ const App: React.FC = () => {
     }
     setInstallPrompt(null);
   };
+  
+  const commonControlProps = {
+    config: windowConfig,
+    setConfig: (field: keyof WindowConfig, value: any) => {
+        switch(field) {
+            case 'width': setWidth(value); break;
+            case 'height': setHeight(value); break;
+            case 'series': setSeries(value); break;
+            case 'glassType': setGlassType(value); break;
+            case 'glassThickness': setGlassThickness(value); break;
+            case 'glassSpecialType': setGlassSpecialType(value); break;
+            case 'profileColor': setProfileColor(value); break;
+            case 'glassGrid': setGlassGrid(value); break;
+            case 'windowType': setWindowType(value); break;
+            case 'trackType': setTrackType(value); break;
+            case 'shutterConfig': setShutterConfig(value); break;
+            case 'fixedShutters': setFixedShutters(value); break;
+            case 'slidingHandles': setSlidingHandles(value); break;
+            case 'doorPositions': setDoorPositions(value); break;
+            case 'ventilatorGrid': setVentilatorGrid(value); break;
+            case 'partitionPanels': setPartitionPanels(value); break;
+        }
+    },
+    setGridSize: handleSetGridSize,
+    availableSeries: availableSeries,
+    onSeriesSelect: handleSeriesSelect,
+    onSeriesSave: handleSeriesSave,
+    onSeriesDelete: handleSeriesDelete,
+    fixedPanels: fixedPanels,
+    addFixedPanel: addFixedPanel,
+    removeFixedPanel: removeFixedPanel,
+    updateFixedPanelSize: updateFixedPanelSize,
+    onHardwareChange: handleHardwareChange,
+    onAddHardware: addHardwareItem,
+    onRemoveHardware: removeHardwareItem,
+    toggleDoorPosition: toggleDoorPosition,
+    onVentilatorCellClick: handleVentilatorCellClick,
+    savedColors: savedColors,
+    setSavedColors: setSavedColors,
+    onUpdateHandle: handleUpdateHandle,
+  };
 
 
   return (
@@ -616,70 +649,31 @@ const App: React.FC = () => {
             )}
         </header>
         <div className="flex flex-row flex-grow min-h-0">
-            <div ref={panelRef} className={`flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isPanelOpen ? 'w-80 md:w-96' : 'w-0'}`}>
-                <div className={`h-full overflow-hidden ${isPanelOpen ? 'w-80 md:w-96' : 'w-0'}`}>
-                    <ControlsPanel
-                        config={windowConfig}
-                        onClose={() => setIsPanelOpen(false)}
-                        setConfig={(field, value) => {
-                          // This is a simplified setter for demonstration. A more robust solution might use a reducer.
-                          switch(field) {
-                            case 'width': setWidth(value as number | ''); break;
-                            case 'height': setHeight(value as number | ''); break;
-                            case 'series': setSeries(value as ProfileSeries); break;
-                            case 'glassType': setGlassType(value as GlassType); break;
-                            case 'glassThickness': setGlassThickness(value as number | ''); break;
-                            case 'glassSpecialType': setGlassSpecialType(value as GlassSpecialType); break;
-                            case 'profileColor': setProfileColor(value as string); break;
-                            case 'glassGrid': setGlassGrid(value as {rows: number, cols: number}); break;
-                            case 'windowType': setWindowType(value as WindowType); break;
-                            case 'trackType': setTrackType(value as TrackType); break;
-                            case 'shutterConfig': setShutterConfig(value as ShutterConfigType); break;
-                            case 'fixedShutters': setFixedShutters(value as boolean[]); break;
-                            case 'slidingHandles': setSlidingHandles(value as (HandleConfig|null)[]); break;
-                            case 'doorPositions': setDoorPositions(value as {row: number, col: number, handle?: HandleConfig}[]); break;
-                            case 'ventilatorGrid': setVentilatorGrid(value as VentilatorCell[][]); break;
-                            case 'partitionPanels': setPartitionPanels(value as {count: number, types: PartitionPanelConfig[]}); break;
-                          }
-                        }}
-                        setGridSize={handleSetGridSize}
-                        availableSeries={availableSeries}
-                        onSeriesSelect={handleSeriesSelect}
-                        onSeriesSave={handleSeriesSave}
-                        onSeriesDelete={handleSeriesDelete}
-                        fixedPanels={fixedPanels}
-                        addFixedPanel={addFixedPanel}
-                        removeFixedPanel={removeFixedPanel}
-                        updateFixedPanelSize={updateFixedPanelSize}
-                        onHardwareChange={handleHardwareChange}
-                        onAddHardware={addHardwareItem}
-                        onRemoveHardware={removeHardwareItem}
-                        toggleDoorPosition={toggleDoorPosition}
-                        onVentilatorCellClick={handleVentilatorCellClick}
-                        savedColors={savedColors}
-                        setSavedColors={setSavedColors}
-                        onUpdateHandle={handleUpdateHandle}
-                    />
+            {/* Desktop Side Panel */}
+            <div ref={panelRef} className={`hidden lg:block flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isPanelOpen ? 'w-96' : 'w-0'}`}>
+                <div className={`h-full overflow-hidden ${isPanelOpen ? 'w-96' : 'w-0'}`}>
+                    <ControlsPanel {...commonControlProps} onClose={() => setIsPanelOpen(false)} />
                 </div>
             </div>
+
             <div className="relative flex-1 flex flex-col min-w-0">
                 {!isPanelOpen && (
                   <button 
                     onClick={() => setIsPanelOpen(true)}
-                    className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex items-center justify-center transition-all duration-300 no-print"
+                    className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex"
                     aria-label="Expand panel"
                   >
                     <ChevronLeftIcon className="w-5 h-5 rotate-180" />
                   </button>
                 )}
-              <div className="flex-grow">
+              <div className="flex-grow relative">
                  <WindowCanvas 
                     config={windowConfig} 
                     onRemoveVerticalDivider={handleRemoveVerticalDivider}
                     onRemoveHorizontalDivider={handleRemoveHorizontalDivider}
                   />
               </div>
-              <div className="flex-shrink-0 no-print">
+              <div className="flex-shrink-0 no-print hidden lg:block">
                   <QuotationPanel 
                       width={Number(width) || 0}
                       height={Number(height) || 0}
@@ -697,7 +691,51 @@ const App: React.FC = () => {
                       onViewQuotation={() => setIsQuotationModalOpen(true)}
                   />
               </div>
+
+              {/* Mobile Bottom Action Bar */}
+              <div className="lg:hidden p-2 bg-slate-800 border-t-2 border-slate-700 grid grid-cols-2 gap-2 no-print">
+                  <Button onClick={() => setIsPanelOpen(true)} variant="secondary" className="h-12">
+                      <AdjustmentsIcon className="w-5 h-5 mr-2" /> Configure
+                  </Button>
+                  <Button onClick={() => setIsMobileQuoteOpen(true)} variant="secondary" className="h-12">
+                       <ListBulletIcon className="w-5 h-5 mr-2" /> Quotation
+                  </Button>
+              </div>
             </div>
+        </div>
+
+        {/* Mobile Controls Panel (Bottom Sheet) */}
+        <div 
+          className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${isPanelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+          onClick={() => setIsPanelOpen(false)}
+        ></div>
+        <div className={`lg:hidden fixed bottom-0 left-0 right-0 max-h-[85vh] transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${isPanelOpen ? 'translate-y-0' : 'translate-y-full'}`}>
+           <ControlsPanel {...commonControlProps} onClose={() => setIsPanelOpen(false)} />
+        </div>
+
+         {/* Mobile Quotation Panel (Bottom Sheet) */}
+        <div 
+          className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${isMobileQuoteOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+          onClick={() => setIsMobileQuoteOpen(false)}
+        ></div>
+        <div className={`lg:hidden fixed bottom-0 left-0 right-0 transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${isMobileQuoteOpen ? 'translate-y-0' : 'translate-y-full'}`}>
+            <QuotationPanel 
+                width={Number(width) || 0}
+                height={Number(height) || 0}
+                quantity={quantity}
+                setQuantity={setQuantity}
+                areaType={areaType}
+                setAreaType={setAreaType}
+                rate={rate}
+                setRate={setRate}
+                onSave={handleSaveToQuotation}
+                windowTitle={windowTitle}
+                setWindowTitle={setWindowTitle}
+                hardwareCostPerWindow={hardwareCostPerWindow}
+                quotationItemCount={quotationItems.length}
+                onViewQuotation={() => setIsQuotationModalOpen(true)}
+                onClose={() => setIsMobileQuoteOpen(false)}
+            />
         </div>
       </div>
     </>
