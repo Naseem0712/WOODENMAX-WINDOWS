@@ -19,12 +19,12 @@ export interface HardwareItem {
   unit: 'per_shutter_or_door' | 'per_window';
 }
 
-export type GlassSpecialType = 'none' | 'laminated' | 'dgu' | 'custom';
+export type GlassSpecialType = 'none' | 'laminated' | 'dgu';
 
 export interface GlassOptions {
     thicknesses: number[];
     customThicknessAllowed: boolean;
-    specialTypes: Exclude<GlassSpecialType, 'none' | 'custom'>[];
+    specialTypes: Exclude<GlassSpecialType, 'none'>[];
 }
 
 export interface ProfileDimensions {
@@ -52,11 +52,17 @@ export interface ProfileDimensions {
   glassGridProfile: number | '';
 }
 
+export type ProfileDetails = {
+    [K in keyof ProfileDimensions]?: number | '';
+}
+
 export interface ProfileSeries {
   id: string;
   name: string;
   type: WindowType;
   dimensions: ProfileDimensions;
+  weights?: ProfileDetails;
+  lengths?: ProfileDetails;
   hardwareItems: HardwareItem[];
   glassOptions: GlassOptions;
 }
@@ -90,6 +96,9 @@ export enum GlassType {
   CLEAR = 'clear',
   FROSTED = 'frosted',
   TINTED_BLUE = 'tinted-blue',
+  CLEAR_SAPPHIRE = 'clear-sapphire',
+  BROWN_TINTED = 'brown-tinted',
+  BLACK_TINTED = 'black-tinted',
 }
 
 export enum AreaType {
@@ -101,8 +110,6 @@ export interface HandleConfig {
   x: number; // 0-100 percentage
   y: number; // 0-100 percentage
   orientation: 'vertical' | 'horizontal';
-  width: number; // in mm
-  height: number; // in mm
 }
 
 export type VentilatorCellType = 'glass' | 'louvers' | 'door' | 'exhaust_fan';
@@ -125,10 +132,8 @@ export interface WindowConfig {
   series: ProfileSeries;
   fixedPanels: FixedPanel[];
   glassType: GlassType;
-  glassThickness: number | '' | 'custom';
-  customGlassThickness: number | '';
+  glassThickness: number | '';
   glassSpecialType: GlassSpecialType;
-  customGlassSpecialType: string;
   profileColor: string;
   glassGrid: { rows: number, cols: number };
   

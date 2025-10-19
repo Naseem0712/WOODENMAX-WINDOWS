@@ -1,16 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, GlassOptions } from './types';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
 import { v4 as uuidv4 } from 'uuid';
+import { ChevronLeftIcon } from './components/icons/ChevronLeftIcon';
 import { QuotationPanel } from './components/QuotationPanel';
 import { QuotationListModal } from './components/QuotationListModal';
 import { Logo } from './components/icons/Logo';
 import { Button } from './components/ui/Button';
 import { DownloadIcon } from './components/icons/DownloadIcon';
-import { AdjustmentsIcon } from './components/icons/AdjustmentsIcon';
-import { ListBulletIcon } from './components/icons/ListBulletIcon';
 
 interface BeforeInstallPromptEvent extends Event {
     readonly platforms: Array<string>;
@@ -27,11 +26,10 @@ const BASE_DIMENSIONS = {
     mullion: 0, louverBlade: 0, topTrack: 0, bottomTrack: 0, glassGridProfile: 0,
 };
 
-// FIX: Added GlassOptions type to ensure correct type inference for specialTypes.
-const DEFAULT_GLASS_OPTIONS: GlassOptions = {
+const DEFAULT_GLASS_OPTIONS = {
     thicknesses: [5, 6, 8, 10, 12],
     customThicknessAllowed: true,
-    specialTypes: ['laminated', 'dgu'],
+    specialTypes: ['laminated', 'dgu'] as Exclude<GlassSpecialType, 'none'>[],
 };
 
 const DEFAULT_SLIDING_HARDWARE: HardwareItem[] = [
@@ -53,6 +51,8 @@ const DEFAULT_SLIDING_SERIES: ProfileSeries = {
     },
     hardwareItems: DEFAULT_SLIDING_HARDWARE,
     glassOptions: DEFAULT_GLASS_OPTIONS,
+    weights: {},
+    lengths: {},
 };
 
 const DEFAULT_CASEMENT_HARDWARE: HardwareItem[] = [
@@ -70,6 +70,8 @@ const DEFAULT_CASEMENT_SERIES: ProfileSeries = {
     dimensions: { ...BASE_DIMENSIONS, outerFrame: 60, fixedFrame: 25, casementShutter: 70, mullion: 80, glassGridProfile: 15 },
     hardwareItems: DEFAULT_CASEMENT_HARDWARE,
     glassOptions: DEFAULT_GLASS_OPTIONS,
+    weights: {},
+    lengths: {},
 };
 
 const DEFAULT_VENTILATOR_HARDWARE: HardwareItem[] = [
@@ -86,6 +88,8 @@ const DEFAULT_VENTILATOR_SERIES: ProfileSeries = {
     dimensions: { ...BASE_DIMENSIONS, outerFrame: 50, fixedFrame: 20, casementShutter: 45, mullion: 50, louverBlade: 25, glassGridProfile: 15 },
     hardwareItems: DEFAULT_VENTILATOR_HARDWARE,
     glassOptions: DEFAULT_GLASS_OPTIONS,
+    weights: {},
+    lengths: {},
 };
 
 const DEFAULT_PARTITION_HARDWARE: HardwareItem[] = [
@@ -105,7 +109,9 @@ const DEFAULT_GLASS_PARTITION_SERIES: ProfileSeries = {
     thicknesses: [8, 10, 12],
     customThicknessAllowed: true,
     specialTypes: ['laminated'],
-  }
+  },
+  weights: {},
+  lengths: {},
 };
 
 const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
@@ -118,15 +124,12 @@ const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
     description: 'Supply and installation of premium aluminium windows and partitions as per the agreed specifications.'
 };
 
-type MobileSheet = 'none' | 'controls' | 'quotation';
-
 const App: React.FC = () => {
   // Shared State
   const [width, setWidth] = useState<number | ''>(1800);
   const [height, setHeight] = useState<number | ''>(2100);
   const [fixedPanels, setFixedPanels] = useState<FixedPanel[]>([]);
-  const [isDesktopPanelOpen, setIsDesktopPanelOpen] = useState(true);
-  const [mobileSheet, setMobileSheet] = useState<MobileSheet>('none');
+  const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [glassType, setGlassType] = useState<GlassType>(GlassType.CLEAR);
   const [glassThickness, setGlassThickness] = useState<number | ''>(8);
   const [glassSpecialType, setGlassSpecialType] = useState<GlassSpecialType>('none');
@@ -142,6 +145,7 @@ const App: React.FC = () => {
   const [fixedShutters, setFixedShutters] = useState<boolean[]>([]);
   const [slidingHandles, setSlidingHandles] = useState<(HandleConfig | null)[]>([]);
 
+  
   // Casement & Ventilator State
   const [verticalDividers, setVerticalDividers] = useState<number[]>([0.5]);
   const [horizontalDividers, setHorizontalDividers] = useState<number[]>([]);
@@ -203,14 +207,8 @@ const App: React.FC = () => {
   
   // PWA Install State
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 1024);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
   
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -253,6 +251,18 @@ const App: React.FC = () => {
       window.localStorage.setItem('woodenmax-quotation-settings', JSON.stringify(quotationSettings));
     } catch (error) { console.error("Could not save quotation settings", error); }
   }, [quotationSettings]);
+  
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isPanelOpen && panelRef.current && !panelRef.current.contains(event.target as Node)) {
+        setIsPanelOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isPanelOpen]);
 
   const SERIES_MAP: Record<WindowType, ProfileSeries> = {
     [WindowType.SLIDING]: DEFAULT_SLIDING_SERIES,
@@ -430,10 +440,20 @@ const App: React.FC = () => {
 
   const handleRemoveVerticalDivider = (index: number) => {
       setVerticalDividers(prev => prev.filter((_, i) => i !== index));
+      setVentilatorGrid(prev => prev.map(row => {
+          row.splice(index + 1, 1);
+          return row;
+      }));
+      setDoorPositions(prev => prev.filter(p => p.col !== index + 1).map(p => p.col > index + 1 ? {...p, col: p.col - 1} : p));
   };
   
   const handleRemoveHorizontalDivider = (index: number) => {
       setHorizontalDividers(prev => prev.filter((_, i) => i !== index));
+      setVentilatorGrid(prev => {
+          prev.splice(index + 1, 1);
+          return prev;
+      });
+      setDoorPositions(prev => prev.filter(p => p.row !== index + 1).map(p => p.row > index + 1 ? {...p, row: p.row - 1} : p));
   };
 
   const handleUpdateHandle = (panelId: string, newConfig: HandleConfig | null) => {
@@ -517,7 +537,25 @@ const App: React.FC = () => {
   }, [series.hardwareItems, numShutters, doorPositions.length, ventilatorGrid, windowType, partitionPanels, horizontalDividers, verticalDividers]);
 
   const windowConfig: WindowConfig = useMemo(() => ({
-    width: width, height: height, series, fixedPanels, glassType, glassThickness: glassThickness as any, customGlassThickness: 0, glassSpecialType, customGlassSpecialType: '', profileColor, glassGrid, windowType, trackType, shutterConfig, fixedShutters, slidingHandles, verticalDividers, horizontalDividers, doorPositions, ventilatorGrid, partitionPanels,
+    width: width,
+    height: height,
+    series,
+    fixedPanels,
+    glassType,
+    glassThickness: Number(glassThickness) || 0,
+    glassSpecialType,
+    profileColor,
+    glassGrid,
+    windowType,
+    trackType,
+    shutterConfig,
+    fixedShutters,
+    slidingHandles,
+    verticalDividers,
+    horizontalDividers,
+    doorPositions,
+    ventilatorGrid,
+    partitionPanels,
   }), [width, height, series, fixedPanels, glassType, glassThickness, glassSpecialType, profileColor, glassGrid, windowType, trackType, shutterConfig, fixedShutters, slidingHandles, verticalDividers, horizontalDividers, doorPositions, ventilatorGrid, partitionPanels]);
 
   const handleSaveToQuotation = () => {
@@ -537,105 +575,130 @@ const App: React.FC = () => {
     alert(`"${newItem.title}" saved to quotation! You now have ${quotationItems.length + 1} item(s).`);
   }
 
+  const handleRemoveQuotationItem = (id: string) => {
+      setQuotationItems(prev => prev.filter(item => item.id !== id));
+  }
+  
   const handleInstallClick = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      console.log('User accepted the A2HS prompt');
+    } else {
+      console.log('User dismissed the A2HS prompt');
+    }
+    setInstallPrompt(null);
   };
 
-  const panelProps = {
-      config: windowConfig,
-      onClose: () => isMobile ? setMobileSheet('none') : setIsDesktopPanelOpen(false),
-      setConfig: (field: keyof WindowConfig, value: any) => {
-        const setters: Record<string, Function> = { width: setWidth, height: setHeight, series: setSeries, glassType: setGlassType, glassThickness: setGlassThickness, glassSpecialType: setGlassSpecialType, profileColor: setProfileColor, glassGrid: setGlassGrid, windowType: setWindowType, trackType: setTrackType, shutterConfig: setShutterConfig, fixedShutters: setFixedShutters, slidingHandles: setSlidingHandles, doorPositions: setDoorPositions, ventilatorGrid: setVentilatorGrid, partitionPanels: setPartitionPanels,
-        };
-        setters[field]?.(value);
-      },
-      setGridSize: handleSetGridSize, availableSeries, onSeriesSelect: handleSeriesSelect, onSeriesSave: handleSeriesSave,
-      onSeriesDelete: handleSeriesDelete, fixedPanels, addFixedPanel, removeFixedPanel,
-      updateFixedPanelSize, onHardwareChange: handleHardwareChange, onAddHardware: addHardwareItem, onRemoveHardware: removeHardwareItem,
-      toggleDoorPosition,
-      onVentilatorCellClick: handleVentilatorCellClick,
-      savedColors, setSavedColors, onUpdateHandle: handleUpdateHandle,
-  };
-  
-  const quotationPanelProps = {
-      width: Number(width), height: Number(height), quantity, setQuantity, areaType, setAreaType, rate, setRate, onSave: handleSaveToQuotation,
-      windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount: quotationItems.length, onViewQuotation: () => setIsQuotationModalOpen(true),
-      onClose: () => setMobileSheet('none'),
-  };
 
   return (
     <>
-      <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} onRemove={id => setQuotationItems(p => p.filter(i => i.id !== id))} settings={quotationSettings} setSettings={setQuotationSettings} />
-      
+      <QuotationListModal 
+        isOpen={isQuotationModalOpen}
+        onClose={() => setIsQuotationModalOpen(false)}
+        items={quotationItems}
+        onRemove={handleRemoveQuotationItem}
+        settings={quotationSettings}
+        setSettings={setQuotationSettings}
+      />
       <div className="flex flex-col h-screen font-sans bg-slate-900 overflow-hidden">
-        <header className="bg-slate-800 p-3 flex items-center justify-between shadow-md z-40 no-print shrink-0">
-            <div className="flex items-center">
-                <Logo className="h-10 w-10 mr-4 shrink-0" />
-                <div className="hidden sm:block">
-                    <h1 className="text-2xl font-bold text-white tracking-wider">WoodenMax</h1>
-                    <p className="text-sm text-indigo-300">Reshaping spaces</p>
-                </div>
+        <header className="bg-slate-800 p-3 flex items-center shadow-md z-40 no-print">
+            <Logo className="h-10 w-10 mr-4 flex-shrink-0" />
+            <div className="flex-grow">
+                <h1 className="text-2xl font-bold text-white tracking-wider">WoodenMax</h1>
+                <p className="text-sm text-indigo-300">Reshaping spaces</p>
             </div>
-            <div className="flex items-center gap-2">
-                {installPrompt && ( <Button onClick={handleInstallClick} variant="secondary" className="hidden md:inline-flex"><DownloadIcon className="w-5 h-5 mr-2" /> Add to Home Screen</Button> )}
-            </div>
+             {installPrompt && (
+                <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse">
+                    <DownloadIcon className="w-5 h-5 mr-2" /> Add to Home Screen
+                </Button>
+            )}
         </header>
-
         <div className="flex flex-row flex-grow min-h-0">
-            {/* Desktop Panel */}
-            <div className={`shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print hidden lg:block ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
-                <div className={`h-full overflow-hidden ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
-                    <ControlsPanel {...panelProps} />
+            <div ref={panelRef} className={`flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isPanelOpen ? 'w-80 md:w-96' : 'w-0'}`}>
+                <div className={`h-full overflow-hidden ${isPanelOpen ? 'w-80 md:w-96' : 'w-0'}`}>
+                    <ControlsPanel
+                        config={windowConfig}
+                        onClose={() => setIsPanelOpen(false)}
+                        setConfig={(field, value) => {
+                          // This is a simplified setter for demonstration. A more robust solution might use a reducer.
+                          switch(field) {
+                            case 'width': setWidth(value as number | ''); break;
+                            case 'height': setHeight(value as number | ''); break;
+                            case 'series': setSeries(value as ProfileSeries); break;
+                            case 'glassType': setGlassType(value as GlassType); break;
+                            case 'glassThickness': setGlassThickness(value as number | ''); break;
+                            case 'glassSpecialType': setGlassSpecialType(value as GlassSpecialType); break;
+                            case 'profileColor': setProfileColor(value as string); break;
+                            case 'glassGrid': setGlassGrid(value as {rows: number, cols: number}); break;
+                            case 'windowType': setWindowType(value as WindowType); break;
+                            case 'trackType': setTrackType(value as TrackType); break;
+                            case 'shutterConfig': setShutterConfig(value as ShutterConfigType); break;
+                            case 'fixedShutters': setFixedShutters(value as boolean[]); break;
+                            case 'slidingHandles': setSlidingHandles(value as (HandleConfig|null)[]); break;
+                            case 'doorPositions': setDoorPositions(value as {row: number, col: number, handle?: HandleConfig}[]); break;
+                            case 'ventilatorGrid': setVentilatorGrid(value as VentilatorCell[][]); break;
+                            case 'partitionPanels': setPartitionPanels(value as {count: number, types: PartitionPanelConfig[]}); break;
+                          }
+                        }}
+                        setGridSize={handleSetGridSize}
+                        availableSeries={availableSeries}
+                        onSeriesSelect={handleSeriesSelect}
+                        onSeriesSave={handleSeriesSave}
+                        onSeriesDelete={handleSeriesDelete}
+                        fixedPanels={fixedPanels}
+                        addFixedPanel={addFixedPanel}
+                        removeFixedPanel={removeFixedPanel}
+                        updateFixedPanelSize={updateFixedPanelSize}
+                        onHardwareChange={handleHardwareChange}
+                        onAddHardware={addHardwareItem}
+                        onRemoveHardware={removeHardwareItem}
+                        toggleDoorPosition={toggleDoorPosition}
+                        onVentilatorCellClick={handleVentilatorCellClick}
+                        savedColors={savedColors}
+                        setSavedColors={setSavedColors}
+                        onUpdateHandle={handleUpdateHandle}
+                    />
                 </div>
             </div>
-
             <div className="relative flex-1 flex flex-col min-w-0">
-                {!isDesktopPanelOpen && !isMobile && (
-                  <button onClick={() => setIsDesktopPanelOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex items-center justify-center transition-all duration-300 no-print" aria-label="Expand panel">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 rotate-180"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+                {!isPanelOpen && (
+                  <button 
+                    onClick={() => setIsPanelOpen(true)}
+                    className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex items-center justify-center transition-all duration-300 no-print"
+                    aria-label="Expand panel"
+                  >
+                    <ChevronLeftIcon className="w-5 h-5 rotate-180" />
                   </button>
                 )}
-
               <div className="flex-grow">
-                <WindowCanvas config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} />
+                 <WindowCanvas 
+                    config={windowConfig} 
+                    onRemoveVerticalDivider={handleRemoveVerticalDivider}
+                    onRemoveHorizontalDivider={handleRemoveHorizontalDivider}
+                  />
               </div>
-              
-              {!isMobile && (
-                <div className="shrink-0">
-                    <QuotationPanel {...quotationPanelProps} />
-                </div>
-              )}
-
-              {/* Mobile Sheet Overlays */}
-              <div className={`fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity lg:hidden ${mobileSheet !== 'none' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setMobileSheet('none')}></div>
-              
-              <div className={`fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out lg:hidden ${mobileSheet === 'controls' ? 'translate-y-0' : 'translate-y-full'}`} style={{height: '85vh'}}>
-                  <div className="bg-slate-800 rounded-t-2xl h-full flex flex-col">
-                      <div className="text-center py-2 shrink-0" onClick={() => setMobileSheet('none')}><div className="w-12 h-1.5 bg-slate-600 rounded-full inline-block"></div></div>
-                      <ControlsPanel {...panelProps} />
-                  </div>
+              <div className="flex-shrink-0 no-print">
+                  <QuotationPanel 
+                      width={Number(width) || 0}
+                      height={Number(height) || 0}
+                      quantity={quantity}
+                      setQuantity={setQuantity}
+                      areaType={areaType}
+                      setAreaType={setAreaType}
+                      rate={rate}
+                      setRate={setRate}
+                      onSave={handleSaveToQuotation}
+                      windowTitle={windowTitle}
+                      setWindowTitle={setWindowTitle}
+                      hardwareCostPerWindow={hardwareCostPerWindow}
+                      quotationItemCount={quotationItems.length}
+                      onViewQuotation={() => setIsQuotationModalOpen(true)}
+                  />
               </div>
-               <div className={`fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out lg:hidden ${mobileSheet === 'quotation' ? 'translate-y-0' : 'translate-y-full'}`} style={{height: '60vh'}}>
-                  <div className="bg-slate-800 rounded-t-2xl h-full flex flex-col">
-                      <div className="text-center py-2 shrink-0" onClick={() => setMobileSheet('none')}><div className="w-12 h-1.5 bg-slate-600 rounded-full inline-block"></div></div>
-                      <QuotationPanel {...quotationPanelProps} />
-                  </div>
-              </div>
-
             </div>
         </div>
-        {/* Mobile Bottom Nav */}
-        {isMobile && (
-            <div className="grid grid-cols-2 gap-2 p-2 bg-slate-800 border-t border-slate-700 no-print shrink-0">
-                <Button onClick={() => setMobileSheet('controls')} variant={mobileSheet === 'controls' ? 'primary' : 'secondary'} className="h-12 text-base">
-                    <AdjustmentsIcon className="w-6 h-6 mr-2" /> Configure
-                </Button>
-                <Button onClick={() => setMobileSheet('quotation')} variant={mobileSheet === 'quotation' ? 'primary' : 'secondary'} className="h-12 text-base">
-                    <ListBulletIcon className="w-6 h-6 mr-2" /> Quotation
-                </Button>
-            </div>
-        )}
       </div>
     </>
   );

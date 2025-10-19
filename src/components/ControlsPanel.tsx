@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import type { FixedPanel, ProfileDimensions, ProfileSeries, GlassType, HardwareItem, VentilatorCell, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, PartitionPanelConfig, HandleConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType } from '../types';
 import { Button } from './ui/Button';
+import { Card } from './ui/Card';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
 import { PlusIcon } from './icons/PlusIcon';
@@ -9,7 +10,6 @@ import { TrashIcon } from './icons/TrashIcon';
 import { DimensionInput } from './ui/DimensionInput';
 import { v4 as uuidv4 } from 'uuid';
 import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
-import { CollapsibleCard } from './ui/CollapsibleCard';
 
 
 interface ControlsPanelProps {
@@ -50,6 +50,8 @@ function getContrastYIQ(hexcolor: string){
     const yiq = ((r*299)+(g*587)+(b*114))/1000;
     return (yiq >= 128) ? 'black' : 'white';
 }
+
+const standardGlassThicknesses = [5, 6, 8, 10, 12, 15, 18];
 
 const Slider: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string }> = ({ label, ...props }) => (
     <div>
@@ -139,6 +141,17 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
     });
   };
 
+  const handleProfileDetailChange = (
+    field: 'weights' | 'lengths',
+    key: keyof ProfileDimensions,
+    value: number | ''
+  ) => {
+      setConfig('series', {
+        ...series,
+        [field]: { ...(series[field] || {}), [key]: value },
+      });
+  };
+
   const handleGlassOptionChange = <K extends keyof ProfileSeries['glassOptions']>(key: K, value: any) => {
       setConfig('series', {
         ...series,
@@ -202,35 +215,34 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
   };
 
   return (
-    <div className="w-full lg:w-96 p-4 space-y-4 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
+    <div className="w-full lg:w-96 p-4 space-y-6 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-white">Window Configuration</h2>
         <button 
             onClick={onClose} 
-            className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white hidden lg:block" 
+            className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white" 
             aria-label="Collapse panel"
         >
             <ChevronLeftIcon className="w-6 h-6" />
         </button>
       </div>
 
-      <div className="bg-slate-800 rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold text-slate-100 border-b border-slate-700 pb-3 mb-4">Design Type</h3>
+      <Card title="Design Type">
           <div className="grid grid-cols-2 bg-slate-700 rounded-md p-1 gap-1">
               <button onClick={() => setConfig('windowType', WindowType.SLIDING)} className={`p-2 text-sm font-semibold rounded ${windowType === WindowType.SLIDING ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Sliding</button>
               <button onClick={() => setConfig('windowType', WindowType.CASEMENT)} className={`p-2 text-sm font-semibold rounded ${windowType === WindowType.CASEMENT ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Casement</button>
               <button onClick={() => setConfig('windowType', WindowType.VENTILATOR)} className={`p-2 text-sm font-semibold rounded ${windowType === WindowType.VENTILATOR ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Ventilator</button>
               <button onClick={() => setConfig('windowType', WindowType.GLASS_PARTITION)} className={`p-2 text-sm font-semibold rounded ${windowType === WindowType.GLASS_PARTITION ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Partition</button>
           </div>
-      </div>
+      </Card>
       
-      <CollapsibleCard title="Overall Dimensions" defaultOpen>
+      <Card title="Overall Dimensions">
         <DimensionInput label="Total Width" value_mm={config.width} onChange_mm={v => setConfig('width', v)} placeholder="e.g., 1800" />
         <DimensionInput label="Total Height" value_mm={config.height} onChange_mm={v => setConfig('height', v)} placeholder="e.g., 1200" />
-      </CollapsibleCard>
+      </Card>
 
       {windowType === WindowType.SLIDING && (
-        <CollapsibleCard title="Track & Shutter Setup">
+        <Card title="Track & Shutter Setup">
             <Select label="Track Type" value={config.trackType} onChange={(e) => setConfig('trackType', parseInt(e.target.value) as TrackType)}>
             <option value={TrackType.TWO_TRACK}>2-Track</option>
             <option value={TrackType.THREE_TRACK}>3-Track</option>
@@ -254,11 +266,11 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                 </div>
               </div>
             )}
-        </CollapsibleCard>
+        </Card>
       )}
 
       {(windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) && (
-          <CollapsibleCard title="Grid Layout" defaultOpen>
+          <Card title="Grid Layout">
               <div className="grid grid-cols-2 gap-4">
                   <Input label="Rows" type="number" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
                   <Input label="Columns" type="number" value={gridCols} min={1} onChange={e => setGridSize(gridRows, Math.max(1, parseInt(e.target.value) || 1))} />
@@ -290,11 +302,11 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                     </div>
                   </div>
               </div>
-          </CollapsibleCard>
+          </Card>
       )}
 
       {windowType === WindowType.GLASS_PARTITION && (
-        <CollapsibleCard title="Partition Panel Setup">
+        <Card title="Partition Panel Setup">
           <Input label="Number of Panels" type="number" min={1} max={8} value={config.partitionPanels.count} onChange={e => setConfig('partitionPanels', {...config.partitionPanels, count: Math.max(1, parseInt(e.target.value) || 1) })}/>
           {config.partitionPanels.count > 0 && (
             <div className="pt-2">
@@ -312,11 +324,11 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
               </div>
             </div>
           )}
-        </CollapsibleCard>
+        </Card>
       )}
 
       {operablePanels.length > 0 && (
-          <CollapsibleCard title="Handle Configuration">
+          <Card title="Handle Configuration">
               <Select label="Select Panel" value={selectedPanelId} onChange={e => setSelectedPanelId(e.target.value)}>
                 {operablePanels.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
               </Select>
@@ -326,8 +338,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                           <input 
                               type="checkbox" 
                               checked={!!currentHandle} 
-                              // FIX: Added width and height properties to the new HandleConfig object.
-                              onChange={e => onUpdateHandle(selectedPanelId, e.target.checked ? { x: 50, y: 50, orientation: 'vertical', width: 25, height: 150 } : null)}
+                              onChange={e => onUpdateHandle(selectedPanelId, e.target.checked ? { x: 50, y: 50, orientation: 'vertical' } : null)}
                               className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"
                           />
                           <span className="text-sm text-slate-200">Enable Handle</span>
@@ -352,14 +363,17 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                       )}
                   </div>
               )}
-          </CollapsibleCard>
+          </Card>
       )}
 
-      <CollapsibleCard title="Appearance">
+      <Card title="Appearance">
         <Select label="Glass Tint" value={config.glassType} onChange={(e) => setConfig('glassType', e.target.value as GlassType)}>
           <option value="clear">Clear</option>
           <option value="frosted">Frosted</option>
           <option value="tinted-blue">Tinted Blue</option>
+          <option value="clear-sapphire">Clear Sapphire</option>
+          <option value="brown-tinted">Brown Tinted</option>
+          <option value="black-tinted">Black Tinted</option>
         </Select>
         <div className="grid grid-cols-2 gap-4">
           <Select label="Glass Thickness" value={config.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))}>
@@ -404,10 +418,10 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                 </div>
             )}
         </div>
-      </CollapsibleCard>
+      </Card>
       
       {windowType !== WindowType.GLASS_PARTITION && (
-        <CollapsibleCard title="Fixed Panels">
+        <Card title="Fixed Panels">
            <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.TOP)}><PlusIcon className="w-4 h-4 mr-2" /> Top</Button>
               <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.BOTTOM)}><PlusIcon className="w-4 h-4 mr-2" /> Bottom</Button>
@@ -425,10 +439,10 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
                    ))}
                </div>
            )}
-        </CollapsibleCard>
+        </Card>
       )}
 
-      <CollapsibleCard title="Profile Series Dimensions">
+      <Card title="Profile Series Dimensions">
         <div className="space-y-2">
           <Select label="Active Profile" value={series.id} onChange={(e) => onSeriesSelect(e.target.value)}>
             {filteredAvailableSeries.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -454,37 +468,51 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
 
         {windowType === WindowType.SLIDING && (
             <>
-                <DimensionInput label="Outer Frame" value_mm={series.dimensions.outerFrame} onChange_mm={val => handleDimensionChange('outerFrame', val)}/>
-                <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} />
-                <DimensionInput label="Shutter Handle" value_mm={series.dimensions.shutterHandle} onChange_mm={val => handleDimensionChange('shutterHandle', val)} />
-                <DimensionInput label="Shutter Interlock" value_mm={series.dimensions.shutterInterlock} onChange_mm={val => handleDimensionChange('shutterInterlock', val)} />
-                <DimensionInput label="Shutter Meeting" value_mm={series.dimensions.shutterMeeting} onChange_mm={val => handleDimensionChange('shutterMeeting', val)} />
-                <DimensionInput label="Shutter Top/Bottom" value_mm={series.dimensions.shutterTop} onChange_mm={val => handleDimensionChange('shutterTop', val)} />
+                <DimensionInput label="Outer Frame" value_mm={series.dimensions.outerFrame} onChange_mm={val => handleDimensionChange('outerFrame', val)} weightValue={series.weights?.outerFrame} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrame', v)} lengthValue={series.lengths?.outerFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrame', v)} />
+                { (fixedPanels.length > 0) && <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} />}
+                <DimensionInput label="Shutter Handle" value_mm={series.dimensions.shutterHandle} onChange_mm={val => handleDimensionChange('shutterHandle', val)} weightValue={series.weights?.shutterHandle} onWeightChange={v => handleProfileDetailChange('weights', 'shutterHandle', v)} lengthValue={series.lengths?.shutterHandle} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterHandle', v)} />
+                <DimensionInput label="Shutter Interlock" value_mm={series.dimensions.shutterInterlock} onChange_mm={val => handleDimensionChange('shutterInterlock', val)} weightValue={series.weights?.shutterInterlock} onWeightChange={v => handleProfileDetailChange('weights', 'shutterInterlock', v)} lengthValue={series.lengths?.shutterInterlock} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterInterlock', v)} />
+                { config.shutterConfig === ShutterConfigType.FOUR_GLASS && <DimensionInput label="Shutter Meeting" value_mm={series.dimensions.shutterMeeting} onChange_mm={val => handleDimensionChange('shutterMeeting', val)} weightValue={series.weights?.shutterMeeting} onWeightChange={v => handleProfileDetailChange('weights', 'shutterMeeting', v)} lengthValue={series.lengths?.shutterMeeting} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterMeeting', v)} />}
+                <DimensionInput label="Shutter Top/Bottom" value_mm={series.dimensions.shutterTop} onChange_mm={val => handleDimensionChange('shutterTop', val)} weightValue={series.weights?.shutterTop} onWeightChange={v => handleProfileDetailChange('weights', 'shutterTop', v)} lengthValue={series.lengths?.shutterTop} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterTop', v)} />
             </>
         )}
         {(windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) && (
             <>
-                <DimensionInput label="Outer Frame" value_mm={series.dimensions.outerFrame} onChange_mm={val => handleDimensionChange('outerFrame', val)}/>
-                <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} />
-                <DimensionInput label="Shutter/Door Frame" value_mm={series.dimensions.casementShutter} onChange_mm={val => handleDimensionChange('casementShutter', val)} />
-                <DimensionInput label="Mullion Profile" value_mm={series.dimensions.mullion} onChange_mm={val => handleDimensionChange('mullion', val)} />
+                <DimensionInput label="Outer Frame" value_mm={series.dimensions.outerFrame} onChange_mm={val => handleDimensionChange('outerFrame', val)} weightValue={series.weights?.outerFrame} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrame', v)} lengthValue={series.lengths?.outerFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrame', v)} />
+                <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} />
+                <DimensionInput label="Shutter/Door Frame" value_mm={series.dimensions.casementShutter} onChange_mm={val => handleDimensionChange('casementShutter', val)} weightValue={series.weights?.casementShutter} onWeightChange={v => handleProfileDetailChange('weights', 'casementShutter', v)} lengthValue={series.lengths?.casementShutter} onLengthChange={v => handleProfileDetailChange('lengths', 'casementShutter', v)} />
+                <DimensionInput label="Mullion Profile" value_mm={series.dimensions.mullion} onChange_mm={val => handleDimensionChange('mullion', val)} weightValue={series.weights?.mullion} onWeightChange={v => handleProfileDetailChange('weights', 'mullion', v)} lengthValue={series.lengths?.mullion} onLengthChange={v => handleProfileDetailChange('lengths', 'mullion', v)} />
             </>
         )}
         {windowType === WindowType.VENTILATOR && (
-            <DimensionInput label="Louver Blade" value_mm={series.dimensions.louverBlade} onChange_mm={val => handleDimensionChange('louverBlade', val)} />
+            <DimensionInput label="Louver Blade" value_mm={series.dimensions.louverBlade} onChange_mm={val => handleDimensionChange('louverBlade', val)} weightValue={series.weights?.louverBlade} onWeightChange={v => handleProfileDetailChange('weights', 'louverBlade', v)} lengthValue={series.lengths?.louverBlade} onLengthChange={v => handleProfileDetailChange('lengths', 'louverBlade', v)} />
         )}
         {windowType === WindowType.GLASS_PARTITION && (
             <>
-                <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} />
-                <DimensionInput label="Hinged Panel Frame" value_mm={series.dimensions.casementShutter} onChange_mm={val => handleDimensionChange('casementShutter', val)} />
-                <DimensionInput label="Top Track Height" value_mm={series.dimensions.topTrack} onChange_mm={val => handleDimensionChange('topTrack', val)} />
-                <DimensionInput label="Bottom Track Height" value_mm={series.dimensions.bottomTrack} onChange_mm={val => handleDimensionChange('bottomTrack', val)} />
-                <DimensionInput label="Glass Grid Profile" value_mm={series.dimensions.glassGridProfile} onChange_mm={val => handleDimensionChange('glassGridProfile', val)} />
+                <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} />
+                <DimensionInput label="Hinged Panel Frame" value_mm={series.dimensions.casementShutter} onChange_mm={val => handleDimensionChange('casementShutter', val)} weightValue={series.weights?.casementShutter} onWeightChange={v => handleProfileDetailChange('weights', 'casementShutter', v)} lengthValue={series.lengths?.casementShutter} onLengthChange={v => handleProfileDetailChange('lengths', 'casementShutter', v)} />
+                <DimensionInput label="Top Track Height" value_mm={series.dimensions.topTrack} onChange_mm={val => handleDimensionChange('topTrack', val)} weightValue={series.weights?.topTrack} onWeightChange={v => handleProfileDetailChange('weights', 'topTrack', v)} lengthValue={series.lengths?.topTrack} onLengthChange={v => handleProfileDetailChange('lengths', 'topTrack', v)} />
+                <DimensionInput label="Bottom Track Height" value_mm={series.dimensions.bottomTrack} onChange_mm={val => handleDimensionChange('bottomTrack', val)} weightValue={series.weights?.bottomTrack} onWeightChange={v => handleProfileDetailChange('weights', 'bottomTrack', v)} lengthValue={series.lengths?.bottomTrack} onLengthChange={v => handleProfileDetailChange('lengths', 'bottomTrack', v)} />
+                <DimensionInput label="Glass Grid Profile" value_mm={series.dimensions.glassGridProfile} onChange_mm={val => handleDimensionChange('glassGridProfile', val)} weightValue={series.weights?.glassGridProfile} onWeightChange={v => handleProfileDetailChange('weights', 'glassGridProfile', v)} lengthValue={series.lengths?.glassGridProfile} onLengthChange={v => handleProfileDetailChange('lengths', 'glassGridProfile', v)} />
             </>
         )}
 
         <div className="mt-4 pt-4 border-t border-slate-700">
             <h4 className="text-md font-semibold text-slate-100 mb-2">Supported Glass</h4>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Standard Thicknesses (mm)</label>
+              <div className="grid grid-cols-4 gap-2">
+                {standardGlassThicknesses.map(t => (
+                  <label key={t} className="flex items-center space-x-2 p-2 bg-slate-700 rounded-md cursor-pointer hover:bg-slate-600">
+                    <input type="checkbox" checked={series.glassOptions.thicknesses.includes(t)} onChange={e => {
+                      const newT = e.target.checked ? [...series.glassOptions.thicknesses, t] : series.glassOptions.thicknesses.filter(th => th !== t);
+                      handleGlassOptionChange('thicknesses', newT.sort((a,b)=>a-b));
+                    }} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                    <span className="text-sm text-slate-200">{t}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4 mt-3">
               <label className="flex items-center space-x-2 p-2 bg-slate-700 rounded-md cursor-pointer hover:bg-slate-600">
                 <input type="checkbox" checked={series.glassOptions.customThicknessAllowed} onChange={e => handleGlassOptionChange('customThicknessAllowed', e.target.checked)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
@@ -506,9 +534,9 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
               </label>
             </div>
         </div>
-      </CollapsibleCard>
+      </Card>
 
-      <CollapsibleCard title="Hardware Configuration">
+      <Card title="Hardware Configuration">
           <div className="space-y-3">
               {series.hardwareItems.map(item => (
                   <div key={item.id} className="p-3 bg-slate-700 rounded-md">
@@ -528,7 +556,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
               ))}
           </div>
           <Button onClick={onAddHardware} variant="secondary" className="w-full mt-4"><PlusIcon className="w-4 h-4 mr-2"/> Add Hardware Item</Button>
-      </CollapsibleCard>
+      </Card>
     </div>
   );
 };

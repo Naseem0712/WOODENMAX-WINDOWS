@@ -49,8 +49,8 @@ const ShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' }> = ({ 
 }
 
 const Handle: React.FC<{ config: HandleConfig, scale: number, color: string }> = ({ config, scale, color }) => {
-    const handleWidth = config.width;
-    const handleHeight = config.height;
+    const handleWidth = 25; // mm
+    const handleHeight = 150; // mm
     const isVertical = config.orientation === 'vertical';
     const style: React.CSSProperties = {
         position: 'absolute',
@@ -209,6 +209,9 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = (props) => {
     [GlassType.CLEAR]: { backgroundColor: 'hsl(190, 80%, 85%)', opacity: 0.7 },
     [GlassType.FROSTED]: { backgroundColor: 'hsl(200, 100%, 95%)', opacity: 0.9, backdropFilter: 'blur(2px)' },
     [GlassType.TINTED_BLUE]: { backgroundColor: 'hsl(205, 90%, 60%)', opacity: 0.6 },
+    [GlassType.CLEAR_SAPPHIRE]: { backgroundColor: 'hsl(210, 80%, 70%)', opacity: 0.65 },
+    [GlassType.BROWN_TINTED]: { backgroundColor: 'hsl(30, 30%, 30%)', opacity: 0.6 },
+    [GlassType.BLACK_TINTED]: { backgroundColor: 'hsl(0, 0%, 20%)', opacity: 0.7 },
   };
 
   const topFix = fixedPanels.find(p => p.position === FixedPanelPosition.TOP);

@@ -6,6 +6,10 @@ interface DimensionInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEl
   label: string;
   value_mm: number | '';
   onChange_mm: (value: number | '') => void;
+  weightValue?: number | '';
+  onWeightChange?: (value: number | '') => void;
+  lengthValue?: number | '';
+  onLengthChange?: (value: number | '') => void;
 }
 
 const parseToMm = (displayValue: string, unit: Unit): number | '' => {
@@ -56,7 +60,7 @@ const formatFromMm = (mmValue: number, unit: Unit): string => {
 };
 
 
-export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value_mm, onChange_mm, className, ...props }) => {
+export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value_mm, onChange_mm, className, weightValue, onWeightChange, lengthValue, onLengthChange, ...props }) => {
   const [displayValue, setDisplayValue] = useState('');
   const [unit, setUnit] = useState<Unit>('mm');
   const [isFocused, setIsFocused] = useState(false);
@@ -112,8 +116,6 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
           onChange={handleInputChange}
           onFocus={() => setIsFocused(true)}
           onBlur={handleBlur}
-          type="text"
-          inputMode="decimal"
           {...props}
         />
         <div className="absolute inset-y-0 right-0 flex items-center">
@@ -130,6 +132,32 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
             </select>
         </div>
       </div>
+      {onWeightChange && onLengthChange && (
+        <div className="grid grid-cols-2 gap-2 mt-1">
+            <div className="relative">
+                <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="Weight"
+                    value={weightValue}
+                    onChange={e => onWeightChange(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full pl-3 pr-12 py-1 bg-slate-700 border border-slate-600 rounded-md text-white text-xs focus:ring-1 focus:ring-indigo-500"
+                />
+                <span className="absolute inset-y-0 right-0 flex items-center pr-2 text-xs text-slate-400 pointer-events-none">kg/m</span>
+            </div>
+             <div className="relative">
+                <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="Length"
+                    value={lengthValue}
+                    onChange={e => onLengthChange(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full pl-3 pr-5 py-1 bg-slate-700 border border-slate-600 rounded-md text-white text-xs focus:ring-1 focus:ring-indigo-500"
+                />
+                <span className="absolute inset-y-0 right-0 flex items-center pr-2 text-xs text-slate-400 pointer-events-none">m</span>
+            </div>
+        </div>
+    )}
     </div>
   );
 };
