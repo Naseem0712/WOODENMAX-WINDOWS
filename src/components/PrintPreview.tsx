@@ -139,7 +139,6 @@ const PrintableMiteredFrame: React.FC<{
     );
 };
 
-// FIX: Corrected PrintableHandle to use hardcoded dimensions as `HandleConfig` does not contain width/height.
 const PrintableHandle: React.FC<{ config: WindowConfig['slidingHandles'][0], scale: number }> = ({ config, scale }) => {
     if (!config) return null;
     const handleWidth = 25; // mm
@@ -336,7 +335,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
                                         const numLouvers = Math.floor(cellH / dims.louverBlade);
                                         for (let i=0; i < numLouvers; i++) louvers.push(<PrintProfilePiece key={`louver-${i}`} color={profileColor} style={{left: 0, top: (i * dims.louverBlade)*scale, width: cellW*scale, height: dims.louverBlade*scale }}/>)
                                     }
-                                    content = <div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: y*scale, width: cellW*scale, height: cellH*scale}}>{louvers}<PrintShutterIndicator type="louvers"/></div>;
+                                    content = <div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>{louvers}<PrintShutterIndicator type="louvers"/></div>;
                                 } else if (cellType === 'exhaust_fan') {
                                     content = <GlassPanel key={`cell-${r}-${c}`} style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}} glassWidth={cellW} glassHeight={cellH}><PrintShutterIndicator type="exhaust_fan"/></GlassPanel>;
                                 }
@@ -439,30 +438,26 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
   const gstAmount = totalAfterDiscount * (Number(settings.financials.gstPercentage) / 100);
   const grandTotal = totalAfterDiscount + gstAmount;
 
-  const pages = useMemo(() => {
-    const ITEMS_PER_FIRST_PAGE = 3;
+  const itemPages = useMemo(() => {
+    const ITEMS_PER_FIRST_PAGE = 2;
     const ITEMS_PER_SUBSEQUENT_PAGES = 4;
     
     if (items.length === 0) {
-        return [[]]; // Create one empty page if there are no items
+        return [];
     }
 
     const result: QuotationItem[][] = [];
     const remainingItems = [...items];
     
-    // First page
-    if (remainingItems.length > 0) {
-        result.push(remainingItems.splice(0, ITEMS_PER_FIRST_PAGE));
-    }
+    result.push(remainingItems.splice(0, ITEMS_PER_FIRST_PAGE));
     
-    // Subsequent pages
     while (remainingItems.length > 0) {
         result.push(remainingItems.splice(0, ITEMS_PER_SUBSEQUENT_PAGES));
     }
     return result;
   }, [items]);
   
-  const totalPages = pages.length;
+  const totalPages = (itemPages.length > 0 ? itemPages.length : 0) + 1;
 
   const handleExportPdf = () => {
     const element = printContainerRef.current;
@@ -476,7 +471,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
     const opt = {
         margin: 0,
         filename: `Quotation-${settings.customer.name || 'WoodenMax'}-${quoteNumber}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
+        image: { type: 'jpeg' as 'jpeg', quality: 0.98 },
         html2canvas: {
             scale: 2,
             logging: false,
@@ -486,7 +481,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
         jsPDF: {
             unit: 'mm',
             format: 'a4',
-            orientation: 'portrait'
+            orientation: 'portrait' as 'portrait',
         },
         pagebreak: { mode: 'css', after: '.a4-page' }
     };
@@ -523,11 +518,10 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
             </div>
         </div>
         <div ref={printContainerRef} className="flex-grow overflow-y-auto bg-slate-900 print-preview-container custom-scrollbar">
-            {pages.map((pageItems, pageIndex) => (
+            {itemPages.map((pageItems, pageIndex) => (
                 <div 
                     key={pageIndex} 
                     className="a4-page text-black"
-                    style={{ '--total-pages': totalPages } as React.CSSProperties}
                 >
                     {pageIndex === 0 && (
                         <div className="print-header">
@@ -563,11 +557,8 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         )}
                         
                         <div className="w-full text-xs mt-4 space-y-2">
-                            {pageItems.length === 0 && pageIndex === 0 && (
-                                <p className="text-slate-500 text-center py-20">Quotation is empty. Add items from the main screen.</p>
-                            )}
                             {pageItems.map((item, index) => {
-                                const globalIndex = pages.slice(0, pageIndex).reduce((acc, curr) => acc + curr.length, 0) + index;
+                                const globalIndex = itemPages.slice(0, pageIndex).reduce((acc, curr) => acc + curr.length, 0) + index;
                                 const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
                                 const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
                                 const totalArea = singleArea * item.quantity;
@@ -578,10 +569,8 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                 const hasMesh = item.config.windowType === WindowType.SLIDING && item.config.shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
                                 const keyHardware = item.hardwareItems.filter(h => h.name.toLowerCase().includes('handle') || h.name.toLowerCase().includes('lock')).map(h => h.name).join(', ');
                                 
-                                // FIX: Removed incorrect logic for custom glass types that was causing type errors.
                                 const glassThicknessText = (item.config.glassThickness || 'Std.');
-
-                                const specialTypeText = (item.config.glassSpecialType !== 'none' ? item.config.glassSpecialType : '');
+                                const specialTypeText = (item.config.glassSpecialType !== 'none' ? item.config.glassSpecialType.toUpperCase() : '');
 
                                 let panelSummary = '';
                                 if (item.config.windowType === WindowType.GLASS_PARTITION) {
@@ -640,71 +629,107 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                 )
                             })}
                         </div>
-                        
-                        {pageIndex === totalPages - 1 && (
-                            <>
-                                <div className="flex justify-end mt-4">
-                                    <div className="w-2/5 print-summary text-black text-[9pt]">
-                                        <div className="flex justify-between p-1">
-                                            <span>Sub Total</span>
-                                            <span>₹ {Math.round(subTotal).toLocaleString('en-IN')}</span>
-                                        </div>
-                                        <div className="flex justify-between p-1">
-                                            <span>Discount ({settings.financials.discountType === 'percentage' ? `${settings.financials.discount || 0}%` : 'Fixed'})</span>
-                                            <span>- ₹ {Math.round(discountAmount).toLocaleString('en-IN')}</span>
-                                        </div>
-                                        <div className="flex justify-between p-1">
-                                            <span>Taxable Value</span>
-                                            <span>₹ {Math.round(totalAfterDiscount).toLocaleString('en-IN')}</span>
-                                        </div>
-                                        <div className="flex justify-between p-1">
-                                            <span>GST ({settings.financials.gstPercentage || 0}%)</span>
-                                            <span>+ ₹ {Math.round(gstAmount).toLocaleString('en-IN')}</span>
-                                        </div>
-                                        <div className="flex justify-between font-bold text-lg p-2 border-t-2 border-black mt-1">
-                                            <span>Grand Total</span>
-                                            <span>₹ {Math.round(grandTotal).toLocaleString('en-IN')}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <EditableSection 
-                                    title="Project Description" 
-                                    value={settings.description} 
-                                    onChange={val => setSettings({...settings, description: val})}
-                                />
-
-                                <div className="grid grid-cols-2 gap-8 mt-6">
-                                    <div>
-                                        <EditableSection title="Terms & Conditions" value={settings.terms} onChange={val => setSettings({...settings, terms: val})}/>
-                                    </div>
-                                    <div>
-                                        <div className="print-final-details">
-                                            <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">Bank Details for Payment</h3>
-                                            <div className="text-xs grid grid-cols-2 gap-x-4">
-                                                <strong>A/C Name:</strong> <span>{settings.bankDetails.name}</span>
-                                                <strong>A/C Number:</strong> <span>{settings.bankDetails.accountNumber}</span>
-                                                <strong>IFSC Code:</strong> <span>{settings.bankDetails.ifsc}</span>
-                                                <strong>Branch:</strong> <span>{settings.bankDetails.branch}</span>
-                                                <strong>A/C Type:</strong> <span className="capitalize">{settings.bankDetails.accountType}</span>
-                                            </div>
-                                        </div>
-                                        <div className="print-final-details mt-8">
-                                            <div className="h-24"></div>
-                                            <h3 className="font-bold text-sm text-center border-t border-gray-400 pt-1">Authorised Signature</h3>
-                                        </div>
-                                    </div>
-                                </div>
-                            </>
-                        )}
                     </div>
 
                     <div className="print-footer">
-                        {pageIndex === totalPages - 1 && <span>Thank you for your business!</span>}
-                        <span className="page-number float-right"></span>
+                         <span className="page-number float-right">Page {pageIndex + 1} of {totalPages}</span>
                     </div>
                 </div>
             ))}
+
+            <div className="a4-page text-black">
+                {items.length === 0 && (
+                     <div className="print-header">
+                        <div className="flex justify-between items-start">
+                            <div className="flex items-start gap-4">
+                                <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 object-contain"/>
+                                <div>
+                                    <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
+                                    <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
+                                    <p className="text-xs">{settings.company.email} | {settings.company.website}</p>
+                                </div>
+                            </div>
+                            <div className="text-right text-xs">
+                                <h1 className="text-3xl font-light text-gray-600">QUOTATION</h1>
+                                <p><strong>Date:</strong> {quoteDate}</p>
+                                <p><strong>Quote #:</strong> {quoteNumber}</p>
+                            </div>
+                        </div>
+                        <div className="flex justify-between text-xs mt-4">
+                            <div className="bg-gray-100 p-2 rounded w-full">
+                                <h3 className="font-bold mb-1">To:</h3>
+                                <p className="font-semibold">{settings.customer.name}</p>
+                                <p className="whitespace-pre-wrap">{settings.customer.address}</p>
+                                <p><strong>Attn:</strong> {settings.customer.contactPerson}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                 <div className="print-content">
+                    {items.length === 0 && (
+                        <p className="text-slate-500 text-center py-20">Quotation is empty. Add items from the main screen.</p>
+                    )}
+                    <div className="flex-grow"> {/* This will allow content to flow from the top */}
+                        <div className="flex justify-end mt-4">
+                            <div className="w-2/5 print-summary text-black text-[9pt]">
+                                <div className="flex justify-between p-1">
+                                    <span>Sub Total</span>
+                                    <span>₹ {Math.round(subTotal).toLocaleString('en-IN')}</span>
+                                </div>
+                                <div className="flex justify-between p-1">
+                                    <span>Discount ({settings.financials.discountType === 'percentage' ? `${settings.financials.discount || 0}%` : 'Fixed'})</span>
+                                    <span>- ₹ {Math.round(discountAmount).toLocaleString('en-IN')}</span>
+                                </div>
+                                <div className="flex justify-between p-1">
+                                    <span>Taxable Value</span>
+                                    <span>₹ {Math.round(totalAfterDiscount).toLocaleString('en-IN')}</span>
+                                </div>
+                                <div className="flex justify-between p-1">
+                                    <span>GST ({settings.financials.gstPercentage || 0}%)</span>
+                                    <span>+ ₹ {Math.round(gstAmount).toLocaleString('en-IN')}</span>
+                                </div>
+                                <div className="flex justify-between font-bold text-lg p-2 border-t-2 border-black mt-1">
+                                    <span>Grand Total</span>
+                                    <span>₹ {Math.round(grandTotal).toLocaleString('en-IN')}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <EditableSection 
+                            title="Project Description" 
+                            value={settings.description} 
+                            onChange={val => setSettings({...settings, description: val})}
+                        />
+
+                        <div className="grid grid-cols-2 gap-8 mt-6">
+                            <div>
+                                <EditableSection title="Terms & Conditions" value={settings.terms} onChange={val => setSettings({...settings, terms: val})}/>
+                            </div>
+                            <div>
+                                <div className="print-final-details">
+                                    <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">Bank Details for Payment</h3>
+                                    <div className="text-xs grid grid-cols-2 gap-x-4">
+                                        <strong>A/C Name:</strong> <span>{settings.bankDetails.name}</span>
+                                        <strong>A/C Number:</strong> <span>{settings.bankDetails.accountNumber}</span>
+                                        <strong>IFSC Code:</strong> <span>{settings.bankDetails.ifsc}</span>
+                                        <strong>Branch:</strong> <span>{settings.bankDetails.branch}</span>
+                                        <strong>A/C Type:</strong> <span className="capitalize">{settings.bankDetails.accountType}</span>
+                                    </div>
+                                </div>
+                                <div className="print-final-details mt-8">
+                                    <div className="h-24"></div>
+                                    <h3 className="font-bold text-sm text-center border-t border-gray-400 pt-1">Authorised Signature</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                 </div>
+                 <div className="print-footer">
+                    <span>Thank you for your business!</span>
+                    <span className="page-number float-right">Page {itemPages.length + 1} of {totalPages}</span>
+                </div>
+            </div>
+
         </div>
     </div>
   );

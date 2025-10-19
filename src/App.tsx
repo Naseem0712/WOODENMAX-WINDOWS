@@ -53,8 +53,6 @@ const DEFAULT_SLIDING_SERIES: ProfileSeries = {
     },
     hardwareItems: DEFAULT_SLIDING_HARDWARE,
     glassOptions: DEFAULT_GLASS_OPTIONS,
-    weights: {},
-    lengths: {},
 };
 
 const DEFAULT_CASEMENT_HARDWARE: HardwareItem[] = [
@@ -72,8 +70,6 @@ const DEFAULT_CASEMENT_SERIES: ProfileSeries = {
     dimensions: { ...BASE_DIMENSIONS, outerFrame: 60, fixedFrame: 25, casementShutter: 70, mullion: 80, glassGridProfile: 15 },
     hardwareItems: DEFAULT_CASEMENT_HARDWARE,
     glassOptions: DEFAULT_GLASS_OPTIONS,
-    weights: {},
-    lengths: {},
 };
 
 const DEFAULT_VENTILATOR_HARDWARE: HardwareItem[] = [
@@ -90,8 +86,6 @@ const DEFAULT_VENTILATOR_SERIES: ProfileSeries = {
     dimensions: { ...BASE_DIMENSIONS, outerFrame: 50, fixedFrame: 20, casementShutter: 45, mullion: 50, louverBlade: 25, glassGridProfile: 15 },
     hardwareItems: DEFAULT_VENTILATOR_HARDWARE,
     glassOptions: DEFAULT_GLASS_OPTIONS,
-    weights: {},
-    lengths: {},
 };
 
 const DEFAULT_PARTITION_HARDWARE: HardwareItem[] = [
@@ -112,8 +106,6 @@ const DEFAULT_GLASS_PARTITION_SERIES: ProfileSeries = {
     customThicknessAllowed: true,
     specialTypes: ['laminated'],
   },
-  weights: {},
-  lengths: {},
 };
 
 const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
@@ -266,7 +258,8 @@ const App: React.FC = () => {
   useEffect(() => {
     // When switching window type, set a relevant default series
     if (series.type !== windowType) {
-        setSeries(SERIES_MAP[windowType] || DEFAULT_SLIDING_SERIES);
+        const foundSeries = savedSeries.find(s => s.type === windowType);
+        setSeries(foundSeries || SERIES_MAP[windowType] || DEFAULT_SLIDING_SERIES);
     }
     // Reset fixed panels for partition
     if (windowType === WindowType.GLASS_PARTITION) {
@@ -331,7 +324,7 @@ const App: React.FC = () => {
    useEffect(() => {
     setPartitionPanels(current => ({
       ...current,
-      types: Array(current.count).fill({ type: 'fixed' as PartitionPanelType }).map((v, i) => current.types[i] || v),
+      types: Array.from({ length: current.count }, (_, i) => current.types[i] || { type: 'fixed' as PartitionPanelType }),
     }));
   }, [partitionPanels.count]);
 
@@ -348,7 +341,9 @@ const App: React.FC = () => {
     const selected = availableSeries.find(s => s.id === id);
     if(selected) {
       setSeries(selected);
-      setWindowType(selected.type);
+      if (selected.type !== windowType) {
+        setWindowType(selected.type);
+      }
     }
   };
   
@@ -526,7 +521,7 @@ const App: React.FC = () => {
         return total + (qty * itemRate * count);
     }, 0);
 
-  }, [series.hardwareItems, numShutters, doorPositions.length, ventilatorGrid, windowType, partitionPanels, horizontalDividers, verticalDividers]);
+  }, [series.hardwareItems, numShutters, doorPositions.length, ventilatorGrid, windowType, partitionPanels]);
 
   const windowConfig: WindowConfig = useMemo(() => ({
     width: width,
@@ -534,7 +529,7 @@ const App: React.FC = () => {
     series,
     fixedPanels,
     glassType,
-    glassThickness: Number(glassThickness) || 0,
+    glassThickness,
     glassSpecialType,
     profileColor,
     glassGrid,
@@ -709,7 +704,7 @@ const App: React.FC = () => {
           className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${isPanelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
           onClick={() => setIsPanelOpen(false)}
         ></div>
-        <div className={`lg:hidden fixed bottom-0 left-0 right-0 max-h-[85vh] transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${isPanelOpen ? 'translate-y-0' : 'translate-y-full'}`}>
+        <div className={`lg:hidden fixed bottom-0 left-0 right-0 max-h-[85vh] flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${isPanelOpen ? 'translate-y-0' : 'translate-y-full'}`}>
            <ControlsPanel {...commonControlProps} onClose={() => setIsPanelOpen(false)} />
         </div>
 
@@ -718,7 +713,7 @@ const App: React.FC = () => {
           className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${isMobileQuoteOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
           onClick={() => setIsMobileQuoteOpen(false)}
         ></div>
-        <div className={`lg:hidden fixed bottom-0 left-0 right-0 transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${isMobileQuoteOpen ? 'translate-y-0' : 'translate-y-full'}`}>
+        <div className={`lg:hidden fixed bottom-0 left-0 right-0 flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${isMobileQuoteOpen ? 'translate-y-0' : 'translate-y-full'}`}>
             <QuotationPanel 
                 width={Number(width) || 0}
                 height={Number(height) || 0}
