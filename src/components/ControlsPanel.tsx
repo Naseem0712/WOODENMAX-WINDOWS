@@ -15,7 +15,7 @@ import { CollapsibleCard } from './ui/CollapsibleCard';
 interface ControlsPanelProps {
   config: WindowConfig;
   onClose: () => void;
-  setConfig: <K extends keyof WindowConfig>(field: K, value: WindowConfig[K]) => void;
+  setConfig: (field: keyof WindowConfig, value: any) => void;
   setGridSize: (rows: number, cols: number) => void;
   
   availableSeries: ProfileSeries[];
@@ -23,7 +23,6 @@ interface ControlsPanelProps {
   onSeriesSave: (name: string) => void;
   onSeriesDelete: (id: string) => void;
 
-  fixedPanels: FixedPanel[];
   addFixedPanel: (position: FixedPanelPosition) => void;
   removeFixedPanel: (id: string) => void;
   updateFixedPanelSize: (id: string, size: number) => void;
@@ -58,16 +57,16 @@ const Slider: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: st
     </div>
 );
 
-export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
+export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) => {
   const { 
     config, onClose, setConfig, setGridSize, availableSeries, onSeriesSelect, onSeriesSave, onSeriesDelete,
-    fixedPanels, addFixedPanel, removeFixedPanel, updateFixedPanelSize,
+    addFixedPanel, removeFixedPanel, updateFixedPanelSize,
     onHardwareChange, onAddHardware, onRemoveHardware,
     toggleDoorPosition, onVentilatorCellClick,
     savedColors, setSavedColors, onUpdateHandle
   } = props;
 
-  const { windowType, series, verticalDividers, horizontalDividers } = config;
+  const { windowType, series, verticalDividers, horizontalDividers, fixedPanels } = config;
   const gridRows = horizontalDividers.length + 1;
   const gridCols = verticalDividers.length + 1;
 
@@ -195,14 +194,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
   };
 
   const cyclePartitionPanelType = (index: number) => {
-    const sequence: PartitionPanelType[] = ['fixed', 'sliding', 'hinged'];
-    const currentType = config.partitionPanels.types[index].type;
-    const currentIndex = sequence.indexOf(currentType);
-    const nextType = sequence[(currentIndex + 1) % sequence.length];
-    
-    const newTypes = [...config.partitionPanels.types];
-    newTypes[index] = { ...newTypes[index], type: nextType };
-    setConfig('partitionPanels', { ...config.partitionPanels, types: newTypes });
+      setConfig('cyclePartitionPanelType' as any, index);
   };
 
   return (
@@ -298,7 +290,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
 
       {windowType === WindowType.GLASS_PARTITION && (
         <CollapsibleCard title="Partition Panel Setup" defaultOpen>
-          <Input label="Number of Panels" type="number" min={1} max={8} value={config.partitionPanels.count} onChange={e => setConfig('partitionPanels', {...config.partitionPanels, count: Math.max(1, parseInt(e.target.value) || 1) })}/>
+          <Input label="Number of Panels" type="number" min={1} max={8} value={config.partitionPanels.count} onChange={e => setConfig('setPartitionPanelCount' as any, Math.max(1, parseInt(e.target.value) || 1) )}/>
           {config.partitionPanels.count > 0 && (
             <div className="pt-2">
               <label className="block text-sm font-medium text-slate-300 mb-2">Panel Types (Click to cycle)</label>
@@ -512,4 +504,4 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = (props) => {
       </CollapsibleCard>
     </div>
   );
-};
+});

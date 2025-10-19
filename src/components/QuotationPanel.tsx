@@ -33,7 +33,7 @@ const CostDisplay: React.FC<{label:string, value: number, isTotal?: boolean}> = 
 );
 
 
-export const QuotationPanel: React.FC<QuotationPanelProps> = ({
+export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
     width, height, quantity, setQuantity, areaType, setAreaType, rate, setRate, onSave, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount, onViewQuotation, onClose
 }) => {
 
@@ -122,4 +122,4 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = ({
             </div>
         </div>
     );
-};
+});

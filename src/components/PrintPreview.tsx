@@ -1,3 +1,5 @@
+
+
 import React, { useMemo, useRef, useState } from 'react';
 import type { QuotationItem, QuotationSettings, WindowConfig } from '../types';
 import { Button } from './ui/Button';
@@ -400,7 +402,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
 
 
 const EditableSection: React.FC<{title: string, value: string, onChange: (value: string) => void}> = ({ title, value, onChange }) => (
-    <div className="print-final-details mt-4">
+    <div className="print-final-details mt-4" style={{breakInside: 'avoid'}}>
         <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">{title}</h3>
         <textarea 
             value={value}
@@ -471,7 +473,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
     const opt = {
         margin: 0,
         filename: `Quotation-${settings.customer.name || 'WoodenMax'}-${quoteNumber}.pdf`,
-        image: { type: 'jpeg' as 'jpeg', quality: 0.98 },
+        image: { type: 'jpeg' as const, quality: 0.98 },
         html2canvas: {
             scale: 2,
             logging: false,
@@ -481,7 +483,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
         jsPDF: {
             unit: 'mm',
             format: 'a4',
-            orientation: 'portrait' as 'portrait',
+            orientation: 'portrait' as const,
         },
         pagebreak: { mode: 'css', after: '.a4-page' }
     };
@@ -504,6 +506,16 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
 
   return (
     <div className="fixed inset-0 bg-slate-900 z-50 flex flex-col print-preview-modal">
+        {isExporting && (
+          <div className="absolute inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-[100] no-print">
+            <svg className="animate-spin h-10 w-10 text-white mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <h3 className="text-white text-xl font-bold">Generating PDF...</h3>
+            <p className="text-slate-300">This may take a moment. Please wait.</p>
+          </div>
+        )}
         <div className="flex-shrink-0 bg-slate-800 p-3 flex justify-between items-center no-print">
             <div>
                 <h2 className="text-xl font-bold text-white">Print Preview</h2>
@@ -582,7 +594,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                 }
 
                                 return (
-                                    <div key={item.id} className="border-b border-gray-300 print-item pt-4 pb-4">
+                                    <div key={item.id} className="border-b border-gray-300 print-item pt-4 pb-4" style={{breakInside: 'avoid'}}>
                                         <div className="flex gap-4 items-start">
                                             <div className="w-1/3">
                                                 <PrintableWindow config={item.config} />
@@ -665,61 +677,59 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         </div>
                     </div>
                 )}
-                 <div className="print-content">
+                 <div className="print-content !block">
                     {items.length === 0 && (
                         <p className="text-slate-500 text-center py-20">Quotation is empty. Add items from the main screen.</p>
                     )}
-                    <div className="flex-grow"> {/* This will allow content to flow from the top */}
-                        <div className="flex justify-end mt-4">
-                            <div className="w-2/5 print-summary text-black text-[9pt]">
-                                <div className="flex justify-between p-1">
-                                    <span>Sub Total</span>
-                                    <span>₹ {Math.round(subTotal).toLocaleString('en-IN')}</span>
-                                </div>
-                                <div className="flex justify-between p-1">
-                                    <span>Discount ({settings.financials.discountType === 'percentage' ? `${settings.financials.discount || 0}%` : 'Fixed'})</span>
-                                    <span>- ₹ {Math.round(discountAmount).toLocaleString('en-IN')}</span>
-                                </div>
-                                <div className="flex justify-between p-1">
-                                    <span>Taxable Value</span>
-                                    <span>₹ {Math.round(totalAfterDiscount).toLocaleString('en-IN')}</span>
-                                </div>
-                                <div className="flex justify-between p-1">
-                                    <span>GST ({settings.financials.gstPercentage || 0}%)</span>
-                                    <span>+ ₹ {Math.round(gstAmount).toLocaleString('en-IN')}</span>
-                                </div>
-                                <div className="flex justify-between font-bold text-lg p-2 border-t-2 border-black mt-1">
-                                    <span>Grand Total</span>
-                                    <span>₹ {Math.round(grandTotal).toLocaleString('en-IN')}</span>
-                                </div>
+                    <div className="flex justify-end mt-4 print-summary">
+                        <div className="w-2/5 text-black text-[9pt]">
+                            <div className="flex justify-between p-1">
+                                <span>Sub Total</span>
+                                <span>₹ {Math.round(subTotal).toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between p-1">
+                                <span>Discount ({settings.financials.discountType === 'percentage' ? `${settings.financials.discount || 0}%` : 'Fixed'})</span>
+                                <span>- ₹ {Math.round(discountAmount).toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between p-1">
+                                <span>Taxable Value</span>
+                                <span>₹ {Math.round(totalAfterDiscount).toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between p-1">
+                                <span>GST ({settings.financials.gstPercentage || 0}%)</span>
+                                <span>+ ₹ {Math.round(gstAmount).toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between font-bold text-lg p-2 border-t-2 border-black mt-1">
+                                <span>Grand Total</span>
+                                <span>₹ {Math.round(grandTotal).toLocaleString('en-IN')}</span>
                             </div>
                         </div>
-                        
-                        <EditableSection 
-                            title="Project Description" 
-                            value={settings.description} 
-                            onChange={val => setSettings({...settings, description: val})}
-                        />
+                    </div>
+                    
+                    <EditableSection 
+                        title="Project Description" 
+                        value={settings.description} 
+                        onChange={val => setSettings({...settings, description: val})}
+                    />
 
-                        <div className="grid grid-cols-2 gap-8 mt-6">
-                            <div>
-                                <EditableSection title="Terms & Conditions" value={settings.terms} onChange={val => setSettings({...settings, terms: val})}/>
+                    <div className="grid grid-cols-2 gap-8 mt-6">
+                        <div>
+                            <EditableSection title="Terms & Conditions" value={settings.terms} onChange={val => setSettings({...settings, terms: val})}/>
+                        </div>
+                        <div>
+                            <div className="print-final-details" style={{breakInside: 'avoid'}}>
+                                <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">Bank Details for Payment</h3>
+                                <div className="text-xs grid grid-cols-2 gap-x-4">
+                                    <strong>A/C Name:</strong> <span>{settings.bankDetails.name}</span>
+                                    <strong>A/C Number:</strong> <span>{settings.bankDetails.accountNumber}</span>
+                                    <strong>IFSC Code:</strong> <span>{settings.bankDetails.ifsc}</span>
+                                    <strong>Branch:</strong> <span>{settings.bankDetails.branch}</span>
+                                    <strong>A/C Type:</strong> <span className="capitalize">{settings.bankDetails.accountType}</span>
+                                </div>
                             </div>
-                            <div>
-                                <div className="print-final-details">
-                                    <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">Bank Details for Payment</h3>
-                                    <div className="text-xs grid grid-cols-2 gap-x-4">
-                                        <strong>A/C Name:</strong> <span>{settings.bankDetails.name}</span>
-                                        <strong>A/C Number:</strong> <span>{settings.bankDetails.accountNumber}</span>
-                                        <strong>IFSC Code:</strong> <span>{settings.bankDetails.ifsc}</span>
-                                        <strong>Branch:</strong> <span>{settings.bankDetails.branch}</span>
-                                        <strong>A/C Type:</strong> <span className="capitalize">{settings.bankDetails.accountType}</span>
-                                    </div>
-                                </div>
-                                <div className="print-final-details mt-8">
-                                    <div className="h-24"></div>
-                                    <h3 className="font-bold text-sm text-center border-t border-gray-400 pt-1">Authorised Signature</h3>
-                                </div>
+                            <div className="print-final-details mt-8" style={{breakInside: 'avoid'}}>
+                                <div className="h-24"></div>
+                                <h3 className="font-bold text-sm text-center border-t border-gray-400 pt-1">Authorised Signature</h3>
                             </div>
                         </div>
                     </div>

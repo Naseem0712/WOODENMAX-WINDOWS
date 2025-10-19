@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback } from 'react';
 import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
@@ -21,6 +21,24 @@ interface BeforeInstallPromptEvent extends Event {
     }>;
     prompt(): Promise<void>;
 }
+
+type ConfigState = Omit<WindowConfig, 'series'>;
+
+type ConfigAction =
+  | { type: 'SET_FIELD'; field: keyof ConfigState; payload: any }
+  | { type: 'ADD_FIXED_PANEL'; payload: FixedPanelPosition }
+  | { type: 'REMOVE_FIXED_PANEL'; payload: string }
+  | { type: 'UPDATE_FIXED_PANEL_SIZE'; payload: { id: string; size: number } }
+  | { type: 'TOGGLE_DOOR_POSITION'; payload: { row: number; col: number } }
+  | { type: 'HANDLE_VENTILATOR_CELL_CLICK'; payload: { row: number; col: number } }
+  | { type: 'SET_GRID_SIZE'; payload: { rows: number; cols: number } }
+  | { type: 'REMOVE_VERTICAL_DIVIDER'; payload: number }
+  | { type: 'REMOVE_HORIZONTAL_DIVIDER'; payload: number }
+  | { type: 'UPDATE_HANDLE'; payload: { panelId: string; newConfig: HandleConfig | null } }
+  | { type: 'SET_WINDOW_TYPE'; payload: WindowType }
+  | { type: 'SET_PARTITION_PANEL_COUNT'; payload: number }
+  | { type: 'CYCLE_PARTITION_PANEL_TYPE'; payload: number };
+
 
 const BASE_DIMENSIONS = {
     outerFrame: 0, fixedFrame: 0, shutterHandle: 0, shutterInterlock: 0,
@@ -118,41 +136,176 @@ const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
     description: 'Supply and installation of premium aluminium windows and partitions as per the agreed specifications.'
 };
 
+const initialConfig: ConfigState = {
+    width: 1800,
+    height: 2100,
+    fixedPanels: [],
+    glassType: GlassType.CLEAR,
+    glassThickness: 8,
+    glassSpecialType: 'none',
+    profileColor: '#374151',
+    glassGrid: { rows: 0, cols: 0 },
+    windowType: WindowType.SLIDING,
+    trackType: TrackType.TWO_TRACK,
+    shutterConfig: ShutterConfigType.TWO_GLASS,
+    fixedShutters: [],
+    slidingHandles: [],
+    verticalDividers: [0.5],
+    horizontalDividers: [],
+    doorPositions: [{ row: 0, col: 0 }, { row: 0, col: 1 }],
+    ventilatorGrid: [],
+    partitionPanels: { count: 2, types: [{ type: 'fixed' }, { type: 'sliding' }] },
+};
+
+
+function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
+    switch (action.type) {
+        case 'SET_FIELD':
+            return { ...state, [action.field]: action.payload };
+        case 'ADD_FIXED_PANEL':
+            if (state.fixedPanels.some(p => p.position === action.payload)) return state;
+            return { ...state, fixedPanels: [...state.fixedPanels, { id: uuidv4(), position: action.payload, size: 300 }] };
+        case 'REMOVE_FIXED_PANEL':
+            return { ...state, fixedPanels: state.fixedPanels.filter(p => p.id !== action.payload) };
+        case 'UPDATE_FIXED_PANEL_SIZE':
+            return { ...state, fixedPanels: state.fixedPanels.map(p => p.id === action.payload.id ? { ...p, size: action.payload.size } : p) };
+        case 'TOGGLE_DOOR_POSITION': {
+            const { row, col } = action.payload;
+            const exists = state.doorPositions.some(p => p.row === row && p.col === col);
+            if (exists) {
+                return { ...state, doorPositions: state.doorPositions.filter(p => p.row !== row || p.col !== col) };
+            } else {
+                return { ...state, doorPositions: [...state.doorPositions, { row, col }] };
+            }
+        }
+        case 'HANDLE_VENTILATOR_CELL_CLICK': {
+            const { row, col } = action.payload;
+            const sequence: VentilatorCellType[] = ['glass', 'louvers', 'door', 'exhaust_fan'];
+            const newGrid = state.ventilatorGrid.map(r => r.slice());
+            const currentType = newGrid[row][col].type;
+            const currentIndex = sequence.indexOf(currentType);
+            const nextType = sequence[(currentIndex + 1) % sequence.length];
+            newGrid[row][col] = { ...newGrid[row][col], type: nextType };
+            if (nextType !== 'door' && newGrid[row][col].handle) {
+                delete newGrid[row][col].handle;
+            }
+            return { ...state, ventilatorGrid: newGrid };
+        }
+        case 'SET_GRID_SIZE': {
+            const { rows, cols } = action.payload;
+            const newH = Array.from({ length: rows - 1 }).map((_, i) => (i + 1) / rows);
+            const newV = Array.from({ length: cols - 1 }).map((_, i) => (i + 1) / cols);
+            return { ...state, horizontalDividers: newH, verticalDividers: newV };
+        }
+        case 'REMOVE_VERTICAL_DIVIDER': {
+            const index = action.payload;
+            const verticalDividers = state.verticalDividers.filter((_, i) => i !== index);
+            const ventilatorGrid = state.ventilatorGrid.map(row => { row.splice(index + 1, 1); return row; });
+            const doorPositions = state.doorPositions.filter(p => p.col !== index + 1).map(p => p.col > index + 1 ? { ...p, col: p.col - 1 } : p);
+            return { ...state, verticalDividers, ventilatorGrid, doorPositions };
+        }
+        case 'REMOVE_HORIZONTAL_DIVIDER': {
+            const index = action.payload;
+            const horizontalDividers = state.horizontalDividers.filter((_, i) => i !== index);
+            const ventilatorGrid = [...state.ventilatorGrid];
+            ventilatorGrid.splice(index + 1, 1);
+            const doorPositions = state.doorPositions.filter(p => p.row !== index + 1).map(p => p.row > index + 1 ? { ...p, row: p.row - 1 } : p);
+            return { ...state, horizontalDividers, ventilatorGrid, doorPositions };
+        }
+        case 'UPDATE_HANDLE': {
+            const { panelId, newConfig } = action.payload;
+            const parts = panelId.split('-');
+            const type = parts[0];
+            let newState = { ...state };
+
+            switch (type) {
+                case 'sliding': {
+                    const index = parseInt(parts[1], 10);
+                    const newHandles = [...state.slidingHandles];
+                    newHandles[index] = newConfig;
+                    newState.slidingHandles = newHandles;
+                    break;
+                }
+                case 'casement': {
+                    const row = parseInt(parts[1], 10);
+                    const col = parseInt(parts[2], 10);
+                    newState.doorPositions = state.doorPositions.map(p => {
+                        if (p.row === row && p.col === col) {
+                            if (newConfig) return { ...p, handle: newConfig };
+                            const { handle, ...rest } = p;
+                            return rest;
+                        }
+                        return p;
+                    });
+                    break;
+                }
+                case 'ventilator': {
+                    const row = parseInt(parts[1], 10);
+                    const col = parseInt(parts[2], 10);
+                    const newGrid = state.ventilatorGrid.map(r => r.slice());
+                    if (newConfig) {
+                        newGrid[row][col] = { ...newGrid[row][col], handle: newConfig };
+                    } else if (newGrid[row][col]) {
+                        delete newGrid[row][col].handle;
+                    }
+                    newState.ventilatorGrid = newGrid;
+                    break;
+                }
+                case 'partition': {
+                    const index = parseInt(parts[1], 10);
+                    const newTypes = [...state.partitionPanels.types];
+                    if (newConfig) {
+                        newTypes[index] = { ...newTypes[index], handle: newConfig };
+                    } else if (newTypes[index]) {
+                        delete newTypes[index].handle;
+                    }
+                    newState.partitionPanels = { ...state.partitionPanels, types: newTypes };
+                    break;
+                }
+            }
+            return newState;
+        }
+        case 'SET_WINDOW_TYPE': {
+          const newState = { ...state, windowType: action.payload };
+          if (action.payload === WindowType.GLASS_PARTITION) {
+            newState.fixedPanels = [];
+          }
+          return newState;
+        }
+        case 'SET_PARTITION_PANEL_COUNT': {
+          const count = action.payload;
+          return {
+            ...state,
+            partitionPanels: {
+              ...state.partitionPanels,
+              count,
+              types: Array.from({ length: count }, (_, i) => state.partitionPanels.types[i] || { type: 'fixed' as PartitionPanelType }),
+            }
+          };
+        }
+        case 'CYCLE_PARTITION_PANEL_TYPE': {
+            const index = action.payload;
+            const sequence: PartitionPanelType[] = ['fixed', 'sliding', 'hinged'];
+            const currentType = state.partitionPanels.types[index].type;
+            const currentIndex = sequence.indexOf(currentType);
+            const nextType = sequence[(currentIndex + 1) % sequence.length];
+            const newTypes = [...state.partitionPanels.types];
+            newTypes[index] = { ...newTypes[index], type: nextType };
+            return { ...state, partitionPanels: { ...state.partitionPanels, types: newTypes } };
+        }
+        default:
+            return state;
+    }
+}
+
 const App: React.FC = () => {
-  // Shared State
-  const [width, setWidth] = useState<number | ''>(1800);
-  const [height, setHeight] = useState<number | ''>(2100);
-  const [fixedPanels, setFixedPanels] = useState<FixedPanel[]>([]);
+  
+  const [windowConfigState, dispatch] = useReducer(configReducer, initialConfig);
+  const { windowType, trackType, shutterConfig, fixedShutters, slidingHandles, verticalDividers, horizontalDividers, doorPositions, ventilatorGrid, partitionPanels } = windowConfigState;
+
   const [isPanelOpen, setIsPanelOpen] = useState(window.innerWidth >= 1024);
   const [isMobileQuoteOpen, setIsMobileQuoteOpen] = useState(false);
-
-  const [glassType, setGlassType] = useState<GlassType>(GlassType.CLEAR);
-  const [glassThickness, setGlassThickness] = useState<number | ''>(8);
-  const [glassSpecialType, setGlassSpecialType] = useState<GlassSpecialType>('none');
-  const [profileColor, setProfileColor] = useState<string>('#374151');
-  const [glassGrid, setGlassGrid] = useState({ rows: 0, cols: 0 });
   
-  // Window Type State
-  const [windowType, setWindowType] = useState<WindowType>(WindowType.SLIDING);
-  
-  // Sliding Window State
-  const [trackType, setTrackType] = useState<TrackType>(TrackType.TWO_TRACK);
-  const [shutterConfig, setShutterConfig] = useState<ShutterConfigType>(ShutterConfigType.TWO_GLASS);
-  const [fixedShutters, setFixedShutters] = useState<boolean[]>([]);
-  const [slidingHandles, setSlidingHandles] = useState<(HandleConfig | null)[]>([]);
-
-  
-  // Casement & Ventilator State
-  const [verticalDividers, setVerticalDividers] = useState<number[]>([0.5]);
-  const [horizontalDividers, setHorizontalDividers] = useState<number[]>([]);
-  const [doorPositions, setDoorPositions] = useState<{row: number, col: number, handle?: HandleConfig}[]>([{row:0, col:0}, {row:0, col:1}]);
-
-  // Ventilator-specific State
-  const [ventilatorGrid, setVentilatorGrid] = useState<VentilatorCell[][]>([]);
-
-  // Glass Partition State
-  const [partitionPanels, setPartitionPanels] = useState<{ count: number, types: PartitionPanelConfig[] }>({ count: 2, types: [{ type: 'fixed' }, { type: 'sliding' }] });
-
   // Series State
   const [series, setSeries] = useState<ProfileSeries>(() => {
     try {
@@ -205,6 +358,12 @@ const App: React.FC = () => {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   
   const panelRef = useRef<HTMLDivElement>(null);
+  
+  const windowConfig: WindowConfig = useMemo(() => ({
+    ...windowConfigState,
+    series
+  }), [windowConfigState, series]);
+
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -248,29 +407,24 @@ const App: React.FC = () => {
     } catch (error) { console.error("Could not save quotation settings", error); }
   }, [quotationSettings]);
   
-  const SERIES_MAP: Record<WindowType, ProfileSeries> = {
+  const SERIES_MAP: Record<WindowType, ProfileSeries> = useMemo(() => ({
     [WindowType.SLIDING]: DEFAULT_SLIDING_SERIES,
     [WindowType.CASEMENT]: DEFAULT_CASEMENT_SERIES,
     [WindowType.VENTILATOR]: DEFAULT_VENTILATOR_SERIES,
     [WindowType.GLASS_PARTITION]: DEFAULT_GLASS_PARTITION_SERIES,
-  };
+  }), []);
 
   useEffect(() => {
-    // When switching window type, set a relevant default series
     if (series.type !== windowType) {
         const foundSeries = savedSeries.find(s => s.type === windowType);
         setSeries(foundSeries || SERIES_MAP[windowType] || DEFAULT_SLIDING_SERIES);
     }
-    // Reset fixed panels for partition
-    if (windowType === WindowType.GLASS_PARTITION) {
-        setFixedPanels([]);
-    }
-  }, [windowType]);
+  }, [windowType, series.type, savedSeries, SERIES_MAP]);
   
-  const availableSeries = [
+  const availableSeries = useMemo(() => [
     DEFAULT_SLIDING_SERIES, DEFAULT_CASEMENT_SERIES, DEFAULT_VENTILATOR_SERIES, 
     DEFAULT_GLASS_PARTITION_SERIES, ...savedSeries
-  ];
+  ], [savedSeries]);
   
   const numShutters = useMemo(() => {
     if (windowType !== WindowType.SLIDING) return 0;
@@ -285,69 +439,52 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (trackType === TrackType.TWO_TRACK && ![ShutterConfigType.TWO_GLASS, ShutterConfigType.FOUR_GLASS].includes(shutterConfig)) {
-      setShutterConfig(ShutterConfigType.TWO_GLASS);
+      dispatch({ type: 'SET_FIELD', field: 'shutterConfig', payload: ShutterConfigType.TWO_GLASS });
     }
     if (trackType === TrackType.THREE_TRACK && ![ShutterConfigType.THREE_GLASS, ShutterConfigType.TWO_GLASS_ONE_MESH].includes(shutterConfig)) {
-      setShutterConfig(ShutterConfigType.THREE_GLASS);
+      dispatch({ type: 'SET_FIELD', field: 'shutterConfig', payload: ShutterConfigType.THREE_GLASS });
     }
   }, [trackType, shutterConfig]);
 
   useEffect(() => {
-    setFixedShutters(current => {
-        const newArray = Array(numShutters).fill(false);
-        for(let i=0; i < Math.min(current.length, newArray.length); i++) { newArray[i] = current[i]; }
-        return newArray;
-    });
-     setSlidingHandles(current => {
-        const newArray = Array(numShutters).fill(null);
-        for(let i=0; i < Math.min(current.length, newArray.length); i++) { newArray[i] = current[i]; }
-        return newArray;
-    });
+    const newFixedShutters = Array(numShutters).fill(false);
+    for(let i=0; i < Math.min(fixedShutters.length, newFixedShutters.length); i++) { newFixedShutters[i] = fixedShutters[i]; }
+    dispatch({ type: 'SET_FIELD', field: 'fixedShutters', payload: newFixedShutters });
+    
+    const newSlidingHandles = Array(numShutters).fill(null);
+    for(let i=0; i < Math.min(slidingHandles.length, newSlidingHandles.length); i++) { newSlidingHandles[i] = slidingHandles[i]; }
+    dispatch({ type: 'SET_FIELD', field: 'slidingHandles', payload: newSlidingHandles });
   }, [numShutters]);
   
   useEffect(() => {
-    setVentilatorGrid(currentGrid => {
-        const gridRows = horizontalDividers.length + 1;
-        const gridCols = verticalDividers.length + 1;
-        const newGrid: VentilatorCell[][] = Array.from({ length: gridRows }, () => 
-            Array.from({ length: gridCols }, () => ({ type: 'glass' }))
-        );
-        for (let r = 0; r < Math.min(gridRows, currentGrid.length); r++) {
-            for (let c = 0; c < Math.min(gridCols, currentGrid[r]?.length || 0); c++) {
-                newGrid[r][c] = currentGrid[r][c];
-            }
+    const gridRows = horizontalDividers.length + 1;
+    const gridCols = verticalDividers.length + 1;
+    const newGrid: VentilatorCell[][] = Array.from({ length: gridRows }, () => 
+        Array.from({ length: gridCols }, () => ({ type: 'glass' }))
+    );
+    for (let r = 0; r < Math.min(gridRows, ventilatorGrid.length); r++) {
+        for (let c = 0; c < Math.min(gridCols, ventilatorGrid[r]?.length || 0); c++) {
+            newGrid[r][c] = ventilatorGrid[r][c];
         }
-        return newGrid;
-    });
+    }
+    dispatch({ type: 'SET_FIELD', field: 'ventilatorGrid', payload: newGrid });
   }, [verticalDividers, horizontalDividers]);
 
-   useEffect(() => {
-    setPartitionPanels(current => ({
-      ...current,
-      types: Array.from({ length: current.count }, (_, i) => current.types[i] || { type: 'fixed' as PartitionPanelType }),
-    }));
-  }, [partitionPanels.count]);
-
-  const addFixedPanel = (position: FixedPanelPosition) => {
-    if (fixedPanels.some(p => p.position === position)) return;
-    setFixedPanels(prev => [...prev, { id: uuidv4(), position, size: 300 }]);
-  };
+  const addFixedPanel = useCallback((position: FixedPanelPosition) => dispatch({ type: 'ADD_FIXED_PANEL', payload: position }), []);
+  const removeFixedPanel = useCallback((id: string) => dispatch({ type: 'REMOVE_FIXED_PANEL', payload: id }), []);
+  const updateFixedPanelSize = useCallback((id: string, size: number) => dispatch({ type: 'UPDATE_FIXED_PANEL_SIZE', payload: { id, size } }), []);
   
-  const removeFixedPanel = (id: string) => setFixedPanels(prev => prev.filter(p => p.id !== id));
-  
-  const updateFixedPanelSize = (id: string, size: number) => setFixedPanels(prev => prev.map(p => p.id === id ? {...p, size} : p));
-  
-  const handleSeriesSelect = (id: string) => {
+  const handleSeriesSelect = useCallback((id: string) => {
     const selected = availableSeries.find(s => s.id === id);
     if(selected) {
       setSeries(selected);
       if (selected.type !== windowType) {
-        setWindowType(selected.type);
+        dispatch({ type: 'SET_WINDOW_TYPE', payload: selected.type });
       }
     }
-  };
+  }, [availableSeries, windowType]);
   
-  const handleSeriesSave = (name: string) => {
+  const handleSeriesSave = useCallback((name: string) => {
     if (name && name.trim() !== '') {
       const newSeries: ProfileSeries = {
         ...series,
@@ -358,9 +495,9 @@ const App: React.FC = () => {
       setSavedSeries(prev => [...prev, newSeries]);
       setSeries(newSeries);
     }
-  };
+  }, [series, windowType]);
   
-  const handleSeriesDelete = (id: string) => {
+  const handleSeriesDelete = useCallback((id: string) => {
     if (id.includes('-default')) { return; }
     if (window.confirm("Are you sure you want to delete this profile?")) {
       setSavedSeries(prev => prev.filter(s => s.id !== id));
@@ -368,137 +505,35 @@ const App: React.FC = () => {
         setSeries(SERIES_MAP[windowType]);
       }
     }
-  };
+  }, [series.id, windowType, SERIES_MAP]);
   
-  const handleHardwareChange = (id: string, field: keyof HardwareItem, value: string | number) => {
+  const handleHardwareChange = useCallback((id: string, field: keyof HardwareItem, value: string | number) => {
     setSeries(prevSeries => ({
         ...prevSeries,
         hardwareItems: prevSeries.hardwareItems.map(item => item.id === id ? { ...item, [field]: value } : item)
     }));
-  };
+  }, []);
   
-  const addHardwareItem = () => {
+  const addHardwareItem = useCallback(() => {
     setSeries(prevSeries => ({
         ...prevSeries,
         hardwareItems: [...prevSeries.hardwareItems, { id: uuidv4(), name: 'New Hardware', qtyPerShutter: 1, rate: 0, unit: 'per_shutter_or_door' }]
     }));
-  };
+  }, []);
   
-  const removeHardwareItem = (id: string) => {
+  const removeHardwareItem = useCallback((id: string) => {
     setSeries(prevSeries => ({
         ...prevSeries,
         hardwareItems: prevSeries.hardwareItems.filter(item => item.id !== id)
     }));
-  };
+  }, []);
 
-  const toggleDoorPosition = (row: number, col: number) => {
-    setDoorPositions(prev => {
-        const exists = prev.some(p => p.row === row && p.col === col);
-        if (exists) {
-            return prev.filter(p => p.row !== row || p.col !== col);
-        } else {
-            return [...prev, { row, col }];
-        }
-    });
-  };
-
-  const handleVentilatorCellClick = (row: number, col: number) => {
-    const sequence: VentilatorCellType[] = ['glass', 'louvers', 'door', 'exhaust_fan'];
-    setVentilatorGrid(prev => {
-        const newGrid = prev.map(r => r.slice());
-        const currentType = newGrid[row][col].type;
-        const currentIndex = sequence.indexOf(currentType);
-        const nextType = sequence[(currentIndex + 1) % sequence.length];
-        newGrid[row][col] = { ...newGrid[row][col], type: nextType };
-        // Remove handle if it's not a door anymore
-        if (nextType !== 'door' && newGrid[row][col].handle) {
-            delete newGrid[row][col].handle;
-        }
-        return newGrid;
-    });
-  };
-
-  const handleSetGridSize = (rows: number, cols: number) => {
-      const newH = Array.from({length: rows - 1}).map((_, i) => (i + 1) / rows);
-      const newV = Array.from({length: cols - 1}).map((_, i) => (i + 1) / cols);
-      setHorizontalDividers(newH);
-      setVerticalDividers(newV);
-  };
-
-  const handleRemoveVerticalDivider = (index: number) => {
-      setVerticalDividers(prev => prev.filter((_, i) => i !== index));
-      setVentilatorGrid(prev => prev.map(row => {
-          row.splice(index + 1, 1);
-          return row;
-      }));
-      setDoorPositions(prev => prev.filter(p => p.col !== index + 1).map(p => p.col > index + 1 ? {...p, col: p.col - 1} : p));
-  };
-  
-  const handleRemoveHorizontalDivider = (index: number) => {
-      setHorizontalDividers(prev => prev.filter((_, i) => i !== index));
-      setVentilatorGrid(prev => {
-          prev.splice(index + 1, 1);
-          return prev;
-      });
-      setDoorPositions(prev => prev.filter(p => p.row !== index + 1).map(p => p.row > index + 1 ? {...p, row: p.row - 1} : p));
-  };
-
-  const handleUpdateHandle = (panelId: string, newConfig: HandleConfig | null) => {
-    const parts = panelId.split('-');
-    const type = parts[0];
-
-    switch (type) {
-        case 'sliding': {
-            const index = parseInt(parts[1], 10);
-            setSlidingHandles(prev => {
-                const newHandles = [...prev];
-                newHandles[index] = newConfig;
-                return newHandles;
-            });
-            break;
-        }
-        case 'casement': {
-            const row = parseInt(parts[1], 10);
-            const col = parseInt(parts[2], 10);
-            setDoorPositions(prev => prev.map(p => {
-                if (p.row === row && p.col === col) {
-                    if (newConfig) return { ...p, handle: newConfig };
-                    const { handle, ...rest } = p;
-                    return rest;
-                }
-                return p;
-            }));
-            break;
-        }
-        case 'ventilator': {
-            const row = parseInt(parts[1], 10);
-            const col = parseInt(parts[2], 10);
-            setVentilatorGrid(prev => {
-                const newGrid = prev.map(r => r.slice());
-                if (newConfig) {
-                    newGrid[row][col] = { ...newGrid[row][col], handle: newConfig };
-                } else if (newGrid[row][col]) {
-                    delete newGrid[row][col].handle;
-                }
-                return newGrid;
-            });
-            break;
-        }
-        case 'partition': {
-            const index = parseInt(parts[1], 10);
-            setPartitionPanels(prev => {
-                const newTypes = [...prev.types];
-                if (newConfig) {
-                    newTypes[index] = { ...newTypes[index], handle: newConfig };
-                } else if (newTypes[index]) {
-                    delete newTypes[index].handle;
-                }
-                return { ...prev, types: newTypes };
-            });
-            break;
-        }
-    }
-  };
+  const toggleDoorPosition = useCallback((row: number, col: number) => dispatch({ type: 'TOGGLE_DOOR_POSITION', payload: { row, col } }), []);
+  const handleVentilatorCellClick = useCallback((row: number, col: number) => dispatch({ type: 'HANDLE_VENTILATOR_CELL_CLICK', payload: { row, col } }), []);
+  const handleSetGridSize = useCallback((rows: number, cols: number) => dispatch({ type: 'SET_GRID_SIZE', payload: { rows, cols } }), []);
+  const handleRemoveVerticalDivider = useCallback((index: number) => dispatch({ type: 'REMOVE_VERTICAL_DIVIDER', payload: index }), []);
+  const handleRemoveHorizontalDivider = useCallback((index: number) => dispatch({ type: 'REMOVE_HORIZONTAL_DIVIDER', payload: index }), []);
+  const handleUpdateHandle = useCallback((panelId: string, newConfig: HandleConfig | null) => dispatch({ type: 'UPDATE_HANDLE', payload: { panelId, newConfig } }), []);
 
   const hardwareCostPerWindow = useMemo(() => {
     let numDoorsOrShutters = 0;
@@ -523,34 +558,12 @@ const App: React.FC = () => {
 
   }, [series.hardwareItems, numShutters, doorPositions.length, ventilatorGrid, windowType, partitionPanels]);
 
-  const windowConfig: WindowConfig = useMemo(() => ({
-    width: width,
-    height: height,
-    series,
-    fixedPanels,
-    glassType,
-    glassThickness,
-    glassSpecialType,
-    profileColor,
-    glassGrid,
-    windowType,
-    trackType,
-    shutterConfig,
-    fixedShutters,
-    slidingHandles,
-    verticalDividers,
-    horizontalDividers,
-    doorPositions,
-    ventilatorGrid,
-    partitionPanels,
-  }), [width, height, series, fixedPanels, glassType, glassThickness, glassSpecialType, profileColor, glassGrid, windowType, trackType, shutterConfig, fixedShutters, slidingHandles, verticalDividers, horizontalDividers, doorPositions, ventilatorGrid, partitionPanels]);
-
-  const handleSaveToQuotation = () => {
+  const handleSaveToQuotation = useCallback(() => {
     const colorName = savedColors.find(c => c.hex === windowConfig.profileColor)?.name;
     const newItem: QuotationItem = {
         id: uuidv4(),
         title: windowTitle || 'Untitled Window',
-        config: windowConfig,
+        config: JSON.parse(JSON.stringify(windowConfig)),
         quantity: Number(quantity) || 1,
         areaType,
         rate: Number(rate) || 0,
@@ -560,11 +573,11 @@ const App: React.FC = () => {
     };
     setQuotationItems(prev => [...prev, newItem]);
     alert(`"${newItem.title}" saved to quotation! You now have ${quotationItems.length + 1} item(s).`);
-  }
+  }, [windowTitle, windowConfig, quantity, areaType, rate, hardwareCostPerWindow, series.hardwareItems, savedColors, quotationItems.length]);
 
-  const handleRemoveQuotationItem = (id: string) => {
+  const handleRemoveQuotationItem = useCallback((id: string) => {
       setQuotationItems(prev => prev.filter(item => item.id !== id));
-  }
+  }, []);
   
   const handleInstallClick = async () => {
     if (!installPrompt) return;
@@ -578,34 +591,22 @@ const App: React.FC = () => {
     setInstallPrompt(null);
   };
   
-  const commonControlProps = {
+  const setConfig = useCallback((field: keyof WindowConfig, value: any) => {
+    if (field === 'series') {
+        setSeries(value);
+    } else {
+        dispatch({ type: 'SET_FIELD', field: field as keyof ConfigState, payload: value });
+    }
+  }, []);
+  
+  const commonControlProps = useMemo(() => ({
     config: windowConfig,
-    setConfig: (field: keyof WindowConfig, value: any) => {
-        switch(field) {
-            case 'width': setWidth(value); break;
-            case 'height': setHeight(value); break;
-            case 'series': setSeries(value); break;
-            case 'glassType': setGlassType(value); break;
-            case 'glassThickness': setGlassThickness(value); break;
-            case 'glassSpecialType': setGlassSpecialType(value); break;
-            case 'profileColor': setProfileColor(value); break;
-            case 'glassGrid': setGlassGrid(value); break;
-            case 'windowType': setWindowType(value); break;
-            case 'trackType': setTrackType(value); break;
-            case 'shutterConfig': setShutterConfig(value); break;
-            case 'fixedShutters': setFixedShutters(value); break;
-            case 'slidingHandles': setSlidingHandles(value); break;
-            case 'doorPositions': setDoorPositions(value); break;
-            case 'ventilatorGrid': setVentilatorGrid(value); break;
-            case 'partitionPanels': setPartitionPanels(value); break;
-        }
-    },
+    setConfig,
     setGridSize: handleSetGridSize,
     availableSeries: availableSeries,
     onSeriesSelect: handleSeriesSelect,
     onSeriesSave: handleSeriesSave,
     onSeriesDelete: handleSeriesDelete,
-    fixedPanels: fixedPanels,
     addFixedPanel: addFixedPanel,
     removeFixedPanel: removeFixedPanel,
     updateFixedPanelSize: updateFixedPanelSize,
@@ -617,8 +618,7 @@ const App: React.FC = () => {
     savedColors: savedColors,
     setSavedColors: setSavedColors,
     onUpdateHandle: handleUpdateHandle,
-  };
-
+  }), [windowConfig, setConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle]);
 
   return (
     <>
@@ -670,8 +670,8 @@ const App: React.FC = () => {
               </div>
               <div className="flex-shrink-0 no-print hidden lg:block">
                   <QuotationPanel 
-                      width={Number(width) || 0}
-                      height={Number(height) || 0}
+                      width={Number(windowConfig.width) || 0}
+                      height={Number(windowConfig.height) || 0}
                       quantity={quantity}
                       setQuantity={setQuantity}
                       areaType={areaType}
@@ -715,8 +715,8 @@ const App: React.FC = () => {
         ></div>
         <div className={`lg:hidden fixed bottom-0 left-0 right-0 flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${isMobileQuoteOpen ? 'translate-y-0' : 'translate-y-full'}`}>
             <QuotationPanel 
-                width={Number(width) || 0}
-                height={Number(height) || 0}
+                width={Number(windowConfig.width) || 0}
+                height={Number(windowConfig.height) || 0}
                 quantity={quantity}
                 setQuantity={setQuantity}
                 areaType={areaType}
