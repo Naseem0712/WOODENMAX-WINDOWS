@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import type { QuotationItem, QuotationSettings } from '../types';
 import { Button } from './ui/Button';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -8,14 +8,17 @@ import { PrinterIcon } from './icons/PrinterIcon';
 import { UploadIcon } from './icons/UploadIcon';
 import { Select } from './ui/Select';
 import { PrintPreview } from './PrintPreview';
+import { DownloadIcon } from './icons/DownloadIcon';
 
 interface QuotationListModalProps {
   isOpen: boolean;
   onClose: () => void;
   items: QuotationItem[];
+  setItems: (items: QuotationItem[]) => void;
   onRemove: (id: string) => void;
   settings: QuotationSettings;
   setSettings: (settings: QuotationSettings) => void;
+  onTogglePreview: (isPreviewing: boolean) => void;
 }
 
 const Section: React.FC<{title: string, children: React.ReactNode, className?: string}> = ({title, children, className}) => (
@@ -33,11 +36,17 @@ const TextArea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & {la
 );
 
 
-export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, onClose, items, onRemove, settings, setSettings }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, onClose, items, setItems, onRemove, settings, setSettings, onTogglePreview }) => {
+  const companyLogoInputRef = useRef<HTMLInputElement>(null);
+  const importQuotationInputRef = useRef<HTMLInputElement>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
+  useEffect(() => {
+    onTogglePreview(isPreviewOpen);
+  }, [isPreviewOpen, onTogglePreview]);
+
   if (!isOpen) return null;
+
   if (isPreviewOpen) {
     return <PrintPreview 
         isOpen={isPreviewOpen}
@@ -72,6 +81,49 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
     }
   }
 
+  const handleExport = () => {
+    const quotationData = {
+        settings,
+        items,
+    };
+    const jsonString = JSON.stringify(quotationData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const date = new Date().toISOString().slice(0, 10);
+    link.download = `WoodenMax-Quotation-${settings.customer.name || 'Export'}-${date}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        try {
+            const result = event.target?.result as string;
+            const data = JSON.parse(result);
+            if (data.settings && data.items && Array.isArray(data.items)) {
+                setSettings(data.settings);
+                setItems(data.items);
+                alert('Quotation imported successfully!');
+            } else {
+                throw new Error('Invalid quotation file format.');
+            }
+        } catch (error) {
+            console.error('Failed to import quotation:', error);
+            alert('Error: Could not import the quotation file. It might be invalid or corrupted.');
+        }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset file input
+  };
+
   const subTotal = items.reduce((total, item) => {
     const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
     const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
@@ -103,7 +155,10 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
         <div className="flex justify-between items-center p-4 border-b border-slate-700 no-print">
           <h2 className="text-2xl font-bold text-white">Quotation Generator</h2>
           <div className="flex items-center gap-2">
-            <Button onClick={() => setIsPreviewOpen(true)} variant="secondary"><PrinterIcon className="w-5 h-5 mr-2"/> Print Preview</Button>
+            <Button onClick={handleExport} variant="secondary"><DownloadIcon className="w-5 h-5 mr-2"/> Export JSON</Button>
+            <Button onClick={() => importQuotationInputRef.current?.click()} variant="secondary"><UploadIcon className="w-5 h-5 mr-2"/> Import JSON</Button>
+            <input type="file" ref={importQuotationInputRef} onChange={handleImport} className="hidden" accept="application/json" />
+            <Button onClick={() => setIsPreviewOpen(true)}><PrinterIcon className="w-5 h-5 mr-2"/> Print Preview</Button>
             <Button onClick={onClose} variant="secondary" className="p-2 rounded-full h-10 w-10">
                 <XMarkIcon className="w-6 h-6" />
             </Button>
@@ -118,8 +173,8 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
                         <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 rounded-md object-cover bg-slate-600"/>
                         <div className="flex-grow">
                             <Input label="Company Name" value={settings.company.name} onChange={e => handleSettingsChange('company', 'name', e.target.value)} />
-                            <Button variant="secondary" className="w-full mt-2" onClick={() => fileInputRef.current?.click()}><UploadIcon className="w-4 h-4 mr-2"/> Upload Logo</Button>
-                            <input type="file" ref={fileInputRef} onChange={handleLogoUpload} className="hidden" accept="image/*" />
+                            <Button variant="secondary" className="w-full mt-2" onClick={() => companyLogoInputRef.current?.click()}><UploadIcon className="w-4 h-4 mr-2"/> Upload Logo</Button>
+                            <input type="file" ref={companyLogoInputRef} onChange={handleLogoUpload} className="hidden" accept="image/*" />
                         </div>
                     </div>
                      <Input label="Address" value={settings.company.address} onChange={e => handleSettingsChange('company', 'address', e.target.value)} />
@@ -137,7 +192,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
             
             <Section title="Quotation Items">
                 {items.length === 0 ? (
-                    <p className="text-slate-400 text-center py-8">Your quotation is empty. Add items from the main screen.</p>
+                    <p className="text-slate-400 text-center py-8">Your quotation is empty. Add items from the main screen or import a quotation file.</p>
                 ) : (
                     <div className="space-y-2">
                         {items.map((item, index) => {

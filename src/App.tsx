@@ -347,6 +347,7 @@ const App: React.FC = () => {
   const [rate, setRate] = useState<number | ''>(550);
   const [quotationItems, setQuotationItems] = useState<QuotationItem[]>([]);
   const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const [quotationSettings, setQuotationSettings] = useState<QuotationSettings>(() => {
       try {
         const item = window.localStorage.getItem('woodenmax-quotation-settings');
@@ -454,6 +455,7 @@ const App: React.FC = () => {
     const newSlidingHandles = Array(numShutters).fill(null);
     for(let i=0; i < Math.min(slidingHandles.length, newSlidingHandles.length); i++) { newSlidingHandles[i] = slidingHandles[i]; }
     dispatch({ type: 'SET_FIELD', field: 'slidingHandles', payload: newSlidingHandles });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [numShutters]);
   
   useEffect(() => {
@@ -468,6 +470,7 @@ const App: React.FC = () => {
         }
     }
     dispatch({ type: 'SET_FIELD', field: 'ventilatorGrid', payload: newGrid });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verticalDividers, horizontalDividers]);
 
   const addFixedPanel = useCallback((position: FixedPanelPosition) => dispatch({ type: 'ADD_FIXED_PANEL', payload: position }), []);
@@ -626,11 +629,13 @@ const App: React.FC = () => {
         isOpen={isQuotationModalOpen}
         onClose={() => setIsQuotationModalOpen(false)}
         items={quotationItems}
+        setItems={setQuotationItems}
         onRemove={handleRemoveQuotationItem}
         settings={quotationSettings}
         setSettings={setQuotationSettings}
+        onTogglePreview={setIsPreviewing}
       />
-      <div className="flex flex-col h-screen font-sans bg-slate-900 overflow-hidden">
+      <div className={`flex flex-col h-screen font-sans bg-slate-900 overflow-hidden ${isPreviewing ? 'hidden' : ''}`}>
         <header className="bg-slate-800 p-3 flex items-center shadow-md z-40 no-print">
             <Logo className="h-10 w-10 mr-4 flex-shrink-0" />
             <div className="flex-grow">

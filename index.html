@@ -164,6 +164,18 @@
             resize: none !important;
             color: black !important;
         }
+        
+        /* Fix for flexbox layout causing printing issues */
+        .print-item > .flex {
+            display: block !important;
+        }
+        .print-item .w-1\/3, .print-item .w-2\/3 {
+            width: 100% !important;
+        }
+        .print-item .w-1\/3 {
+            margin-bottom: 8px;
+        }
+
 
         @page {
           size: A4;
