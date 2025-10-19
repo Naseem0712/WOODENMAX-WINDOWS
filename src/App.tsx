@@ -298,9 +298,23 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
     }
 }
 
+const getInitialConfig = (): ConfigState => {
+  try {
+    const saved = window.localStorage.getItem('woodenmax-current-config');
+    if (saved) {
+      // Merge with default to ensure new fields are included if the app updates
+      const parsed = JSON.parse(saved);
+      return { ...initialConfig, ...parsed };
+    }
+  } catch (error) {
+    console.error("Could not load current config from localStorage", error);
+  }
+  return initialConfig;
+};
+
 const App: React.FC = () => {
   
-  const [windowConfigState, dispatch] = useReducer(configReducer, initialConfig);
+  const [windowConfigState, dispatch] = useReducer(configReducer, getInitialConfig());
   const { windowType, trackType, shutterConfig, fixedShutters, slidingHandles, verticalDividers, horizontalDividers, doorPositions, ventilatorGrid, partitionPanels } = windowConfigState;
 
   const [isPanelOpen, setIsPanelOpen] = useState(window.innerWidth >= 1024);
@@ -341,11 +355,11 @@ const App: React.FC = () => {
   });
   
   // Quotation State
-  const [windowTitle, setWindowTitle] = useState<string>('Window 1');
-  const [quantity, setQuantity] = useState<number | ''>(1);
-  const [areaType, setAreaType] = useState<AreaType>(AreaType.SQFT);
-  const [rate, setRate] = useState<number | ''>(550);
-  const [quotationItems, setQuotationItems] = useState<QuotationItem[]>([]);
+  const [windowTitle, setWindowTitle] = useState<string>(() => window.localStorage.getItem('woodenmax-quotation-panel-title') || 'Window 1');
+  const [quantity, setQuantity] = useState<number | ''>(() => { try { const s = window.localStorage.getItem('woodenmax-quotation-panel-quantity'); return s ? JSON.parse(s) : 1; } catch { return 1; } });
+  const [areaType, setAreaType] = useState<AreaType>(() => (window.localStorage.getItem('woodenmax-quotation-panel-areaType') as AreaType) || AreaType.SQFT);
+  const [rate, setRate] = useState<number | ''>(() => { try { const s = window.localStorage.getItem('woodenmax-quotation-panel-rate'); return s ? JSON.parse(s) : 550; } catch { return 550; } });
+  const [quotationItems, setQuotationItems] = useState<QuotationItem[]>(() => { try { const s = window.localStorage.getItem('woodenmax-quotation-items'); return s ? JSON.parse(s) : []; } catch { return []; } });
   const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [quotationSettings, setQuotationSettings] = useState<QuotationSettings>(() => {
@@ -365,7 +379,34 @@ const App: React.FC = () => {
     series
   }), [windowConfigState, series]);
 
+  // --- PERSISTENCE EFFECTS ---
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('woodenmax-current-config', JSON.stringify(windowConfigState));
+    } catch (error) {
+      console.error("Could not save current config to localStorage", error);
+    }
+  }, [windowConfigState]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('woodenmax-quotation-items', JSON.stringify(quotationItems));
+    } catch (error) {
+      console.error("Could not save quotation items", error);
+    }
+  }, [quotationItems]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('woodenmax-quotation-panel-title', windowTitle);
+      window.localStorage.setItem('woodenmax-quotation-panel-quantity', JSON.stringify(quantity));
+      window.localStorage.setItem('woodenmax-quotation-panel-areaType', areaType);
+      window.localStorage.setItem('woodenmax-quotation-panel-rate', JSON.stringify(rate));
+    } catch (error) {
+      console.error("Could not save quotation panel state", error);
+    }
+  }, [windowTitle, quantity, areaType, rate]);
+  
   useEffect(() => {
     const handler = (e: Event) => {
       e.preventDefault();
