@@ -584,30 +584,31 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                     className="a4-page text-black"
                 >
                     <div className="print-header">
-                        <div className="flex justify-between items-start">
-                            <div className="flex items-start gap-4">
-                                <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 object-contain"/>
-                                <div>
-                                    <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
-                                    <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
-                                    <p className="text-xs">{settings.company.email} | {settings.company.website}</p>
+                        {pageIndex === 0 && (
+                            <>
+                                <div className="flex justify-between items-start">
+                                    <div className="flex items-start gap-4">
+                                        <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 object-contain"/>
+                                        <div>
+                                            <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
+                                            <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
+                                            <p className="text-xs">{settings.company.email} | {settings.company.website}</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right text-xs">
+                                        <p><strong>Date:</strong> {quoteDate}</p>
+                                        <p><strong>Quote #:</strong> {quoteNumber}</p>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="text-right text-xs">
-                                <h1 className="text-3xl font-light text-gray-600">QUOTATION</h1>
-                                <p><strong>Date:</strong> {quoteDate}</p>
-                                <p><strong>Quote #:</strong> {quoteNumber}</p>
-                            </div>
-                        </div>
-                       {pageIndex === 0 && (
-                         <div className="flex justify-between text-xs mt-4">
-                            <div className="bg-gray-100 p-2 rounded w-full">
-                                <h3 className="font-bold mb-1">To:</h3>
-                                <p className="font-semibold">{settings.customer.name}</p>
-                                <p className="whitespace-pre-wrap">{settings.customer.address}</p>
-                                <p><strong>Attn:</strong> {settings.customer.contactPerson}</p>
-                            </div>
-                         </div>
+                                <div className="flex justify-between text-xs mt-4">
+                                    <div className="bg-gray-100 p-2 rounded w-full">
+                                        <h3 className="font-bold mb-1">To:</h3>
+                                        <p className="font-semibold">{settings.customer.name}</p>
+                                        <p className="whitespace-pre-wrap">{settings.customer.address}</p>
+                                        <p><strong>Attn:</strong> {settings.customer.contactPerson}</p>
+                                    </div>
+                                </div>
+                            </>
                        )}
                     </div>
                     
@@ -700,21 +701,32 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
 
             <div className="a4-page text-black">
                 <div className="print-header">
-                    <div className="flex justify-between items-start">
-                        <div className="flex items-start gap-4">
-                            <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 object-contain"/>
-                            <div>
-                                <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
-                                <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
-                                <p className="text-xs">{settings.company.email} | {settings.company.website}</p>
+                    {items.length === 0 && (
+                        <>
+                            <div className="flex justify-between items-start">
+                                <div className="flex items-start gap-4">
+                                    <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 object-contain"/>
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
+                                        <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
+                                        <p className="text-xs">{settings.company.email} | {settings.company.website}</p>
+                                    </div>
+                                </div>
+                                <div className="text-right text-xs">
+                                    <p><strong>Date:</strong> {quoteDate}</p>
+                                    <p><strong>Quote #:</strong> {quoteNumber}</p>
+                                </div>
                             </div>
-                        </div>
-                        <div className="text-right text-xs">
-                            <h1 className="text-3xl font-light text-gray-600">QUOTATION</h1>
-                            <p><strong>Date:</strong> {quoteDate}</p>
-                            <p><strong>Quote #:</strong> {quoteNumber}</p>
-                        </div>
-                    </div>
+                            <div className="flex justify-between text-xs mt-4">
+                                <div className="bg-gray-100 p-2 rounded w-full">
+                                    <h3 className="font-bold mb-1">To:</h3>
+                                    <p className="font-semibold">{settings.customer.name}</p>
+                                    <p className="whitespace-pre-wrap">{settings.customer.address}</p>
+                                    <p><strong>Attn:</strong> {settings.customer.contactPerson}</p>
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
                 <div className="print-content">
                     <h2 className="text-xl font-bold text-center my-4 text-black">Final Summary</h2>
