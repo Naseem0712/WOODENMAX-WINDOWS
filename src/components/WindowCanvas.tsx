@@ -424,19 +424,18 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
                 const panelWidth = innerAreaWidth / partitionPanels.count;
                 const overlap = 25;
                 
-                const hasSliding = partitionPanels.types.some(p => p.type === 'sliding');
-                if (hasSliding) {
+                if (partitionPanels.hasTopChannel) {
                   innerContent.push(<ProfilePiece key="track-top" color={profileColor} style={{ top: 0, left: 0, width: innerAreaWidth * scale, height: dims.topTrack * scale }} />);
                   innerContent.push(<ProfilePiece key="track-bottom" color={profileColor} style={{ bottom: 0, left: 0, width: innerAreaWidth * scale, height: dims.bottomTrack * scale }} />);
                 }
                 
-                const panelAreaY = hasSliding ? dims.topTrack : 0;
-                const panelAreaHeight = innerAreaHeight - (hasSliding ? dims.topTrack + dims.bottomTrack : 0);
+                const panelAreaY = partitionPanels.hasTopChannel ? dims.topTrack : 0;
+                const panelAreaHeight = innerAreaHeight - (partitionPanels.hasTopChannel ? dims.topTrack + dims.bottomTrack : 0);
 
                 for (let i=0; i < partitionPanels.count; i++) {
                     const panelConfig = partitionPanels.types[i];
                     if (!panelConfig) continue;
-                    const { type, handle } = panelConfig;
+                    const { type, handle, framing } = panelConfig;
 
                     const zIndex = type === 'sliding' ? 10 + i : 5;
                     let panelX = i * (panelWidth);
@@ -449,33 +448,27 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
                     if (handle) {
                         handleElements.push(<div key={`handle-part-${i}`} style={{ position: 'absolute', zIndex: 30, left: (panelX + currentPanelWidth * handle.x / 100) * scale, top: (panelAreaY + panelAreaHeight * handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handle} scale={scale} color={profileColor} /></div>);
                     }
+                    
+                    const isFramed = framing === 'full' || type === 'hinged';
+                    const frameSize = dims.casementShutter;
 
-                    if (type === 'fixed') {
-                        innerContent.push(
-                          <div key={`panel-${i}`} className="absolute" style={{left: panelX*scale, top: panelAreaY*scale, width: currentPanelWidth*scale, height: panelAreaHeight*scale}}>
-                            <GlassPanel style={{left: 0, top: 0, width: '100%', height: '100%'}} glassWidth={currentPanelWidth} glassHeight={panelAreaHeight}>
-                               <ShutterIndicator type="fixed" />
-                            </GlassPanel>
-                          </div>
-                        );
-                    } else if (type === 'sliding') {
-                        innerContent.push(
-                           <div key={`panel-${i}`} className="absolute" style={{left: panelX*scale, top: panelAreaY*scale, width: currentPanelWidth*scale, height: panelAreaHeight*scale, zIndex}}>
-                             <GlassPanel style={{left: 0, top: 0, width: '100%', height: '100%'}} glassWidth={currentPanelWidth} glassHeight={panelAreaHeight}>
-                                <ShutterIndicator type="sliding" />
-                            </GlassPanel>
-                           </div>
-                        );
-                    } else if (type === 'hinged') {
-                         innerContent.push(
-                            <div key={`panel-${i}`} className="absolute" style={{left: panelX*scale, top: panelAreaY*scale, width: currentPanelWidth*scale, height: panelAreaHeight*scale}}>
-                                <MiteredFrame width={currentPanelWidth} height={panelAreaHeight} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
-                                <GlassPanel style={{left: dims.casementShutter*scale, top:dims.casementShutter*scale, width: (currentPanelWidth - 2*dims.casementShutter)*scale, height: (panelAreaHeight - 2*dims.casementShutter)*scale}} glassWidth={currentPanelWidth - 2*dims.casementShutter} glassHeight={panelAreaHeight - 2*dims.casementShutter}>
-                                    <ShutterIndicator type="hinged" />
-                                </GlassPanel>
-                            </div>
-                         );
-                    }
+                    innerContent.push(
+                        <div key={`panel-${i}`} className="absolute" style={{left: panelX*scale, top: panelAreaY*scale, width: currentPanelWidth*scale, height: panelAreaHeight*scale, zIndex}}>
+                          {isFramed && <MiteredFrame width={currentPanelWidth} height={panelAreaHeight} profileSize={frameSize} scale={scale} color={profileColor} />}
+                          <GlassPanel 
+                            style={{
+                              left: (isFramed ? frameSize : 0) * scale, 
+                              top: (isFramed ? frameSize : 0) * scale, 
+                              width: (currentPanelWidth - (isFramed ? 2 * frameSize : 0)) * scale, 
+                              height: (panelAreaHeight - (isFramed ? 2 * frameSize : 0)) * scale
+                            }} 
+                            glassWidth={currentPanelWidth - (isFramed ? 2 * frameSize : 0)} 
+                            glassHeight={panelAreaHeight - (isFramed ? 2 * frameSize : 0)}
+                          >
+                             <ShutterIndicator type={type} />
+                          </GlassPanel>
+                        </div>
+                    );
                 }
                 break;
             }

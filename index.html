@@ -79,33 +79,42 @@
         page-break-inside: avoid;
     }
 
-    /* Styles for PDF Export cleanup */
-    .pdf-export-mode {
-        padding: 0 !important;
-        background-color: white !important;
-    }
-    .pdf-export-mode .a4-page {
-        margin: 0 !important;
-        box-shadow: none !important;
-        border: none !important;
-    }
-    /* Layout fixes for html2pdf.js which doesn't respect @media print */
-    .pdf-export-mode .print-item > .flex {
+    /* Unified styles for on-screen preview, PDF export, and native print */
+    .print-preview-active .print-item > .flex,
+    .pdf-export-mode .print-item > .flex,
+    @media print .print-item > .flex {
         display: block !important;
     }
+
+    .print-preview-active .print-item .w-1\/3,
+    .print-preview-active .print-item .w-2\/3,
     .pdf-export-mode .print-item .w-1\/3,
-    .pdf-export-mode .print-item .w-2\/3 {
+    .pdf-export-mode .print-item .w-2\/3,
+    @media print .print-item .w-1\/3,
+    @media print .print-item .w-2\/3 {
         width: 100% !important;
     }
-    .pdf-export-mode .print-item .w-1\/3 {
+
+    .print-preview-active .print-item .w-1\/3,
+    .pdf-export-mode .print-item .w-1\/3,
+    @media print .print-item .w-1\/3 {
         margin-bottom: 8px;
     }
-    .pdf-export-mode textarea.print-editable {
+
+    .print-preview-active textarea.print-editable {
+        border-color: #94a3b8 !important; /* Lighter border for editing */
+        background-color: #f8fafc !important; /* Light background for editing */
+        color: #1e293b !important;
+        resize: vertical !important;
+    }
+
+    .pdf-export-mode textarea.print-editable,
+    @media print textarea.print-editable {
         border-color: transparent !important;
         background-color: transparent !important;
         resize: none !important;
+        color: black !important;
     }
-
 
     @media print {
         *, *::before, *::after {
@@ -174,26 +183,7 @@
             color: black !important;
             font-weight: normal !important;
         }
-
-        textarea.print-editable {
-            border-color: transparent !important;
-            background-color: transparent !important;
-            resize: none !important;
-            color: black !important;
-        }
         
-        /* Fix for flexbox layout causing printing issues */
-        .print-item > .flex {
-            display: block !important;
-        }
-        .print-item .w-1\/3, .print-item .w-2\/3 {
-            width: 100% !important;
-        }
-        .print-item .w-1\/3 {
-            margin-bottom: 8px;
-        }
-
-
         @page {
           size: A4;
           margin: 0;

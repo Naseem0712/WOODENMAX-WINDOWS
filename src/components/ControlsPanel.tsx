@@ -15,7 +15,7 @@ import { CollapsibleCard } from './ui/CollapsibleCard';
 interface ControlsPanelProps {
   config: WindowConfig;
   onClose: () => void;
-  setConfig: (field: keyof WindowConfig, value: any) => void;
+  setConfig: (field: keyof WindowConfig | 'setPartitionPanelCount', value: any) => void;
   setGridSize: (rows: number, cols: number) => void;
   
   availableSeries: ProfileSeries[];
@@ -37,6 +37,10 @@ interface ControlsPanelProps {
   savedColors: SavedColor[];
   setSavedColors: (colors: SavedColor[]) => void;
   onUpdateHandle: (panelId: string, newConfig: HandleConfig | null) => void;
+
+  onCyclePartitionPanelType: (index: number) => void;
+  onSetPartitionHasTopChannel: (hasChannel: boolean) => void;
+  onCyclePartitionPanelFraming: (index: number) => void;
 }
 
 function getContrastYIQ(hexcolor: string){
@@ -63,7 +67,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
     addFixedPanel, removeFixedPanel, updateFixedPanelSize,
     onHardwareChange, onAddHardware, onRemoveHardware,
     toggleDoorPosition, onVentilatorCellClick,
-    savedColors, setSavedColors, onUpdateHandle
+    savedColors, setSavedColors, onUpdateHandle,
+    onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming
   } = props;
 
   const { windowType, series, verticalDividers, horizontalDividers, fixedPanels } = config;
@@ -192,10 +197,22 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         default: return 'Fixed';
     }
   };
+  
+  const isCustomThickness = useMemo(() => {
+    return series.glassOptions.customThicknessAllowed &&
+           config.glassThickness !== '' &&
+           !series.glassOptions.thicknesses.includes(Number(config.glassThickness));
+  }, [config.glassThickness, series.glassOptions]);
 
-  const cyclePartitionPanelType = (index: number) => {
-      setConfig('cyclePartitionPanelType' as any, index);
+  const handleThicknessChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    if (value === 'custom') {
+        setConfig('glassThickness', 15); // Default custom value
+    } else {
+        setConfig('glassThickness', value === '' ? '' : Number(value));
+    }
   };
+
 
   return (
     <div className="w-full p-4 space-y-4 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
@@ -290,18 +307,40 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
 
       {windowType === WindowType.GLASS_PARTITION && (
         <CollapsibleCard title="Partition Panel Setup" defaultOpen>
-          <Input label="Number of Panels" type="number" min={1} max={8} value={config.partitionPanels.count} onChange={e => setConfig('setPartitionPanelCount' as any, Math.max(1, parseInt(e.target.value) || 1) )}/>
+          <Input label="Number of Panels" type="number" min={1} max={8} value={config.partitionPanels.count} onChange={e => setConfig('setPartitionPanelCount', Math.max(1, parseInt(e.target.value) || 1) )}/>
+           <label className="flex items-center space-x-2 cursor-pointer mt-2">
+              <input 
+                  type="checkbox" 
+                  checked={config.partitionPanels.hasTopChannel} 
+                  onChange={e => onSetPartitionHasTopChannel(e.target.checked)}
+                  className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span className="text-sm text-slate-200">Enable Top/Bottom Channel</span>
+          </label>
           {config.partitionPanels.count > 0 && (
             <div className="pt-2">
-              <label className="block text-sm font-medium text-slate-300 mb-2">Panel Types (Click to cycle)</label>
-              <div className="grid grid-cols-2 gap-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">Panel Types (Click to change)</label>
+              <div className="grid grid-cols-1 gap-2">
                   {Array.from({length: config.partitionPanels.count}).map((_, i) => {
-                      const type = config.partitionPanels.types[i]?.type || 'fixed';
-                      const colorClass = type === 'sliding' ? 'bg-sky-600 text-white' : type === 'hinged' ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-300';
+                      const panelConfig = config.partitionPanels.types[i] || { type: 'fixed' };
+                      const type = panelConfig.type;
+                      const framing = panelConfig.framing || 'none';
+                      const typeColorClass = type === 'sliding' ? 'bg-sky-600 hover:bg-sky-700' : type === 'hinged' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-700 hover:bg-slate-600';
+                      const frameColorClass = framing === 'full' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-700 hover:bg-slate-600';
+                      
                       return (
-                          <button key={i} onClick={() => cyclePartitionPanelType(i)} className={`p-2 rounded-md text-sm font-semibold text-center capitalize ${colorClass} hover:opacity-80`}>
-                              Panel {i + 1}: {type}
-                          </button>
+                        <div key={i} className="grid grid-cols-3 gap-1 text-white text-sm font-semibold">
+                            <div className="p-2 rounded-l-md bg-slate-800 col-span-1 flex items-center justify-center">Panel {i + 1}</div>
+                            <button onClick={() => onCyclePartitionPanelType(i)} className={`p-2 capitalize ${typeColorClass} transition-colors`}>
+                                {type}
+                            </button>
+                             <button 
+                                onClick={() => onCyclePartitionPanelFraming(i)} 
+                                disabled={type === 'hinged'}
+                                className={`p-2 rounded-r-md capitalize ${frameColorClass} transition-colors ${type === 'hinged' ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                {type === 'hinged' ? 'Framed' : (framing === 'full' ? 'Framed' : 'Frameless')}
+                            </button>
+                        </div>
                       )
                   })}
               </div>
@@ -350,24 +389,32 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
       )}
 
       <CollapsibleCard title="Appearance">
-        <Select label="Glass Tint" value={config.glassType} onChange={(e) => setConfig('glassType', e.target.value as GlassType)}>
-          <option value="clear">Clear</option>
-          <option value="frosted">Frosted</option>
-          <option value="tinted-blue">Tinted Blue</option>
-          <option value="clear-sapphire">Clear Sapphire</option>
-          <option value="brown-tinted">Brown Tinted</option>
-          <option value="black-tinted">Black Tinted</option>
-        </Select>
         <div className="grid grid-cols-2 gap-4">
-          <Select label="Glass Thickness" value={config.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))}>
-              <option value="">Auto</option>
-              {series.glassOptions.thicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
-              {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
-          </Select>
-           <Select label="Special Type" value={config.glassSpecialType} onChange={e => setConfig('glassSpecialType', e.target.value as GlassSpecialType)}>
-              <option value="none">None</option>
-              {series.glassOptions.specialTypes.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-           </Select>
+            <Select label="Glass Tint" value={config.glassType} onChange={(e) => setConfig('glassType', e.target.value as GlassType)}>
+              <option value="clear">Clear</option>
+              <option value="frosted">Frosted</option>
+              <option value="tinted-blue">Tinted Blue</option>
+              <option value="clear-sapphire">Clear Sapphire</option>
+              <option value="brown-tinted">Brown Tinted</option>
+              <option value="black-tinted">Black Tinted</option>
+            </Select>
+            <Select label="Special Type" value={config.glassSpecialType} onChange={e => setConfig('glassSpecialType', e.target.value as GlassSpecialType)}>
+                <option value="none">None</option>
+                {series.glassOptions.specialTypes.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+            </Select>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Select label="Glass Thickness" value={isCustomThickness ? 'custom' : config.glassThickness} onChange={handleThicknessChange}>
+                <option value="">Auto</option>
+                {series.glassOptions.thicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
+                {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
+            </Select>
+            {isCustomThickness && (
+                 <Input label="Custom Thickness (mm)" type="number" value={config.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))} className="mt-2" />
+            )}
+          </div>
+          <Input label="Glass Name / Brand (Optional)" type="text" value={config.customGlassName} onChange={e => setConfig('customGlassName', e.target.value)} placeholder="e.g. Saint-Gobain" />
         </div>
         
         <div className="pt-4 mt-4 border-t border-slate-700">

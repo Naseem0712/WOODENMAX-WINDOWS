@@ -1,5 +1,3 @@
-
-
 import React, { useMemo, useRef, useState } from 'react';
 import type { QuotationItem, QuotationSettings, WindowConfig } from '../types';
 import { Button } from './ui/Button';
@@ -16,6 +14,44 @@ interface PrintPreviewProps {
   settings: QuotationSettings;
   setSettings: (settings: QuotationSettings) => void;
 }
+
+const numWords = {
+    a: ['', 'one ', 'two ', 'three ', 'four ', 'five ', 'six ', 'seven ', 'eight ', 'nine ', 'ten ', 'eleven ', 'twelve ', 'thirteen ', 'fourteen ', 'fifteen ', 'sixteen ', 'seventeen ', 'eighteen ', 'nineteen '],
+    b: ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety']
+};
+
+function numberToWords(numStr: string): string {
+    if (numStr === '0') return '';
+    const num = parseInt(numStr, 10);
+    if (num > 99) return 'overflow';
+    if (num < 20) return numWords.a[num];
+    const digit1 = Math.floor(num / 10);
+    const digit2 = num % 10;
+    return numWords.b[digit1] + numWords.a[digit2];
+}
+
+function amountToWords(amount: number): string {
+    const num = Math.round(amount);
+    if (num === 0) return 'Rupees Zero Only';
+    const numStr = num.toString();
+    if (numStr.length > 9) return 'Amount too large';
+
+    const crore = numStr.slice(0, -7);
+    const lakh = numStr.slice(-7, -5);
+    const thousand = numStr.slice(-5, -3);
+    const hundred = numStr.slice(-3, -2);
+    const rest = numStr.slice(-2);
+
+    let result = '';
+    if (crore) result += numberToWords(crore) + 'Crore ';
+    if (lakh) result += numberToWords(lakh) + 'Lakh ';
+    if (thousand) result += numberToWords(thousand) + 'Thousand ';
+    if (hundred && hundred !== '0') result += numberToWords(hundred) + 'Hundred ';
+    if (rest) result += (result && rest !== '00' ? 'and ' : '') + numberToWords(rest);
+
+    return `Rupees ${result.trim().charAt(0).toUpperCase() + result.trim().slice(1)} Only`;
+}
+
 
 const PrintDimensionLabel: React.FC<{ value: number; unit?: string, className?: string, style?: React.CSSProperties }> = ({ value, unit = "mm", className, style }) => (
     <span className={`absolute bg-white bg-opacity-80 text-black text-[6pt] font-mono px-1 py-0 rounded z-20 ${className}`} style={{'--tw-rotate': '-90deg', transform: 'translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) rotate(var(--tw-rotate, 0)) skewX(var(--tw-skew-x, 0)) skewY(var(--tw-skew-y, 0)) scaleX(var(--tw-scale-x, 1)) scaleY(var(--tw-scale-y, 1))', ...style} as React.CSSProperties}>
@@ -355,17 +391,19 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
                         const panelWidth = innerAreaWidth / partitionPanels.count;
                         const overlap = 25; 
                         const panels: React.ReactNode[] = [];
-                        const hasSliding = partitionPanels.types.some(p => p.type === 'sliding');
-                        if (hasSliding) {
+                        
+                        if (partitionPanels.hasTopChannel) {
                             panels.push(<PrintProfilePiece key="track-top" color={profileColor} style={{ top: 0, left: 0, width: innerAreaWidth * scale, height: dims.topTrack * scale }} />);
                             panels.push(<PrintProfilePiece key="track-bottom" color={profileColor} style={{ bottom: 0, left: 0, width: innerAreaWidth * scale, height: dims.bottomTrack * scale }} />);
                         }
-                        const panelAreaY = hasSliding ? dims.topTrack : 0;
-                        const panelAreaHeight = innerAreaHeight - (hasSliding ? dims.topTrack + dims.bottomTrack : 0);
+                        const panelAreaY = partitionPanels.hasTopChannel ? dims.topTrack : 0;
+                        const panelAreaHeight = innerAreaHeight - (partitionPanels.hasTopChannel ? dims.topTrack + dims.bottomTrack : 0);
 
                         for (let i=0; i < partitionPanels.count; i++) {
                             const panelConfig = partitionPanels.types[i];
-                            const type = panelConfig?.type;
+                            if (!panelConfig) continue;
+                            const { type, handle, framing } = panelConfig;
+                            
                             const zIndex = type === 'sliding' ? 10 + i : 5;
                             let panelX = i * (panelWidth);
                             let currentPanelWidth = panelWidth;
@@ -373,20 +411,30 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
                                 panelX = i * (panelWidth - overlap);
                                 currentPanelWidth += overlap;
                             }
-                             if (panelConfig?.handle) {
-                                handleElements.push(<div key={`handle-part-${i}`} style={{ position: 'absolute', zIndex: 30, left: (panelX + currentPanelWidth * panelConfig.handle.x / 100) * scale, top: (panelAreaY + panelAreaHeight * panelConfig.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><PrintableHandle config={panelConfig.handle} scale={scale} /></div>);
+                             if (handle) {
+                                handleElements.push(<div key={`handle-part-${i}`} style={{ position: 'absolute', zIndex: 30, left: (panelX + currentPanelWidth * handle.x / 100) * scale, top: (panelAreaY + panelAreaHeight * handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><PrintableHandle config={handle} scale={scale} /></div>);
                             }
                             
-                            if (type === 'fixed') {
-                                panels.push(<div key={`panel-${i}`} className="absolute" style={{left: panelX*scale, top: panelAreaY*scale, width: panelWidth*scale, height: panelAreaHeight*scale}}><GlassPanel style={{left: 0, top: 0, width: '100%', height: '100%'}} glassWidth={panelWidth} glassHeight={panelAreaHeight}><PrintShutterIndicator type="fixed" /></GlassPanel></div>);
-                            } else if (type === 'sliding') {
-                                panels.push(<div key={`panel-${i}`} className="absolute" style={{left: panelX*scale, top: panelAreaY*scale, width: currentPanelWidth*scale, height: panelAreaHeight*scale, zIndex}}><GlassPanel style={{left: 0, top: 0, width: '100%', height: '100%'}} glassWidth={currentPanelWidth} glassHeight={panelAreaHeight}><PrintShutterIndicator type="sliding" /></GlassPanel></div>);
-                            } else if (type === 'hinged') {
-                                panels.push(<div key={`panel-${i}`} className="absolute" style={{left: panelX*scale, top: panelAreaY*scale, width: panelWidth*scale, height: panelAreaHeight*scale}}>
-                                  <PrintableMiteredFrame width={panelWidth} height={panelAreaHeight} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
-                                  <GlassPanel style={{left: dims.casementShutter*scale, top:dims.casementShutter*scale, width: (panelWidth - 2*dims.casementShutter)*scale, height: (panelAreaHeight - 2*dims.casementShutter)*scale}} glassWidth={panelWidth - 2*dims.casementShutter} glassHeight={panelAreaHeight - 2*dims.casementShutter}><PrintShutterIndicator type="hinged" /></GlassPanel>
-                                </div>);
-                            }
+                             const isFramed = framing === 'full' || type === 'hinged';
+                             const frameSize = dims.casementShutter;
+
+                            panels.push(
+                                <div key={`panel-${i}`} className="absolute" style={{left: panelX*scale, top: panelAreaY*scale, width: currentPanelWidth*scale, height: panelAreaHeight*scale, zIndex}}>
+                                  {isFramed && <PrintableMiteredFrame width={currentPanelWidth} height={panelAreaHeight} profileSize={frameSize} scale={scale} color={profileColor} />}
+                                  <GlassPanel 
+                                    style={{
+                                      left: (isFramed ? frameSize : 0) * scale, 
+                                      top: (isFramed ? frameSize : 0) * scale, 
+                                      width: (currentPanelWidth - (isFramed ? 2 * frameSize : 0)) * scale, 
+                                      height: (panelAreaHeight - (isFramed ? 2 * frameSize : 0)) * scale
+                                    }} 
+                                    glassWidth={currentPanelWidth - (isFramed ? 2 * frameSize : 0)} 
+                                    glassHeight={panelAreaHeight - (isFramed ? 2 * frameSize : 0)}
+                                  >
+                                     <PrintShutterIndicator type={type} />
+                                  </GlassPanel>
+                                </div>
+                            );
                         }
                         return <>{panels}</>;
                     })()}
@@ -445,7 +493,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
     const ITEMS_PER_SUBSEQUENT_PAGES = 4;
     
     if (items.length === 0) {
-        return [];
+        return [[]]; // Return one empty page if no items, so final page renders
     }
 
     const result: QuotationItem[][] = [];
@@ -459,7 +507,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
     return result;
   }, [items]);
   
-  const totalPages = (itemPages.length > 0 ? itemPages.length : 0) + 1;
+  const totalPages = itemPages.length + (items.length > 0 ? 1 : 0);
 
   const handleExportPdf = () => {
     const element = printContainerRef.current;
@@ -485,7 +533,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
             format: 'a4',
             orientation: 'portrait' as const,
         },
-        pagebreak: { mode: 'css', after: '.a4-page' }
+        pagebreak: { mode: ['css'], after: '.a4-page' }
     };
 
     html2pdf().from(element).set(opt).save().then(() => {
@@ -530,38 +578,38 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
             </div>
         </div>
         <div ref={printContainerRef} className="flex-grow overflow-y-auto bg-slate-900 print-preview-container custom-scrollbar">
-            {itemPages.map((pageItems, pageIndex) => (
+            {items.length > 0 && itemPages.map((pageItems, pageIndex) => (
                 <div 
                     key={pageIndex} 
                     className="a4-page text-black"
                 >
-                    {pageIndex === 0 && (
-                        <div className="print-header">
-                            <div className="flex justify-between items-start">
-                                <div className="flex items-start gap-4">
-                                    <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 object-contain"/>
-                                    <div>
-                                        <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
-                                        <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
-                                        <p className="text-xs">{settings.company.email} | {settings.company.website}</p>
-                                    </div>
-                                </div>
-                                <div className="text-right text-xs">
-                                    <h1 className="text-3xl font-light text-gray-600">QUOTATION</h1>
-                                    <p><strong>Date:</strong> {quoteDate}</p>
-                                    <p><strong>Quote #:</strong> {quoteNumber}</p>
+                    <div className="print-header">
+                        <div className="flex justify-between items-start">
+                            <div className="flex items-start gap-4">
+                                <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 object-contain"/>
+                                <div>
+                                    <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
+                                    <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
+                                    <p className="text-xs">{settings.company.email} | {settings.company.website}</p>
                                 </div>
                             </div>
-                            <div className="flex justify-between text-xs mt-4">
-                                <div className="bg-gray-100 p-2 rounded w-full">
-                                    <h3 className="font-bold mb-1">To:</h3>
-                                    <p className="font-semibold">{settings.customer.name}</p>
-                                    <p className="whitespace-pre-wrap">{settings.customer.address}</p>
-                                    <p><strong>Attn:</strong> {settings.customer.contactPerson}</p>
-                                </div>
+                            <div className="text-right text-xs">
+                                <h1 className="text-3xl font-light text-gray-600">QUOTATION</h1>
+                                <p><strong>Date:</strong> {quoteDate}</p>
+                                <p><strong>Quote #:</strong> {quoteNumber}</p>
                             </div>
                         </div>
-                    )}
+                       {pageIndex === 0 && (
+                         <div className="flex justify-between text-xs mt-4">
+                            <div className="bg-gray-100 p-2 rounded w-full">
+                                <h3 className="font-bold mb-1">To:</h3>
+                                <p className="font-semibold">{settings.customer.name}</p>
+                                <p className="whitespace-pre-wrap">{settings.customer.address}</p>
+                                <p><strong>Attn:</strong> {settings.customer.contactPerson}</p>
+                            </div>
+                         </div>
+                       )}
+                    </div>
                     
                     <div className="print-content">
                         {pageIndex === 0 && (
@@ -583,6 +631,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                 
                                 const glassThicknessText = (item.config.glassThickness || 'Std.');
                                 const specialTypeText = (item.config.glassSpecialType !== 'none' ? item.config.glassSpecialType.toUpperCase() : '');
+                                const customGlassName = item.config.customGlassName ? `(${item.config.customGlassName})` : '';
 
                                 let panelSummary = '';
                                 if (item.config.windowType === WindowType.GLASS_PARTITION) {
@@ -608,7 +657,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                 <div className="text-black text-[9pt] mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
                                                     <p><strong>Size (WxH):</strong> {item.config.width} x {item.config.height} mm</p>
                                                     <p><strong>Series:</strong> {item.config.series.name}</p>
-                                                    <p><strong>Glass:</strong> {glassThicknessText}mm {specialTypeText} {item.config.glassType}</p>
+                                                    <p><strong>Glass:</strong> {glassThicknessText}mm {specialTypeText} {item.config.glassType} {customGlassName}</p>
                                                     <p><strong>Color:</strong> {item.profileColorName || item.config.profileColor}</p>
                                                     <p><strong>Mesh:</strong> {hasMesh ? 'Yes' : 'No'}</p>
                                                     {keyHardware && <p><strong>Hardware:</strong> {keyHardware}</p>}
@@ -650,97 +699,87 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
             ))}
 
             <div className="a4-page text-black">
-                {items.length === 0 && (
-                     <div className="print-header">
-                        <div className="flex justify-between items-start">
-                            <div className="flex items-start gap-4">
-                                <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 object-contain"/>
-                                <div>
-                                    <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
-                                    <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
-                                    <p className="text-xs">{settings.company.email} | {settings.company.website}</p>
-                                </div>
-                            </div>
-                            <div className="text-right text-xs">
-                                <h1 className="text-3xl font-light text-gray-600">QUOTATION</h1>
-                                <p><strong>Date:</strong> {quoteDate}</p>
-                                <p><strong>Quote #:</strong> {quoteNumber}</p>
+                <div className="print-header">
+                    <div className="flex justify-between items-start">
+                        <div className="flex items-start gap-4">
+                            <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 object-contain"/>
+                            <div>
+                                <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
+                                <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
+                                <p className="text-xs">{settings.company.email} | {settings.company.website}</p>
                             </div>
                         </div>
-                        <div className="flex justify-between text-xs mt-4">
-                            <div className="bg-gray-100 p-2 rounded w-full">
-                                <h3 className="font-bold mb-1">To:</h3>
-                                <p className="font-semibold">{settings.customer.name}</p>
-                                <p className="whitespace-pre-wrap">{settings.customer.address}</p>
-                                <p><strong>Attn:</strong> {settings.customer.contactPerson}</p>
-                            </div>
+                        <div className="text-right text-xs">
+                            <h1 className="text-3xl font-light text-gray-600">QUOTATION</h1>
+                            <p><strong>Date:</strong> {quoteDate}</p>
+                            <p><strong>Quote #:</strong> {quoteNumber}</p>
                         </div>
                     </div>
-                )}
-                 <div className="print-content !block">
-                    {items.length === 0 && (
-                        <p className="text-slate-500 text-center py-20">Quotation is empty. Add items from the main screen.</p>
-                    )}
-                    <div className="flex justify-end mt-4 print-summary">
-                        <div className="w-2/5 text-black text-[9pt]">
-                            <div className="flex justify-between p-1">
-                                <span>Sub Total</span>
-                                <span>₹ {Math.round(subTotal).toLocaleString('en-IN')}</span>
-                            </div>
-                            <div className="flex justify-between p-1">
-                                <span>Discount ({settings.financials.discountType === 'percentage' ? `${settings.financials.discount || 0}%` : 'Fixed'})</span>
-                                <span>- ₹ {Math.round(discountAmount).toLocaleString('en-IN')}</span>
-                            </div>
-                            <div className="flex justify-between p-1">
-                                <span>Taxable Value</span>
-                                <span>₹ {Math.round(totalAfterDiscount).toLocaleString('en-IN')}</span>
-                            </div>
-                            <div className="flex justify-between p-1">
-                                <span>GST ({settings.financials.gstPercentage || 0}%)</span>
-                                <span>+ ₹ {Math.round(gstAmount).toLocaleString('en-IN')}</span>
-                            </div>
-                            <div className="flex justify-between font-bold text-lg p-2 border-t-2 border-black mt-1">
-                                <span>Grand Total</span>
-                                <span>₹ {Math.round(grandTotal).toLocaleString('en-IN')}</span>
-                            </div>
-                        </div>
+                </div>
+                <div className="print-content">
+                    <h2 className="text-xl font-bold text-center my-4 text-black">Final Summary</h2>
+                    <table className="w-full text-left text-sm print-summary mb-4" style={{breakInside: 'avoid'}}>
+                        <tbody>
+                            <tr className="border-b border-gray-300">
+                                <th className="py-1">Sub Total</th>
+                                <td className="text-right">₹ {Math.round(subTotal).toLocaleString('en-IN')}</td>
+                            </tr>
+                            <tr className="border-b border-gray-300">
+                                <th className="py-1">Discount ({settings.financials.discountType === 'percentage' ? `${settings.financials.discount}%` : 'Fixed'})</th>
+                                <td className="text-right">- ₹ {Math.round(discountAmount).toLocaleString('en-IN')}</td>
+                            </tr>
+                            <tr className="border-b-2 border-black font-semibold">
+                                <th className="py-1">Total after Discount</th>
+                                <td className="text-right">₹ {Math.round(totalAfterDiscount).toLocaleString('en-IN')}</td>
+                            </tr>
+                            <tr className="border-b border-gray-300">
+                                <th className="py-1">GST ({settings.financials.gstPercentage}%)</th>
+                                <td className="text-right">+ ₹ {Math.round(gstAmount).toLocaleString('en-IN')}</td>
+                            </tr>
+                            <tr className="font-bold text-lg bg-gray-100">
+                                <th className="py-2 px-1">Grand Total</th>
+                                <td className="text-right px-1">₹ {Math.round(grandTotal).toLocaleString('en-IN')}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div className="text-right mt-2">
+                        <p className="text-xs">Amount in Words:</p>
+                        <p className="font-bold text-xs">{amountToWords(grandTotal)}</p>
                     </div>
-                    
-                    <EditableSection 
-                        title="Project Description" 
-                        value={settings.description} 
-                        onChange={val => setSettings({...settings, description: val})}
+
+                    <EditableSection
+                        title="Description"
+                        value={settings.description}
+                        onChange={value => setSettings({ ...settings, description: value })}
                     />
 
-                    <div className="grid grid-cols-2 gap-8 mt-6">
-                        <div>
-                            <EditableSection title="Terms & Conditions" value={settings.terms} onChange={val => setSettings({...settings, terms: val})}/>
+                    <EditableSection
+                        title="Terms & Conditions"
+                        value={settings.terms}
+                        onChange={value => setSettings({ ...settings, terms: value })}
+                    />
+                    
+                    <div className="grid grid-cols-2 gap-8 print-final-details mt-4" style={{breakInside: 'avoid'}}>
+                        <div className="text-xs">
+                             <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">Bank Details</h3>
+                             <p><strong>A/C Name:</strong> {settings.bankDetails.name}</p>
+                             <p><strong>A/C No:</strong> {settings.bankDetails.accountNumber}</p>
+                             <p><strong>IFSC:</strong> {settings.bankDetails.ifsc}</p>
+                             <p><strong>Branch:</strong> {settings.bankDetails.branch}</p>
+                             <p><strong>A/C Type:</strong> {settings.bankDetails.accountType.charAt(0).toUpperCase() + settings.bankDetails.accountType.slice(1)}</p>
                         </div>
                         <div>
-                            <div className="print-final-details" style={{breakInside: 'avoid'}}>
-                                <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">Bank Details for Payment</h3>
-                                <div className="text-xs grid grid-cols-2 gap-x-4">
-                                    <strong>A/C Name:</strong> <span>{settings.bankDetails.name}</span>
-                                    <strong>A/C Number:</strong> <span>{settings.bankDetails.accountNumber}</span>
-                                    <strong>IFSC Code:</strong> <span>{settings.bankDetails.ifsc}</span>
-                                    <strong>Branch:</strong> <span>{settings.bankDetails.branch}</span>
-                                    <strong>A/C Type:</strong> <span className="capitalize">{settings.bankDetails.accountType}</span>
-                                </div>
-                            </div>
-                            <div className="print-final-details mt-8" style={{breakInside: 'avoid'}}>
-                                <div className="h-24"></div>
-                                <h3 className="font-bold text-sm text-center border-t border-gray-400 pt-1">Authorised Signature</h3>
-                            </div>
+                            <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">For {settings.company.name}</h3>
+                            <div className="h-24"></div>
+                            <p className="border-t border-black pt-1 text-center text-xs">Authorised Signature</p>
                         </div>
                     </div>
-                 </div>
-                 <div className="print-footer">
-                    <span>Thank you for your business!</span>
-                    <span className="page-number float-right">Page {itemPages.length + 1} of {totalPages}</span>
+                </div>
+                <div className="print-footer">
+                    <span className="page-number float-right">Page {totalPages} of {totalPages}</span>
                 </div>
             </div>
-
         </div>
     </div>
   );
-}
+};

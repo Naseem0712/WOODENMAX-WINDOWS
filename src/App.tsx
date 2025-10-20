@@ -37,7 +37,9 @@ type ConfigAction =
   | { type: 'UPDATE_HANDLE'; payload: { panelId: string; newConfig: HandleConfig | null } }
   | { type: 'SET_WINDOW_TYPE'; payload: WindowType }
   | { type: 'SET_PARTITION_PANEL_COUNT'; payload: number }
-  | { type: 'CYCLE_PARTITION_PANEL_TYPE'; payload: number };
+  | { type: 'CYCLE_PARTITION_PANEL_TYPE'; payload: number }
+  | { type: 'SET_PARTITION_HAS_TOP_CHANNEL'; payload: boolean }
+  | { type: 'CYCLE_PARTITION_PANEL_FRAMING'; payload: number };
 
 
 const BASE_DIMENSIONS = {
@@ -142,6 +144,7 @@ const initialConfig: ConfigState = {
     fixedPanels: [],
     glassType: GlassType.CLEAR,
     glassThickness: 8,
+    customGlassName: '',
     glassSpecialType: 'none',
     profileColor: '#374151',
     glassGrid: { rows: 0, cols: 0 },
@@ -154,7 +157,7 @@ const initialConfig: ConfigState = {
     horizontalDividers: [],
     doorPositions: [{ row: 0, col: 0 }, { row: 0, col: 1 }],
     ventilatorGrid: [],
-    partitionPanels: { count: 2, types: [{ type: 'fixed' }, { type: 'sliding' }] },
+    partitionPanels: { count: 2, types: [{ type: 'fixed' }, { type: 'sliding' }], hasTopChannel: true },
 };
 
 
@@ -286,11 +289,25 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
         case 'CYCLE_PARTITION_PANEL_TYPE': {
             const index = action.payload;
             const sequence: PartitionPanelType[] = ['fixed', 'sliding', 'hinged'];
-            const currentType = state.partitionPanels.types[index].type;
+            const currentConfig = state.partitionPanels.types[index];
+            const currentType = currentConfig.type;
             const currentIndex = sequence.indexOf(currentType);
             const nextType = sequence[(currentIndex + 1) % sequence.length];
             const newTypes = [...state.partitionPanels.types];
-            newTypes[index] = { ...newTypes[index], type: nextType };
+            newTypes[index] = { ...currentConfig, type: nextType };
+            if (nextType === 'fixed' && newTypes[index].handle) {
+                delete newTypes[index].handle;
+            }
+            return { ...state, partitionPanels: { ...state.partitionPanels, types: newTypes } };
+        }
+        case 'SET_PARTITION_HAS_TOP_CHANNEL': {
+            return { ...state, partitionPanels: { ...state.partitionPanels, hasTopChannel: action.payload }};
+        }
+        case 'CYCLE_PARTITION_PANEL_FRAMING': {
+            const index = action.payload;
+            const newTypes = [...state.partitionPanels.types];
+            const currentFraming = newTypes[index].framing || 'none';
+            newTypes[index] = { ...newTypes[index], framing: currentFraming === 'none' ? 'full' : 'none' };
             return { ...state, partitionPanels: { ...state.partitionPanels, types: newTypes } };
         }
         default:
@@ -304,6 +321,15 @@ const getInitialConfig = (): ConfigState => {
     if (saved) {
       // Merge with default to ensure new fields are included if the app updates
       const parsed = JSON.parse(saved);
+      // Ensure partitionPanels has the new properties
+      if (parsed.partitionPanels && typeof parsed.partitionPanels.hasTopChannel === 'undefined') {
+          parsed.partitionPanels.hasTopChannel = true;
+      }
+      if (parsed.partitionPanels && parsed.partitionPanels.types) {
+          parsed.partitionPanels.types.forEach((t: any) => {
+              if (typeof t.framing === 'undefined') t.framing = 'none';
+          });
+      }
       return { ...initialConfig, ...parsed };
     }
   } catch (error) {
@@ -578,6 +604,9 @@ const App: React.FC = () => {
   const handleRemoveVerticalDivider = useCallback((index: number) => dispatch({ type: 'REMOVE_VERTICAL_DIVIDER', payload: index }), []);
   const handleRemoveHorizontalDivider = useCallback((index: number) => dispatch({ type: 'REMOVE_HORIZONTAL_DIVIDER', payload: index }), []);
   const handleUpdateHandle = useCallback((panelId: string, newConfig: HandleConfig | null) => dispatch({ type: 'UPDATE_HANDLE', payload: { panelId, newConfig } }), []);
+  const onCyclePartitionPanelType = useCallback((index: number) => dispatch({ type: 'CYCLE_PARTITION_PANEL_TYPE', payload: index }), []);
+  const onSetPartitionHasTopChannel = useCallback((hasChannel: boolean) => dispatch({ type: 'SET_PARTITION_HAS_TOP_CHANNEL', payload: hasChannel }), []);
+  const onCyclePartitionPanelFraming = useCallback((index: number) => dispatch({ type: 'CYCLE_PARTITION_PANEL_FRAMING', payload: index }), []);
 
   const hardwareCostPerWindow = useMemo(() => {
     let numDoorsOrShutters = 0;
@@ -662,7 +691,10 @@ const App: React.FC = () => {
     savedColors: savedColors,
     setSavedColors: setSavedColors,
     onUpdateHandle: handleUpdateHandle,
-  }), [windowConfig, setConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle]);
+    onCyclePartitionPanelType,
+    onSetPartitionHasTopChannel,
+    onCyclePartitionPanelFraming,
+  }), [windowConfig, setConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming]);
 
   return (
     <>

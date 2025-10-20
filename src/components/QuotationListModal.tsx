@@ -44,6 +44,17 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
   useEffect(() => {
     onTogglePreview(isPreviewOpen);
   }, [isPreviewOpen, onTogglePreview]);
+  
+  useEffect(() => {
+    if (isPreviewOpen) {
+        document.documentElement.classList.add('print-preview-active');
+    } else {
+        document.documentElement.classList.remove('print-preview-active');
+    }
+    return () => {
+        document.documentElement.classList.remove('print-preview-active');
+    };
+  }, [isPreviewOpen]);
 
   if (!isOpen) return null;
 

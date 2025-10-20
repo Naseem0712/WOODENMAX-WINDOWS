@@ -124,6 +124,7 @@ export type PartitionPanelType = 'fixed' | 'sliding' | 'hinged';
 export interface PartitionPanelConfig {
     type: PartitionPanelType;
     handle?: HandleConfig;
+    framing?: 'none' | 'full';
 }
 
 export interface WindowConfig {
@@ -133,6 +134,7 @@ export interface WindowConfig {
   fixedPanels: FixedPanel[];
   glassType: GlassType;
   glassThickness: number | '';
+  customGlassName: string;
   glassSpecialType: GlassSpecialType;
   profileColor: string;
   glassGrid: { rows: number, cols: number };
@@ -155,7 +157,11 @@ export interface WindowConfig {
   ventilatorGrid: VentilatorCell[][];
   
   // Glass Partition specific
-  partitionPanels: { count: number; types: PartitionPanelConfig[]; };
+  partitionPanels: { 
+    count: number; 
+    types: PartitionPanelConfig[]; 
+    hasTopChannel: boolean;
+  };
 }
 
 export interface QuotationItem {
