@@ -488,29 +488,8 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
   const gstAmount = totalAfterDiscount * (Number(settings.financials.gstPercentage) / 100);
   const grandTotal = totalAfterDiscount + gstAmount;
 
-  const itemPages = useMemo(() => {
-    const ITEMS_PER_FIRST_PAGE = 2;
-    const ITEMS_PER_SUBSEQUENT_PAGES = 4;
-    
-    if (items.length === 0) {
-        return [[]]; // Return one empty page if no items, so final page renders
-    }
-
-    const result: QuotationItem[][] = [];
-    const remainingItems = [...items];
-    
-    result.push(remainingItems.splice(0, ITEMS_PER_FIRST_PAGE));
-    
-    while (remainingItems.length > 0) {
-        result.push(remainingItems.splice(0, ITEMS_PER_SUBSEQUENT_PAGES));
-    }
-    return result;
-  }, [items]);
-  
-  const totalPages = itemPages.length + (items.length > 0 ? 1 : 0);
-
   const handleExportPdf = () => {
-    const element = printContainerRef.current;
+    const element = printContainerRef.current?.querySelector<HTMLElement>('.a4-page');
     if (!element || isExporting) {
         return;
     }
@@ -533,7 +512,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
             format: 'a4',
             orientation: 'portrait' as const,
         },
-        pagebreak: { mode: ['css'], after: '.a4-page' }
+        pagebreak: { mode: ['css', 'legacy'] }
     };
 
     html2pdf().from(element).set(opt).save().then(() => {
@@ -578,218 +557,184 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
             </div>
         </div>
         <div ref={printContainerRef} className="flex-grow overflow-y-auto bg-slate-900 print-preview-container custom-scrollbar">
-            {items.length > 0 && itemPages.map((pageItems, pageIndex) => (
-                <div 
-                    key={pageIndex} 
-                    className="a4-page text-black"
-                >
-                    <div className="print-header">
-                        {pageIndex === 0 && (
-                            <>
-                                <div className="flex justify-between items-start">
-                                    <div className="flex items-start gap-4">
-                                        <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 object-contain"/>
-                                        <div>
-                                            <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
-                                            <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
-                                            <p className="text-xs">{settings.company.email} | {settings.company.website}</p>
+            <div className="a4-page single-scroll-preview text-black">
+                {/* --- Start of Printable Content --- */}
+
+                {/* Page 1 Header */}
+                <div className="print-header" style={{height: 'auto'}}>
+                    <div className="flex justify-between items-start">
+                        <div className="flex items-start gap-4">
+                            <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 object-contain"/>
+                            <div>
+                                <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
+                                <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
+                                <p className="text-xs">{settings.company.email} | {settings.company.website}</p>
+                            </div>
+                        </div>
+                        <div className="text-right text-xs">
+                            <p><strong>Date:</strong> {quoteDate}</p>
+                            <p><strong>Quote #:</strong> {quoteNumber}</p>
+                        </div>
+                    </div>
+                    <div className="flex justify-between text-xs mt-4">
+                        <div className="bg-gray-100 p-2 rounded w-full">
+                            <h3 className="font-bold mb-1">To:</h3>
+                            <p className="font-semibold">{settings.customer.name}</p>
+                            <p className="whitespace-pre-wrap">{settings.customer.address}</p>
+                            <p><strong>Attn:</strong> {settings.customer.contactPerson}</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Main Content (Items + Summary) */}
+                <div className="print-content" style={{display: 'block'}}>
+                    <h2 className="text-xl font-bold text-center my-2 text-black">{settings.title}</h2>
+                    
+                    {/* All Items in a continuous flow */}
+                    <div className="w-full text-xs mt-4 space-y-2">
+                        {items.map((item, globalIndex) => {
+                            const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
+                            const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
+                            const totalArea = singleArea * item.quantity;
+                            const baseCost = totalArea * item.rate;
+                            const totalHardwareCost = item.hardwareCost * item.quantity;
+                            const totalCost = baseCost + totalHardwareCost;
+                            const unitRate = item.quantity > 0 ? totalCost / item.quantity : 0;
+                            const hasMesh = item.config.windowType === WindowType.SLIDING && item.config.shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
+                            const keyHardware = item.hardwareItems.filter(h => h.name.toLowerCase().includes('handle') || h.name.toLowerCase().includes('lock')).map(h => h.name).join(', ');
+                            
+                            const glassThicknessText = (item.config.glassThickness || 'Std.');
+                            const specialTypeText = (item.config.glassSpecialType !== 'none' ? item.config.glassSpecialType.toUpperCase() : '');
+                            const customGlassName = item.config.customGlassName ? `(${item.config.customGlassName})` : '';
+
+                            let panelSummary = '';
+                            if (item.config.windowType === WindowType.GLASS_PARTITION) {
+                                const typeCounts = item.config.partitionPanels.types.reduce((acc, panelConfig) => {
+                                    acc[panelConfig.type] = (acc[panelConfig.type] || 0) + 1;
+                                    return acc;
+                                }, {} as Record<string, number>);
+                                panelSummary = Object.entries(typeCounts).map(([type, count]) => `${count} ${type}`).join(', ');
+                            }
+
+                            return (
+                                <div key={item.id} className="border-b border-gray-300 print-item pt-4 pb-4">
+                                    <div className="flex gap-4 items-start">
+                                        <div className="w-1/3">
+                                            <PrintableWindow config={item.config} />
+                                            <WindowAnnotations config={item.config} />
+                                        </div>
+                                        <div className="w-2/3">
+                                            <p className="print-window-title">
+                                                {globalIndex + 1}. {item.title}
+                                            </p>
+                                            
+                                            <div className="text-black text-[9pt] mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+                                                <p><strong>Size (WxH):</strong> {item.config.width} x {item.config.height} mm</p>
+                                                <p><strong>Series:</strong> {item.config.series.name}</p>
+                                                <p><strong>Glass:</strong> {glassThicknessText}mm {specialTypeText} {item.config.glassType} {customGlassName}</p>
+                                                <p><strong>Color:</strong> {item.profileColorName || item.config.profileColor}</p>
+                                                <p><strong>Mesh:</strong> {hasMesh ? 'Yes' : 'No'}</p>
+                                                {keyHardware && <p><strong>Hardware:</strong> {keyHardware}</p>}
+                                                {panelSummary && <p><strong>Panels:</strong> {panelSummary}</p>}
+                                            </div>
+
+                                            <table className="w-full text-left mt-3 print-item-details text-[9pt] text-black">
+                                                <tbody>
+                                                    <tr className="border-t border-b border-gray-200">
+                                                        <th className="py-1 font-semibold">Area</th>
+                                                        <td>{totalArea.toFixed(2)} {item.areaType}</td>
+                                                    </tr>
+                                                    <tr className="border-b border-gray-200">
+                                                        <th className="py-1 font-semibold">Quantity</th>
+                                                        <td>{item.quantity} Nos.</td>
+                                                    </tr>
+                                                    <tr className="border-b border-gray-200">
+                                                        <th className="py-1 font-semibold">Rate</th>
+                                                        <td>₹ {Math.round(unitRate).toLocaleString('en-IN')} / unit</td>
+                                                    </tr>
+                                                    <tr className="font-bold border-b-2 border-black">
+                                                        <th className="py-1">Total Amount</th>
+                                                        <td className="text-base">₹ {Math.round(totalCost).toLocaleString('en-IN')}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
                                         </div>
                                     </div>
-                                    <div className="text-right text-xs">
-                                        <p><strong>Date:</strong> {quoteDate}</p>
-                                        <p><strong>Quote #:</strong> {quoteNumber}</p>
-                                    </div>
                                 </div>
-                                <div className="flex justify-between text-xs mt-4">
-                                    <div className="bg-gray-100 p-2 rounded w-full">
-                                        <h3 className="font-bold mb-1">To:</h3>
-                                        <p className="font-semibold">{settings.customer.name}</p>
-                                        <p className="whitespace-pre-wrap">{settings.customer.address}</p>
-                                        <p><strong>Attn:</strong> {settings.customer.contactPerson}</p>
-                                    </div>
-                                </div>
-                            </>
-                       )}
+                            )
+                        })}
                     </div>
-                    
-                    <div className="print-content">
-                        {pageIndex === 0 && (
-                          <h2 className="text-xl font-bold text-center mb-2 text-black">{settings.title}</h2>
-                        )}
+
+                    {/* Final Summary Section */}
+                    <div className="final-summary-page">
+                        <h2 className="text-xl font-bold text-center my-4 text-black">Final Summary</h2>
+                        <table className="w-full text-left text-sm print-summary mb-4" style={{breakInside: 'avoid'}}>
+                            <tbody>
+                                <tr className="border-b border-gray-300">
+                                    <th className="py-1">Sub Total</th>
+                                    <td className="text-right">₹ {Math.round(subTotal).toLocaleString('en-IN')}</td>
+                                </tr>
+                                <tr className="border-b border-gray-300">
+                                    <th className="py-1">Discount ({settings.financials.discountType === 'percentage' ? `${settings.financials.discount}%` : 'Fixed'})</th>
+                                    <td className="text-right">- ₹ {Math.round(discountAmount).toLocaleString('en-IN')}</td>
+                                </tr>
+                                <tr className="border-b-2 border-black font-semibold">
+                                    <th className="py-1">Total after Discount</th>
+                                    <td className="text-right">₹ {Math.round(totalAfterDiscount).toLocaleString('en-IN')}</td>
+                                </tr>
+                                <tr className="border-b border-gray-300">
+                                    <th className="py-1">GST ({settings.financials.gstPercentage}%)</th>
+                                    <td className="text-right">+ ₹ {Math.round(gstAmount).toLocaleString('en-IN')}</td>
+                                </tr>
+                                <tr className="font-bold text-lg bg-gray-100">
+                                    <th className="py-2 px-1">Grand Total</th>
+                                    <td className="text-right px-1">₹ {Math.round(grandTotal).toLocaleString('en-IN')}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div className="text-right mt-2">
+                            <p className="text-xs">Amount in Words:</p>
+                            <p className="font-bold text-xs">{amountToWords(grandTotal)}</p>
+                        </div>
+
+                        <EditableSection
+                            title="Description"
+                            value={settings.description}
+                            onChange={value => setSettings({ ...settings, description: value })}
+                        />
+
+                        <EditableSection
+                            title="Terms & Conditions"
+                            value={settings.terms}
+                            onChange={value => setSettings({ ...settings, terms: value })}
+                        />
                         
-                        <div className="w-full text-xs mt-4 space-y-2">
-                            {pageItems.map((item, index) => {
-                                const globalIndex = itemPages.slice(0, pageIndex).reduce((acc, curr) => acc + curr.length, 0) + index;
-                                const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
-                                const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
-                                const totalArea = singleArea * item.quantity;
-                                const baseCost = totalArea * item.rate;
-                                const totalHardwareCost = item.hardwareCost * item.quantity;
-                                const totalCost = baseCost + totalHardwareCost;
-                                const unitRate = item.quantity > 0 ? totalCost / item.quantity : 0;
-                                const hasMesh = item.config.windowType === WindowType.SLIDING && item.config.shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
-                                const keyHardware = item.hardwareItems.filter(h => h.name.toLowerCase().includes('handle') || h.name.toLowerCase().includes('lock')).map(h => h.name).join(', ');
-                                
-                                const glassThicknessText = (item.config.glassThickness || 'Std.');
-                                const specialTypeText = (item.config.glassSpecialType !== 'none' ? item.config.glassSpecialType.toUpperCase() : '');
-                                const customGlassName = item.config.customGlassName ? `(${item.config.customGlassName})` : '';
-
-                                let panelSummary = '';
-                                if (item.config.windowType === WindowType.GLASS_PARTITION) {
-                                    const typeCounts = item.config.partitionPanels.types.reduce((acc, panelConfig) => {
-                                        acc[panelConfig.type] = (acc[panelConfig.type] || 0) + 1;
-                                        return acc;
-                                    }, {} as Record<string, number>);
-                                    panelSummary = Object.entries(typeCounts).map(([type, count]) => `${count} ${type}`).join(', ');
-                                }
-
-                                return (
-                                    <div key={item.id} className="border-b border-gray-300 print-item pt-4 pb-4" style={{breakInside: 'avoid'}}>
-                                        <div className="flex gap-4 items-start">
-                                            <div className="w-1/3">
-                                                <PrintableWindow config={item.config} />
-                                                <WindowAnnotations config={item.config} />
-                                            </div>
-                                            <div className="w-2/3">
-                                                <p className="print-window-title">
-                                                    {globalIndex + 1}. {item.title}
-                                                </p>
-                                                
-                                                <div className="text-black text-[9pt] mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
-                                                    <p><strong>Size (WxH):</strong> {item.config.width} x {item.config.height} mm</p>
-                                                    <p><strong>Series:</strong> {item.config.series.name}</p>
-                                                    <p><strong>Glass:</strong> {glassThicknessText}mm {specialTypeText} {item.config.glassType} {customGlassName}</p>
-                                                    <p><strong>Color:</strong> {item.profileColorName || item.config.profileColor}</p>
-                                                    <p><strong>Mesh:</strong> {hasMesh ? 'Yes' : 'No'}</p>
-                                                    {keyHardware && <p><strong>Hardware:</strong> {keyHardware}</p>}
-                                                    {panelSummary && <p><strong>Panels:</strong> {panelSummary}</p>}
-                                                </div>
-
-                                                <table className="w-full text-left mt-3 print-item-details text-[9pt] text-black">
-                                                    <tbody>
-                                                        <tr className="border-t border-b border-gray-200">
-                                                            <th className="py-1 font-semibold">Area</th>
-                                                            <td>{totalArea.toFixed(2)} {item.areaType}</td>
-                                                        </tr>
-                                                        <tr className="border-b border-gray-200">
-                                                            <th className="py-1 font-semibold">Quantity</th>
-                                                            <td>{item.quantity} Nos.</td>
-                                                        </tr>
-                                                        <tr className="border-b border-gray-200">
-                                                            <th className="py-1 font-semibold">Rate</th>
-                                                            <td>₹ {Math.round(unitRate).toLocaleString('en-IN')} / unit</td>
-                                                        </tr>
-                                                        <tr className="font-bold border-b-2 border-black">
-                                                            <th className="py-1">Total Amount</th>
-                                                            <td className="text-base">₹ {Math.round(totalCost).toLocaleString('en-IN')}</td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )
-                            })}
+                        <div className="grid grid-cols-2 gap-8 print-final-details mt-4" style={{breakInside: 'avoid'}}>
+                            <div className="text-xs">
+                                <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">Bank Details</h3>
+                                <p><strong>A/C Name:</strong> {settings.bankDetails.name}</p>
+                                <p><strong>A/C No:</strong> {settings.bankDetails.accountNumber}</p>
+                                <p><strong>IFSC:</strong> {settings.bankDetails.ifsc}</p>
+                                <p><strong>Branch:</strong> {settings.bankDetails.branch}</p>
+                                <p><strong>A/C Type:</strong> {settings.bankDetails.accountType.charAt(0).toUpperCase() + settings.bankDetails.accountType.slice(1)}</p>
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">For {settings.company.name}</h3>
+                                <div className="h-24"></div>
+                                <p className="border-t border-black pt-1 text-center text-xs">Authorised Signature</p>
+                            </div>
                         </div>
                     </div>
+                </div>
 
+                {/* This footer is only for print, positioned by CSS */}
+                <div className="print-footer-container">
                     <div className="print-footer">
-                         <span className="page-number float-right">Page {pageIndex + 1} of {totalPages}</span>
+                        Page <span className="page-counter"></span>
                     </div>
                 </div>
-            ))}
 
-            <div className="a4-page text-black">
-                <div className="print-header">
-                    {items.length === 0 && (
-                        <>
-                            <div className="flex justify-between items-start">
-                                <div className="flex items-start gap-4">
-                                    <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 object-contain"/>
-                                    <div>
-                                        <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
-                                        <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
-                                        <p className="text-xs">{settings.company.email} | {settings.company.website}</p>
-                                    </div>
-                                </div>
-                                <div className="text-right text-xs">
-                                    <p><strong>Date:</strong> {quoteDate}</p>
-                                    <p><strong>Quote #:</strong> {quoteNumber}</p>
-                                </div>
-                            </div>
-                            <div className="flex justify-between text-xs mt-4">
-                                <div className="bg-gray-100 p-2 rounded w-full">
-                                    <h3 className="font-bold mb-1">To:</h3>
-                                    <p className="font-semibold">{settings.customer.name}</p>
-                                    <p className="whitespace-pre-wrap">{settings.customer.address}</p>
-                                    <p><strong>Attn:</strong> {settings.customer.contactPerson}</p>
-                                </div>
-                            </div>
-                        </>
-                    )}
-                </div>
-                <div className="print-content">
-                    <h2 className="text-xl font-bold text-center my-4 text-black">Final Summary</h2>
-                    <table className="w-full text-left text-sm print-summary mb-4" style={{breakInside: 'avoid'}}>
-                        <tbody>
-                            <tr className="border-b border-gray-300">
-                                <th className="py-1">Sub Total</th>
-                                <td className="text-right">₹ {Math.round(subTotal).toLocaleString('en-IN')}</td>
-                            </tr>
-                            <tr className="border-b border-gray-300">
-                                <th className="py-1">Discount ({settings.financials.discountType === 'percentage' ? `${settings.financials.discount}%` : 'Fixed'})</th>
-                                <td className="text-right">- ₹ {Math.round(discountAmount).toLocaleString('en-IN')}</td>
-                            </tr>
-                            <tr className="border-b-2 border-black font-semibold">
-                                <th className="py-1">Total after Discount</th>
-                                <td className="text-right">₹ {Math.round(totalAfterDiscount).toLocaleString('en-IN')}</td>
-                            </tr>
-                            <tr className="border-b border-gray-300">
-                                <th className="py-1">GST ({settings.financials.gstPercentage}%)</th>
-                                <td className="text-right">+ ₹ {Math.round(gstAmount).toLocaleString('en-IN')}</td>
-                            </tr>
-                            <tr className="font-bold text-lg bg-gray-100">
-                                <th className="py-2 px-1">Grand Total</th>
-                                <td className="text-right px-1">₹ {Math.round(grandTotal).toLocaleString('en-IN')}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <div className="text-right mt-2">
-                        <p className="text-xs">Amount in Words:</p>
-                        <p className="font-bold text-xs">{amountToWords(grandTotal)}</p>
-                    </div>
-
-                    <EditableSection
-                        title="Description"
-                        value={settings.description}
-                        onChange={value => setSettings({ ...settings, description: value })}
-                    />
-
-                    <EditableSection
-                        title="Terms & Conditions"
-                        value={settings.terms}
-                        onChange={value => setSettings({ ...settings, terms: value })}
-                    />
-                    
-                    <div className="grid grid-cols-2 gap-8 print-final-details mt-4" style={{breakInside: 'avoid'}}>
-                        <div className="text-xs">
-                             <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">Bank Details</h3>
-                             <p><strong>A/C Name:</strong> {settings.bankDetails.name}</p>
-                             <p><strong>A/C No:</strong> {settings.bankDetails.accountNumber}</p>
-                             <p><strong>IFSC:</strong> {settings.bankDetails.ifsc}</p>
-                             <p><strong>Branch:</strong> {settings.bankDetails.branch}</p>
-                             <p><strong>A/C Type:</strong> {settings.bankDetails.accountType.charAt(0).toUpperCase() + settings.bankDetails.accountType.slice(1)}</p>
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">For {settings.company.name}</h3>
-                            <div className="h-24"></div>
-                            <p className="border-t border-black pt-1 text-center text-xs">Authorised Signature</p>
-                        </div>
-                    </div>
-                </div>
-                <div className="print-footer">
-                    <span className="page-number float-right">Page {totalPages} of {totalPages}</span>
-                </div>
+                {/* --- End of Printable Content --- */}
             </div>
         </div>
     </div>

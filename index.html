@@ -54,21 +54,18 @@
         box-sizing: border-box;
         position: relative;
     }
+    .single-scroll-preview {
+      min-height: 0;
+      height: auto;
+    }
     .print-header {
         height: 40mm;
         border-bottom: 2px solid #000;
         padding-bottom: 8px;
         flex-shrink: 0;
     }
-    .print-footer {
-        height: 10mm;
-        font-size: 8pt;
-        color: #666;
-        flex-shrink: 0;
-        position: absolute;
-        bottom: 10mm;
-        left: 15mm;
-        right: 15mm;
+    .print-footer-container {
+      display: none; /* Hide footer container by default, only used for print positioning */
     }
     .print-content {
         flex-grow: 1;
@@ -76,7 +73,10 @@
         flex-direction: column;
     }
     .print-item, .print-summary, .print-final-details {
-        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+    .final-summary-page {
+      break-before: page;
     }
 
     /* Unified styles for on-screen preview, PDF export, and native print */
@@ -120,6 +120,9 @@
         *, *::before, *::after {
             box-sizing: border-box !important;
         }
+        body {
+            counter-reset: page;
+        }
         html, body, #root { /* Added #root to prevent color bleed */
             margin: 0;
             padding: 0;
@@ -149,28 +152,40 @@
         .a4-page {
             box-shadow: none !important;
             margin: 0 !important;
-            width: 210mm !important;
-            height: 297mm !important;
-            padding: 15mm !important;
-            page-break-after: always;
-            color: black;
-            position: relative;
-        }
-        .a4-page:last-of-type {
+            width: auto !important;
+            height: auto !important;
+            min-height: 0 !important;
+            padding: 0 !important;
             page-break-after: avoid;
+            color: black;
+            display: block !important;
         }
         .print-header {
             position: static;
             height: auto;
+            border-bottom: 2px solid #000 !important;
         }
         .print-content {
            flex-grow: 1;
         }
+        .print-footer-container {
+           display: block;
+        }
         .print-footer {
-           position: absolute;
-           bottom: 10mm;
+           position: fixed;
+           bottom: 0mm;
            left: 15mm;
            right: 15mm;
+           height: 15mm;
+           font-size: 8pt;
+           color: #666;
+           display: flex;
+           align-items: flex-end;
+           justify-content: flex-end;
+        }
+        .page-counter::before {
+            counter-increment: page;
+            content: counter(page);
         }
         
         .print-window-title {
@@ -186,7 +201,10 @@
         
         @page {
           size: A4;
-          margin: 0;
+          margin: 40mm 15mm 15mm 15mm;
+        }
+        @page:first {
+          margin-top: 15mm;
         }
     }
 </style>
