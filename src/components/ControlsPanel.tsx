@@ -272,8 +272,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
       {(windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) && (
           <CollapsibleCard title="Grid Layout" defaultOpen>
               <div className="grid grid-cols-2 gap-4">
-                  <Input label="Rows" type="number" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
-                  <Input label="Columns" type="number" value={gridCols} min={1} onChange={e => setGridSize(gridRows, Math.max(1, parseInt(e.target.value) || 1))} />
+                  <Input label="Rows" type="number" inputMode="numeric" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
+                  <Input label="Columns" type="number" inputMode="numeric" value={gridCols} min={1} onChange={e => setGridSize(gridRows, Math.max(1, parseInt(e.target.value) || 1))} />
               </div>
               <div className="mt-4">
                   <label className="block text-sm font-medium text-slate-300 mb-2">Panel Configuration (Click to toggle)</label>
@@ -307,7 +307,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
 
       {windowType === WindowType.GLASS_PARTITION && (
         <CollapsibleCard title="Partition Panel Setup" defaultOpen>
-          <Input label="Number of Panels" type="number" min={1} max={8} value={config.partitionPanels.count} onChange={e => setConfig('setPartitionPanelCount', Math.max(1, parseInt(e.target.value) || 1) )}/>
+          <Input label="Number of Panels" type="number" inputMode="numeric" min={1} max={8} value={config.partitionPanels.count} onChange={e => setConfig('setPartitionPanelCount', Math.max(1, parseInt(e.target.value) || 1) )}/>
            <label className="flex items-center space-x-2 cursor-pointer mt-2">
               <input 
                   type="checkbox" 
@@ -411,7 +411,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
                 {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
             </Select>
             {isCustomThickness && (
-                 <Input label="Custom Thickness (mm)" type="number" value={config.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))} className="mt-2" />
+                 <Input label="Custom Thickness (mm)" type="number" inputMode="decimal" value={config.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))} className="mt-2" />
             )}
           </div>
           <Input label="Glass Name / Brand (Optional)" type="text" value={config.customGlassName} onChange={e => setConfig('customGlassName', e.target.value)} placeholder="e.g. Saint-Gobain" />
@@ -420,8 +420,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         <div className="pt-4 mt-4 border-t border-slate-700">
              <label className="block text-sm font-medium text-slate-300 mb-2">Glass Grid</label>
              <div className="grid grid-cols-2 gap-4">
-                <Input label="Rows" type="number" min="0" value={config.glassGrid.rows} onChange={e => setConfig('glassGrid', {...config.glassGrid, rows: Math.max(0, parseInt(e.target.value) || 0)})} />
-                <Input label="Columns" type="number" min="0" value={config.glassGrid.cols} onChange={e => setConfig('glassGrid', {...config.glassGrid, cols: Math.max(0, parseInt(e.target.value) || 0)})} />
+                <Input label="Rows" type="number" min="0" inputMode="numeric" value={config.glassGrid.rows} onChange={e => setConfig('glassGrid', {...config.glassGrid, rows: Math.max(0, parseInt(e.target.value) || 0)})} />
+                <Input label="Columns" type="number" min="0" inputMode="numeric" value={config.glassGrid.cols} onChange={e => setConfig('glassGrid', {...config.glassGrid, cols: Math.max(0, parseInt(e.target.value) || 0)})} />
             </div>
         </div>
 
@@ -537,8 +537,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
                           <Button variant="danger" onClick={() => onRemoveHardware(item.id)} className="p-1 h-7 w-7 flex-shrink-0 ml-2"><TrashIcon className="w-4 h-4"/></Button>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
-                          <Input label="Qty" type="number" value={item.qtyPerShutter} onChange={e => onHardwareChange(item.id, 'qtyPerShutter', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 2"/>
-                          <Input label="Rate" type="number" value={item.rate} onChange={e => onHardwareChange(item.id, 'rate', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 50"/>
+                          <Input label="Qty" type="number" inputMode="numeric" value={item.qtyPerShutter} onChange={e => onHardwareChange(item.id, 'qtyPerShutter', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 2"/>
+                          <Input label="Rate" type="number" inputMode="decimal" value={item.rate} onChange={e => onHardwareChange(item.id, 'rate', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 50"/>
                            <Select label="Unit" value={item.unit} onChange={(e) => onHardwareChange(item.id, 'unit', e.target.value)}>
                               <option value="per_shutter_or_door">Per Door/Panel</option>
                               <option value="per_window">Per Window</option>

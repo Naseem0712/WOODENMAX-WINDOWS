@@ -148,11 +148,18 @@ const WindowAnnotations: React.FC<{ config: WindowConfig }> = ({ config }) => {
 const PrintableMiteredFrame: React.FC<{
     width: number;
     height: number;
-    profileSize: number;
+    profileSize?: number;
+    topSize?: number;
+    bottomSize?: number;
+    leftSize?: number;
+    rightSize?: number;
     scale: number;
     color: string;
-}> = ({ width, height, profileSize, scale, color }) => {
-    const s = profileSize * scale;
+}> = ({ width, height, profileSize = 0, topSize, bottomSize, leftSize, rightSize, scale, color }) => {
+    const ts = (topSize ?? profileSize) * scale;
+    const bs = (bottomSize ?? profileSize) * scale;
+    const ls = (leftSize ?? profileSize) * scale;
+    const rs = (rightSize ?? profileSize) * scale;
 
     const baseStyle: React.CSSProperties = {
         backgroundColor: color,
@@ -161,18 +168,21 @@ const PrintableMiteredFrame: React.FC<{
         boxSizing: 'border-box',
     };
 
-    const clipS = Math.max(0, s);
+    const clipTs = Math.max(0, ts);
+    const clipBs = Math.max(0, bs);
+    const clipLs = Math.max(0, ls);
+    const clipRs = Math.max(0, rs);
 
     return (
         <div className="absolute" style={{ width: width * scale, height: height * scale }}>
             {/* Top */}
-            <div style={{...baseStyle, top: 0, left: 0, width: '100%', height: s, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipS}px) 100%, ${clipS}px 100%)` }} />
+            <div style={{...baseStyle, top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
             {/* Bottom */}
-            <div style={{...baseStyle, bottom: 0, left: 0, width: '100%', height: s, clipPath: `polygon(${clipS}px 0, calc(100% - ${clipS}px) 0, 100% 100%, 0 100%)` }} />
+            <div style={{...baseStyle, bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
             {/* Left */}
-            <div style={{...baseStyle, top: 0, left: 0, width: s, height: '100%', clipPath: `polygon(0 0, 100% ${clipS}px, 100% calc(100% - ${clipS}px), 0 100%)` }} />
+            <div style={{...baseStyle, top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
             {/* Right */}
-            <div style={{...baseStyle, top: 0, right: 0, width: s, height: '100%', clipPath: `polygon(0 ${clipS}px, 100% 0, 100% 100%, 0 calc(100% - ${clipS}px))` }} />
+            <div style={{...baseStyle, top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
         </div>
     );
 };
@@ -235,10 +245,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
     
     // Outer frame
     if (windowType !== WindowType.GLASS_PARTITION) {
-        profileElements.push(<PrintProfilePiece key="frame-left" color={profileColor} style={{ top: 0, left: 0, width: dims.outerFrame * scale, height: numHeight * scale }} />);
-        profileElements.push(<PrintProfilePiece key="frame-right" color={profileColor} style={{ top: 0, right: 0, width: dims.outerFrame * scale, height: numHeight * scale }} />);
-        profileElements.push(<PrintProfilePiece key="frame-top" color={profileColor} style={{ top: 0, left: dims.outerFrame * scale, width: (numWidth - 2 * dims.outerFrame) * scale, height: dims.outerFrame * scale }} />);
-        profileElements.push(<PrintProfilePiece key="frame-bottom" color={profileColor} style={{ bottom: 0, left: dims.outerFrame * scale, width: (numWidth - 2 * dims.outerFrame) * scale, height: dims.outerFrame * scale }} />);
+        profileElements.push(<PrintableMiteredFrame key="outer-frame" width={numWidth} height={numHeight} profileSize={dims.outerFrame} scale={scale} color={profileColor} />);
     }
     
     const frameOffset = (windowType !== WindowType.GLASS_PARTITION) ? dims.outerFrame : 0;
@@ -279,10 +286,16 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
         const glassHeight = height - topProfile - bottomProfile;
         return (
             <div className="absolute" style={{ width: width * scale, height: height * scale }}>
-                <PrintProfilePiece color={profileColor} style={{ top: 0, left: 0, width: leftProfile * scale, height: height * scale}} />
-                <PrintProfilePiece color={profileColor} style={{ top: 0, right: 0, width: rightProfile * scale, height: height * scale}} />
-                <PrintProfilePiece color={profileColor} style={{ top: 0, left: leftProfile * scale, width: glassWidth * scale, height: topProfile * scale}} />
-                <PrintProfilePiece color={profileColor} style={{ bottom: 0, left: leftProfile * scale, width: glassWidth * scale, height: bottomProfile * scale}} />
+                <PrintableMiteredFrame
+                    width={width}
+                    height={height}
+                    topSize={topProfile}
+                    bottomSize={bottomProfile}
+                    leftSize={leftProfile}
+                    rightSize={rightProfile}
+                    scale={scale}
+                    color={profileColor}
+                />
                 <GlassPanel style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale }} glassWidth={glassWidth} glassHeight={glassHeight}>
                     <PrintShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
                 </GlassPanel>
@@ -441,8 +454,8 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
                     {handleElements}
                 </div>
             )}
-            <PrintDimensionLabel value={numWidth} className="-top-5 left-1/2 -translate-x-1/2" style={{transform: 'translateX(-50%)'}}/>
-            <PrintDimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 -left-10 rotate-[-90deg]" />
+            <PrintDimensionLabel value={numWidth} className="top-0 -translate-y-full left-1/2 -translate-x-1/2 -mt-1" />
+            <PrintDimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 left-0 -translate-x-full -ml-2 rotate-[-90deg]" style={{ top: `${numHeight * scale / 2}px`}} />
             {labelElements}
         </div>
     );

@@ -65,46 +65,6 @@ const Handle: React.FC<{ config: HandleConfig, scale: number, color: string }> =
 };
 
 
-const SlidingShutter: React.FC<{
-    width: number;
-    height: number;
-    topProfile: number;
-    bottomProfile: number;
-    rightProfile: number;
-    leftProfile: number;
-    color: string;
-    scale: number;
-    isMesh: boolean;
-    glassType: GlassType;
-    glassStyles: Record<GlassType, React.CSSProperties>;
-    isFixed?: boolean;
-    isSliding?: boolean;
-}> = ({ width, height, topProfile, rightProfile, bottomProfile, leftProfile, color, scale, isMesh, glassType, glassStyles, isFixed = false, isSliding = false }) => {
-    
-    const glassWidth = width - leftProfile - rightProfile;
-    const glassHeight = height - topProfile - bottomProfile;
-
-    const pieceStyle: React.CSSProperties = {
-        backgroundColor: color,
-        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)',
-        position: 'absolute',
-    };
-
-    return (
-        <div className="absolute" style={{ width: width * scale, height: height * scale }}>
-            <div style={{...pieceStyle, top: 0, left: 0, width: leftProfile * scale, height: height * scale}} />
-            <div style={{...pieceStyle, top: 0, right: 0, width: rightProfile * scale, height: height * scale}} />
-            <div style={{...pieceStyle, top: 0, left: leftProfile * scale, width: glassWidth * scale, height: topProfile * scale}} />
-            <div style={{...pieceStyle, bottom: 0, left: leftProfile * scale, width: glassWidth * scale, height: bottomProfile * scale}} />
-            
-            <div className={`absolute`} style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale, ...(!isMesh && glassStyles[glassType]) }}>
-                {isMesh && <div className="w-full h-full" style={{backgroundColor: '#808080', opacity: 0.5, backgroundImage: `linear-gradient(45deg, #000 25%, transparent 25%), linear-gradient(-45deg, #000 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #000 75%), linear-gradient(-45deg, transparent 75%, #000 75%)`, backgroundSize: '4px 4px' }} />}
-                <ShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
-            </div>
-        </div>
-    );
-};
-
 const ProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => ( <div style={{ backgroundColor: color, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)', position: 'absolute', ...style }} /> );
 
 const GlassGrid: React.FC<{width: number, height: number, rows: number, cols: number, profileSize: number, scale: number, color: string}> = ({ width, height, rows, cols, profileSize, scale, color }) => {
@@ -126,11 +86,18 @@ const GlassGrid: React.FC<{width: number, height: number, rows: number, cols: nu
 const MiteredFrame: React.FC<{
     width: number;
     height: number;
-    profileSize: number;
+    profileSize?: number;
+    topSize?: number;
+    bottomSize?: number;
+    leftSize?: number;
+    rightSize?: number;
     scale: number;
     color: string;
-}> = ({ width, height, profileSize, scale, color }) => {
-    const s = profileSize * scale;
+}> = ({ width, height, profileSize = 0, topSize, bottomSize, leftSize, rightSize, scale, color }) => {
+    const ts = (topSize ?? profileSize) * scale;
+    const bs = (bottomSize ?? profileSize) * scale;
+    const ls = (leftSize ?? profileSize) * scale;
+    const rs = (rightSize ?? profileSize) * scale;
 
     const baseStyle: React.CSSProperties = {
         backgroundColor: color,
@@ -139,18 +106,61 @@ const MiteredFrame: React.FC<{
     };
 
     // Use Math.max to prevent negative clip-path values on small scales
-    const clipS = Math.max(0, s);
+    const clipTs = Math.max(0, ts);
+    const clipBs = Math.max(0, bs);
+    const clipLs = Math.max(0, ls);
+    const clipRs = Math.max(0, rs);
 
     return (
         <div className="absolute" style={{ width: width * scale, height: height * scale }}>
             {/* Top */}
-            <div style={{...baseStyle, top: 0, left: 0, width: '100%', height: s, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipS}px) 100%, ${clipS}px 100%)` }} />
+            <div style={{...baseStyle, top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
             {/* Bottom */}
-            <div style={{...baseStyle, bottom: 0, left: 0, width: '100%', height: s, clipPath: `polygon(${clipS}px 0, calc(100% - ${clipS}px) 0, 100% 100%, 0 100%)` }} />
+            <div style={{...baseStyle, bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
             {/* Left */}
-            <div style={{...baseStyle, top: 0, left: 0, width: s, height: '100%', clipPath: `polygon(0 0, 100% ${clipS}px, 100% calc(100% - ${clipS}px), 0 100%)` }} />
+            <div style={{...baseStyle, top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
             {/* Right */}
-            <div style={{...baseStyle, top: 0, right: 0, width: s, height: '100%', clipPath: `polygon(0 ${clipS}px, 100% 0, 100% 100%, 0 calc(100% - ${clipS}px))` }} />
+            <div style={{...baseStyle, top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
+        </div>
+    );
+};
+
+const SlidingShutter: React.FC<{
+    width: number;
+    height: number;
+    topProfile: number;
+    bottomProfile: number;
+    rightProfile: number;
+    leftProfile: number;
+    color: string;
+    scale: number;
+    isMesh: boolean;
+    glassType: GlassType;
+    glassStyles: Record<GlassType, React.CSSProperties>;
+    isFixed?: boolean;
+    isSliding?: boolean;
+}> = ({ width, height, topProfile, rightProfile, bottomProfile, leftProfile, color, scale, isMesh, glassType, glassStyles, isFixed = false, isSliding = false }) => {
+    
+    const glassWidth = width - leftProfile - rightProfile;
+    const glassHeight = height - topProfile - bottomProfile;
+
+    return (
+        <div className="absolute" style={{ width: width * scale, height: height * scale }}>
+             <MiteredFrame
+                width={width}
+                height={height}
+                topSize={topProfile}
+                bottomSize={bottomProfile}
+                leftSize={leftProfile}
+                rightSize={rightProfile}
+                scale={scale}
+                color={color}
+            />
+            
+            <div className={`absolute`} style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale, ...(!isMesh && glassStyles[glassType]) }}>
+                {isMesh && <div className="w-full h-full" style={{backgroundColor: '#808080', opacity: 0.5, backgroundImage: `linear-gradient(45deg, #000 25%, transparent 25%), linear-gradient(-45deg, #000 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #000 75%), linear-gradient(-45deg, transparent 75%, #000 75%)`, backgroundSize: '4px 4px' }} />}
+                <ShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
+            </div>
         </div>
     );
 };
@@ -242,10 +252,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     );
   
     if (windowType !== WindowType.GLASS_PARTITION) {
-      profileElements.push(<ProfilePiece key="frame-left" color={profileColor} style={{ top: 0, left: 0, width: dims.outerFrame * scale, height: numHeight * scale }} />);
-      profileElements.push(<ProfilePiece key="frame-right" color={profileColor} style={{ top: 0, right: 0, width: dims.outerFrame * scale, height: numHeight * scale }} />);
-      profileElements.push(<ProfilePiece key="frame-top" color={profileColor} style={{ top: 0, left: dims.outerFrame * scale, width: (numWidth - 2 * dims.outerFrame) * scale, height: dims.outerFrame * scale }} />);
-      profileElements.push(<ProfilePiece key="frame-bottom" color={profileColor} style={{ bottom: 0, left: dims.outerFrame * scale, width: (numWidth - 2 * dims.outerFrame) * scale, height: dims.outerFrame * scale }} />);
+      profileElements.push(<MiteredFrame key="outer-frame" width={numWidth} height={numHeight} profileSize={dims.outerFrame} scale={scale} color={profileColor} />);
     }
 
     if (leftFix) profileElements.push(<ProfilePiece key="divider-left" color={profileColor} style={{ top: frameOffset * scale, left: (holeX1 - dims.fixedFrame) * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffset) * scale }} />);
@@ -476,7 +483,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     }
 
     return { profileElements, glassElements, handleElements, innerContent, innerAreaWidth, innerAreaHeight, holeX1, holeY1 };
-  }, [config, dims, scale, geometry, glassStyles, glassType, profileColor, onRemoveHorizontalDivider, onRemoveVerticalDivider]);
+  }, [config, dims, scale, geometry, glassStyles, glassType, profileColor, onRemoveHorizontalDivider, onRemoveVerticalDivider, numWidth, numHeight]);
 
   if (numWidth <= 0 || numHeight <= 0) {
     return (
