@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import type { QuotationItem, QuotationSettings, WindowConfig } from '../types';
 import { Button } from './ui/Button';
 import { PrinterIcon } from './icons/PrinterIcon';
@@ -462,17 +462,75 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
 };
 
 
-const EditableSection: React.FC<{title: string, value: string, onChange: (value: string) => void}> = ({ title, value, onChange }) => (
-    <div className="print-final-details mt-4" style={{breakInside: 'avoid'}}>
-        <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">{title}</h3>
-        <textarea 
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            className="w-full text-xs whitespace-pre-wrap bg-transparent border-gray-300 rounded-md p-1 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 print-editable"
-            rows={value.split('\n').length + 1}
-        />
-    </div>
-);
+const EditableSection: React.FC<{title: string, value: string, onChange: (value: string) => void}> = ({ title, value, onChange }) => {
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+        }
+    }, [value]);
+
+    return (
+        <div className="print-final-details mt-4" style={{breakInside: 'avoid'}}>
+            <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">{title}</h3>
+            <textarea 
+                ref={textareaRef}
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                className="w-full text-xs whitespace-pre-wrap bg-transparent border-gray-300 rounded-md p-1 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 print-editable"
+                rows={1}
+                style={{overflow: 'hidden'}}
+            />
+        </div>
+    );
+};
+
+const getPanelSummary = (config: WindowConfig): { label: string; value: string } | null => {
+    const parts: string[] = [];
+    let label = 'Configuration';
+
+    switch (config.windowType) {
+        case WindowType.SLIDING: {
+            label = 'Shutters';
+            const { shutterConfig } = config;
+            if (shutterConfig === ShutterConfigType.TWO_GLASS) parts.push('2 Glass');
+            else if (shutterConfig === ShutterConfigType.THREE_GLASS) parts.push('3 Glass');
+            else if (shutterConfig === ShutterConfigType.FOUR_GLASS) parts.push('4 Glass');
+            else if (shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH) parts.push('2 Glass', '1 Mesh');
+            break;
+        }
+        case WindowType.CASEMENT: {
+            label = 'Panels';
+            const doorCount = config.doorPositions.length;
+            const gridCells = (config.verticalDividers.length + 1) * (config.horizontalDividers.length + 1);
+            const fixedCount = gridCells - doorCount;
+            if (doorCount > 0) parts.push(`${doorCount} Door${doorCount > 1 ? 's' : ''}`);
+            if (fixedCount > 0) parts.push(`${fixedCount} Fixed`);
+            break;
+        }
+        case WindowType.VENTILATOR: {
+            label = 'Panels';
+            const counts: { [key: string]: number } = {};
+            config.ventilatorGrid.flat().forEach(cell => {
+                counts[cell.type] = (counts[cell.type] || 0) + 1;
+            });
+            Object.entries(counts).forEach(([type, count]) => {
+                if (count > 0) {
+                    const typeName = type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    parts.push(`${count} ${typeName}`);
+                }
+            });
+            break;
+        }
+        default:
+            return null;
+    }
+
+    if (parts.length === 0) return null;
+    return { label, value: parts.join(', ') };
+}
 
 export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, items, settings, setSettings }) => {
     
@@ -613,21 +671,11 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                             const totalHardwareCost = item.hardwareCost * item.quantity;
                             const totalCost = baseCost + totalHardwareCost;
                             const unitRate = item.quantity > 0 ? totalCost / item.quantity : 0;
-                            const hasMesh = item.config.windowType === WindowType.SLIDING && item.config.shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
-                            const keyHardware = item.hardwareItems.filter(h => h.name.toLowerCase().includes('handle') || h.name.toLowerCase().includes('lock')).map(h => h.name).join(', ');
+                            const panelSummary = getPanelSummary(item.config);
                             
                             const glassThicknessText = (item.config.glassThickness || 'Std.');
                             const specialTypeText = (item.config.glassSpecialType !== 'none' ? item.config.glassSpecialType.toUpperCase() : '');
                             const customGlassName = item.config.customGlassName ? `(${item.config.customGlassName})` : '';
-
-                            let panelSummary = '';
-                            if (item.config.windowType === WindowType.GLASS_PARTITION) {
-                                const typeCounts = item.config.partitionPanels.types.reduce((acc, panelConfig) => {
-                                    acc[panelConfig.type] = (acc[panelConfig.type] || 0) + 1;
-                                    return acc;
-                                }, {} as Record<string, number>);
-                                panelSummary = Object.entries(typeCounts).map(([type, count]) => `${count} ${type}`).join(', ');
-                            }
 
                             return (
                                 <div key={item.id} className="border-b border-gray-300 print-item pt-4 pb-4">
@@ -646,9 +694,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                 <p><strong>Series:</strong> {item.config.series.name}</p>
                                                 <p><strong>Glass:</strong> {glassThicknessText}mm {specialTypeText} {item.config.glassType} {customGlassName}</p>
                                                 <p><strong>Color:</strong> {item.profileColorName || item.config.profileColor}</p>
-                                                <p><strong>Mesh:</strong> {hasMesh ? 'Yes' : 'No'}</p>
-                                                {keyHardware && <p><strong>Hardware:</strong> {keyHardware}</p>}
-                                                {panelSummary && <p><strong>Panels:</strong> {panelSummary}</p>}
+                                                {panelSummary && <p className="col-span-2"><strong>{panelSummary.label}:</strong> {panelSummary.value}</p>}
                                             </div>
 
                                             <table className="w-full text-left mt-3 print-item-details text-[9pt] text-black">
