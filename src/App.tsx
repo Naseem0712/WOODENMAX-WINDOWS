@@ -871,6 +871,16 @@ const App: React.FC = () => {
   const handleOpenConfigure = () => setActiveMobilePanel('configure');
   const handleOpenQuote = () => setActiveMobilePanel('quotation');
   const handleCloseMobilePanels = () => setActiveMobilePanel('none');
+  
+  const handleViewQuotation = () => {
+    setIsQuotationModalOpen(true);
+    handleCloseMobilePanels();
+  };
+
+  const handleBatchAdd = () => {
+    setIsBatchAddModalOpen(true);
+    handleCloseMobilePanels();
+  };
 
   return (
     <>
@@ -902,7 +912,7 @@ const App: React.FC = () => {
                  <WindowCanvas config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} />
               </div>
               <div className="flex-shrink-0 no-print hidden lg:block">
-                  <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onBatchAdd={() => setIsBatchAddModalOpen(true)} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={() => setIsQuotationModalOpen(true)} />
+                  <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onBatchAdd={handleBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={handleViewQuotation} />
               </div>
               <div className="lg:hidden p-2 bg-slate-800 border-t-2 border-slate-700 grid grid-cols-2 gap-2 no-print">
                   <Button onClick={handleOpenConfigure} variant="secondary" className="h-12"> <AdjustmentsIcon className="w-5 h-5 mr-2" /> Configure </Button>
@@ -919,7 +929,7 @@ const App: React.FC = () => {
         {/* Mobile Quotation Panel */}
         <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${activeMobilePanel === 'quotation' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={handleCloseMobilePanels}></div>
         <div className={`lg:hidden fixed bottom-0 left-0 right-0 flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'quotation' ? 'translate-y-0' : 'translate-y-full'}`}>
-            <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onBatchAdd={() => setIsBatchAddModalOpen(true)} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={() => setIsQuotationModalOpen(true)} onClose={handleCloseMobilePanels} />
+            <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onBatchAdd={handleBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={handleViewQuotation} onClose={handleCloseMobilePanels} />
         </div>
       </div>
     </>

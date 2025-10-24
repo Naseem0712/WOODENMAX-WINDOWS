@@ -41,7 +41,7 @@ export const ContentModal: React.FC<ContentModalProps> = ({ isOpen, onClose }) =
                     This powerful design and quotation tool is brought to you by <strong>WoodenMax Architectural Elements</strong>, a leader in innovative building solutions. Our online platform, hosted at <strong>realvibestudio.in</strong>, is engineered to provide fabricators, architects, and clients across India and the world with state-of-the-art design capabilities, completely free of charge.
                 </p>
                  <p>
-                    This tool was expertly designed and developed by <strong>Naseem Ahmad</strong> to streamline the complexities of architectural fabrication.
+                    This tool was expertly designed and developed by <strong>WoodenMax</strong> to streamline the complexities of architectural fabrication.
                 </p>
             </Section>
 
