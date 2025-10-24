@@ -29,37 +29,47 @@ export const ContentModal: React.FC<ContentModalProps> = ({ isOpen, onClose }) =
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-4 border-b border-slate-700">
-          <h2 className="text-2xl font-bold text-white">Mastering Window & Door Design: Features & Guides</h2>
+          <h2 className="text-2xl font-bold text-white">About Our Design Platform</h2>
           <Button onClick={onClose} variant="secondary" className="p-2 rounded-full h-10 w-10">
             <XMarkIcon className="w-6 h-6" />
           </Button>
         </div>
 
         <div className="flex-grow overflow-y-auto p-6 custom-scrollbar">
-            <Section title="The Ultimate Free Window Quotation Generator">
+            <Section title="Welcome to Real Vibe Studio">
                 <p>
-                    Welcome to the premier `window design tool online`. This powerful `window design software` is built for fabricators, architects, and homeowners in India and worldwide. 
-                    Our mission is to simplify the entire process of `aluminium window design` and `aluminium door design`. While optimized for aluminium, its principles are perfect for planning `upvc window design` projects as well.
+                    This powerful design and quotation tool is brought to you by <strong>WoodenMax Architectural Elements</strong>, a leader in innovative building solutions. Our online platform, hosted at <strong>realvibestudio.in</strong>, is engineered to provide fabricators, architects, and clients across India and the world with state-of-the-art design capabilities, completely free of charge.
+                </p>
+                 <p>
+                    This tool was expertly designed and developed by <strong>Naseem Ahmad</strong> to streamline the complexities of architectural fabrication.
                 </p>
             </Section>
 
-            <Section title="Comprehensive Design Capabilities">
-                <p><strong>Sliding Systems:</strong> Effortlessly create `2 track sliding window design` and `3 track sliding window design` layouts. Our tool manages the `sliding window section details` and `3 track aluminium window profile` requirements automatically, helping you estimate the `3 track sliding window price` accurately. You can even use it to reference your `aluminium sliding window CAD drawing` needs or `sliding window track profile catalogue`.</p>
-                <p><strong>Casement & Hinged Systems:</strong> Produce detailed `aluminium casement window design` and `hinged door design aluminium` plans. The tool helps visualize `casement window profile drawing` requirements and `aluminium door frame design` specifications, including `glass door profile section` details.</p>
-                <p><strong>Ventilators & Fixed Panels:</strong> Quickly configure `aluminium ventilator design` and `fixed glass window design`. Access `fix window section detail` information through the profile editor, useful for both aluminium and `upvc ventilator window` projects.</p>
-                <p><strong>Interior Glass Solutions:</strong> Expand your services by using our `glass door design online` feature. Plan `shower glass design` projects, `bathroom shower glass partition` layouts, including `shower glass door fittings` and `bathroom shower glass profile` specifications.</p>
+            <Section title="Our Flagship Window & Door Designer">
+                <p>
+                    Our initial offering on the Real Vibe Studio platform is this comprehensive window and door design software. It simplifies the entire workflow, from initial design to final quotation and material planning for all types of aluminium and uPVC profiles.
+                </p>
+                <ul className="list-disc list-inside space-y-2 pl-2">
+                    <li>Design complex <strong>sliding window systems</strong>, including 2-track and 3-track configurations.</li>
+                    <li>Create detailed plans for <strong>casement windows and hinged doors</strong>.</li>
+                    <li>Effortlessly configure <strong>ventilators, fixed panels, and interior glass partitions</strong>.</li>
+                    <li>Generate a complete <strong>Bill of Materials (BOM)</strong>, acting as a powerful cutting list software.</li>
+                </ul>
             </Section>
 
-            <Section title="Key Features of Our Window Making Software">
-                 <p><strong>- Online & Accessible:</strong> As a leading `window design tool online`, there's no complex installation. Use the 'Add to Home Screen' feature for an experience similar to a `uPVC window design app` or an `aluminium window design software free download`.</p>
-                <p><strong>- Detailed Profile Management:</strong> Our `window profile design tool` allows you to define every section. It acts as a powerful `window profile calculator` for lengths and materials, making it a must-have for any `aluminium window section designer`.</p>
-                <p><strong>- Bill of Materials (BOM):</strong> Go beyond a simple quote with our `aluminium window cutting list software`. Generate a complete `window bill of materials` for accurate fabrication and purchasing.</p>
-                 <p><strong>- Professional Quotations:</strong> Impress clients with clean, professional-looking quotations, detailing everything from `window frame design online` visualizations to final hardware costs.</p>
+            <Section title="Beyond Windows: Our Manufacturing Expertise">
+                <p>
+                    WoodenMax Architectural Elements is not just about windows. We specialize in the manufacturing of a wide range of high-quality architectural products:
+                </p>
+                 <ul className="list-disc list-inside space-y-2 pl-2">
+                    <li><strong>Pergolas & Louvers:</strong> We craft stunning and durable <strong>iron and profiles pergolas</strong>. Our expertise includes the manufacturing of advanced <strong>retractable pergolas</strong> and high-quality <strong>metal louvers</strong>, perfect for modern indoor and outdoor spaces.</li>
+                    <li><strong>Fabricated Structures:</strong> We provide end-to-end solutions for modular construction, including custom <strong>fabricated homes, shops, and rooms</strong>. Our precision engineering ensures quality and speed for your projects.</li>
+                </ul>
             </Section>
 
-             <Section title="Why Use an Online Window Calculator?">
+             <Section title="A Tool for Professionals">
                  <p>
-                    An online `aluminium window calculator` like this eliminates guesswork and manual errors. It ensures accuracy, saves significant time, and provides a clear, itemized breakdown for your clients. Whether you're doing `window frame design CAD` work or need a quick price, our tool builds trust and professionalism.
+                    Whether you are calculating the price for a 3-track sliding window or planning the material list for a large-scale retractable pergola, our Real Vibe Studio platform is designed to be your trusted partner. It eliminates manual errors, saves time, and empowers you to deliver professional, accurate quotations every time.
                 </p>
             </Section>
         </div>

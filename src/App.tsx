@@ -876,8 +876,8 @@ const App: React.FC = () => {
         <header className="bg-slate-800 p-3 flex items-center shadow-md z-40 no-print">
             <Logo className="h-10 w-10 mr-4 flex-shrink-0" />
             <div className="flex-grow">
-                <h1 className="text-2xl font-bold text-white tracking-wider">WoodenMax</h1>
-                <p className="text-sm text-indigo-300">Reshaping spaces</p>
+                <h1 className="text-2xl font-bold text-white tracking-wider">WoodenMax Architectural Elements</h1>
+                <p className="text-sm text-indigo-300">Powered by Real Vibe Studio</p>
             </div>
             <div className='flex items-center gap-2'>
               <Button onClick={() => setIsContentModalOpen(true)} variant="secondary" className="hidden sm:inline-flex"> <DocumentTextIcon className="w-5 h-5 mr-2" /> Features & Guides </Button>
