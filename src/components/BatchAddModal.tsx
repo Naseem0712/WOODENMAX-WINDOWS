@@ -7,6 +7,9 @@ import { DimensionInput } from './ui/DimensionInput';
 import { Input } from './ui/Input';
 import { TrashIcon } from './icons/TrashIcon';
 import { PlusIcon } from './icons/PlusIcon';
+import { Select } from './ui/Select';
+
+type Unit = 'mm' | 'cm' | 'in' | 'ft-in';
 
 export interface BatchAddItem {
   id: string;
@@ -27,21 +30,22 @@ interface BatchAddModalProps {
 
 export const BatchAddModal: React.FC<BatchAddModalProps> = ({ isOpen, onClose, baseConfig, baseRate, onSave }) => {
   const [rows, setRows] = useState<BatchAddItem[]>([]);
+  const [unit, setUnit] = useState<Unit>('mm');
 
   useEffect(() => {
     if (isOpen) {
       setRows([
         {
           id: uuidv4(),
-          title: 'Window 1',
-          width: baseConfig.width,
-          height: baseConfig.height,
+          title: '',
+          width: '',
+          height: '',
           quantity: 1,
           rate: baseRate,
         }
       ]);
     }
-  }, [isOpen, baseConfig, baseRate]);
+  }, [isOpen, baseRate]);
 
   if (!isOpen) return null;
 
@@ -50,7 +54,7 @@ export const BatchAddModal: React.FC<BatchAddModalProps> = ({ isOpen, onClose, b
       ...prev,
       {
         id: uuidv4(),
-        title: `Window ${prev.length + 1}`,
+        title: ``,
         width: '',
         height: '',
         quantity: 1,
@@ -93,8 +97,19 @@ export const BatchAddModal: React.FC<BatchAddModalProps> = ({ isOpen, onClose, b
         </div>
 
         <div className="flex-grow overflow-y-auto p-4 custom-scrollbar">
-            <div className='space-y-2'>
-                <div className="grid grid-cols-12 gap-x-2 px-2 text-xs font-semibold text-slate-400">
+            <div className='flex justify-end mb-4'>
+                <div className='w-48'>
+                    <Select label="Dimension Unit" value={unit} onChange={e => setUnit(e.target.value as Unit)}>
+                        <option value="mm">mm</option>
+                        <option value="cm">cm</option>
+                        <option value="in">in</option>
+                        <option value="ft-in">ft-in</option>
+                    </Select>
+                </div>
+            </div>
+
+            <div className='space-y-3'>
+                <div className="hidden md:grid grid-cols-12 gap-x-2 px-2 text-xs font-semibold text-slate-400">
                     <div className="col-span-3">Title</div>
                     <div className="col-span-2">Width</div>
                     <div className="col-span-2">Height</div>
@@ -104,28 +119,30 @@ export const BatchAddModal: React.FC<BatchAddModalProps> = ({ isOpen, onClose, b
                 </div>
 
                 {rows.map((row, index) => (
-                    <div key={row.id} className="grid grid-cols-12 gap-x-2 items-center p-2 rounded-md bg-slate-700/50 hover:bg-slate-700">
-                        <div className="col-span-3">
-                           <Input label="" placeholder={`Window ${index + 1}`} value={row.title} onChange={e => handleRowChange(row.id, 'title', e.target.value)} className="!py-1.5"/>
-                        </div>
-                        <div className="col-span-2">
-                           <DimensionInput label="" value_mm={row.width} onChange_mm={v => handleRowChange(row.id, 'width', v)} className="text-sm" />
-                        </div>
-                         <div className="col-span-2">
-                           <DimensionInput label="" value_mm={row.height} onChange_mm={v => handleRowChange(row.id, 'height', v)} className="text-sm" />
-                        </div>
-                         <div className="col-span-2">
-                           <Input label="" type="number" inputMode="numeric" placeholder="1" value={row.quantity} onChange={e => handleRowChange(row.id, 'quantity', e.target.value)} className="!py-1.5" />
-                        </div>
-                        <div className="col-span-2">
-                           <Input label="" type="number" inputMode="numeric" placeholder="550" value={row.rate} onChange={e => handleRowChange(row.id, 'rate', e.target.value)} className="!py-1.5" />
-                        </div>
-                        <div className="col-span-1 text-right">
-                           {rows.length > 1 && (
-                            <Button variant="danger" onClick={() => handleRemoveRow(row.id)} className="p-2 h-8 w-8">
-                                <TrashIcon className="w-4 h-4"/>
-                            </Button>
-                           )}
+                    <div key={row.id} className="bg-slate-700/50 rounded-lg p-3">
+                        <div className="flex flex-col md:flex-row md:items-center md:gap-x-2 space-y-2 md:space-y-0">
+                             <div className="flex-grow md:w-3/12">
+                                <Input label="Title" placeholder={`Window ${index + 1}`} value={row.title} onChange={e => handleRowChange(row.id, 'title', e.target.value)} className="!py-1.5"/>
+                            </div>
+                            <div className="flex-grow md:w-2/12">
+                                <DimensionInput label="Width" value_mm={row.width} onChange_mm={v => handleRowChange(row.id, 'width', v)} controlledUnit={unit} />
+                            </div>
+                            <div className="flex-grow md:w-2/12">
+                                <DimensionInput label="Height" value_mm={row.height} onChange_mm={v => handleRowChange(row.id, 'height', v)} controlledUnit={unit} />
+                            </div>
+                            <div className="flex-grow md:w-2/12">
+                                <Input label="Quantity" type="number" inputMode="numeric" placeholder="1" value={row.quantity} onChange={e => handleRowChange(row.id, 'quantity', e.target.value)} className="!py-1.5" />
+                            </div>
+                            <div className="flex-grow md:w-2/12">
+                                <Input label="Rate" type="number" inputMode="numeric" placeholder="550" value={row.rate} onChange={e => handleRowChange(row.id, 'rate', e.target.value)} className="!py-1.5" />
+                            </div>
+                            <div className="flex-shrink-0 md:w-1/12 text-right">
+                               {rows.length > 1 && (
+                                <Button variant="danger" onClick={() => handleRemoveRow(row.id)} className="p-2 h-8 w-8 ml-auto">
+                                    <TrashIcon className="w-4 h-4"/>
+                                </Button>
+                               )}
+                            </div>
                         </div>
                     </div>
                 ))}

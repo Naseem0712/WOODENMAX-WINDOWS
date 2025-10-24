@@ -10,6 +10,7 @@ interface DimensionInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEl
   onWeightChange?: (value: number | '') => void;
   lengthValue?: number | '';
   onLengthChange?: (value: number | '') => void;
+  controlledUnit?: Unit;
 }
 
 const parseToMm = (displayValue: string, unit: Unit): number | '' => {
@@ -60,9 +61,11 @@ const formatFromMm = (mmValue: number, unit: Unit): string => {
 };
 
 
-export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value_mm, onChange_mm, className, weightValue, onWeightChange, lengthValue, onLengthChange, ...props }) => {
+export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value_mm, onChange_mm, className, weightValue, onWeightChange, lengthValue, onLengthChange, controlledUnit, ...props }) => {
+  const [internalUnit, setInternalUnit] = useState<Unit>('mm');
+  const unit = controlledUnit || internalUnit;
+  
   const [displayValue, setDisplayValue] = useState('');
-  const [unit, setUnit] = useState<Unit>('mm');
   const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => {
@@ -86,7 +89,7 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
   
   const handleUnitChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newUnit = e.target.value as Unit;
-    setUnit(newUnit);
+    setInternalUnit(newUnit);
     // When unit changes, re-format the display value from the canonical mm value
     if (value_mm !== '') {
         setDisplayValue(formatFromMm(Number(value_mm), newUnit));
@@ -100,6 +103,7 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
           setDisplayValue(formatFromMm(Number(value_mm), unit));
       } else {
           setDisplayValue('');
+          onChange_mm('');
       }
   };
 
@@ -116,23 +120,28 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
           className="w-full pl-3 pr-20 py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
           value={displayValue}
           onChange={handleInputChange}
-          onFocus={() => setIsFocused(true)}
+          onFocus={(e) => {
+            setIsFocused(true);
+            e.target.select();
+          }}
           onBlur={handleBlur}
           {...props}
         />
-        <div className="absolute inset-y-0 right-0 flex items-center">
-            <select
-                aria-label="Units"
-                value={unit}
-                onChange={handleUnitChange}
-                className="h-full rounded-r-md border-transparent bg-transparent py-0 pl-2 pr-7 text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm"
-            >
-                <option>mm</option>
-                <option>cm</option>
-                <option>in</option>
-                <option value="ft-in">ft-in</option>
-            </select>
-        </div>
+        {!controlledUnit && (
+          <div className="absolute inset-y-0 right-0 flex items-center">
+              <select
+                  aria-label="Units"
+                  value={unit}
+                  onChange={handleUnitChange}
+                  className="h-full rounded-r-md border-transparent bg-transparent py-0 pl-2 pr-7 text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm"
+              >
+                  <option>mm</option>
+                  <option>cm</option>
+                  <option>in</option>
+                  <option value="ft-in">ft-in</option>
+              </select>
+          </div>
+        )}
       </div>
       {onWeightChange && onLengthChange && (
         <div className="grid grid-cols-2 gap-2 mt-1">
@@ -144,6 +153,7 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
                     value={weightValue}
                     onChange={e => onWeightChange(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full pl-3 pr-12 py-1 bg-slate-700 border border-slate-600 rounded-md text-white text-xs focus:ring-1 focus:ring-indigo-500"
+                    onFocus={(e) => e.target.select()}
                 />
                 <span className="absolute inset-y-0 right-0 flex items-center pr-2 text-xs text-slate-400 pointer-events-none">kg/m</span>
             </div>
@@ -155,6 +165,7 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
                     value={lengthValue}
                     onChange={e => onLengthChange(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full pl-3 pr-5 py-1 bg-slate-700 border border-slate-600 rounded-md text-white text-xs focus:ring-1 focus:ring-indigo-500"
+                    onFocus={(e) => e.target.select()}
                 />
                 <span className="absolute inset-y-0 right-0 flex items-center pr-2 text-xs text-slate-400 pointer-events-none">m</span>
             </div>

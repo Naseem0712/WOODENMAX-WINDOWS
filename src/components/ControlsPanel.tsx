@@ -80,6 +80,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
   } = props;
 
   const { windowType, series, fixedPanels } = config;
+  const [openCard, setOpenCard] = useState<string | null>('Design Type');
   const [isSavingSeries, setIsSavingSeries] = useState(false);
   const [newSeriesName, setNewSeriesName] = useState('');
   const [isAddingColor, setIsAddingColor] = useState(false);
@@ -87,6 +88,10 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
   const [selectedPanelId, setSelectedPanelId] = useState<string>('');
   
   const isCorner = windowType === WindowType.CORNER;
+
+  const handleToggleCard = (title: string) => {
+    setOpenCard(prev => prev === title ? null : title);
+  };
 
   const displayConfig = useMemo(() => {
     if (isCorner && config.leftConfig && config.rightConfig) {
@@ -188,7 +193,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         </div>
       </div>
 
-      <CollapsibleCard title="Design Type" defaultOpen>
+      <CollapsibleCard title="Design Type" isOpen={openCard === 'Design Type'} onToggle={() => handleToggleCard('Design Type')}>
           <div className="grid grid-cols-3 bg-slate-700 rounded-md p-1 gap-1">
               {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.CORNER].map(type => {
                   const typeLabel = type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -198,7 +203,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
           </div>
       </CollapsibleCard>
       
-      <CollapsibleCard title="Overall Dimensions" defaultOpen>
+      <CollapsibleCard title="Overall Dimensions" isOpen={openCard === 'Overall Dimensions'} onToggle={() => handleToggleCard('Overall Dimensions')}>
         {isCorner ? (
             <>
                 <div className="grid grid-cols-2 gap-4">
@@ -214,7 +219,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
       </CollapsibleCard>
       
       {isCorner && (
-         <CollapsibleCard title="Corner Window Setup" defaultOpen>
+         <CollapsibleCard title="Corner Window Setup" isOpen={openCard === 'Corner Window Setup'} onToggle={() => handleToggleCard('Corner Window Setup')}>
             <div className="mb-4 grid grid-cols-2 bg-slate-700 rounded-md p-1 gap-1">
                 <button onClick={() => setActiveCornerSide('left')} className={`p-2 text-sm font-semibold rounded ${activeCornerSide === 'left' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Left Wall</button>
                 <button onClick={() => setActiveCornerSide('right')} className={`p-2 text-sm font-semibold rounded ${activeCornerSide === 'right' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Right Wall</button>
@@ -228,7 +233,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
       )}
 
       {activeWindowType === WindowType.SLIDING && (
-        <CollapsibleCard title="Track & Shutter Setup" defaultOpen>
+        <CollapsibleCard title="Track & Shutter Setup" isOpen={openCard === 'Track & Shutter Setup'} onToggle={() => handleToggleCard('Track & Shutter Setup')}>
             <Select label="Track Type" value={displayConfig.trackType} onChange={(e) => isCorner ? setSideConfig({trackType: parseInt(e.target.value)}) : setConfig('trackType', parseInt(e.target.value) as TrackType)}>
                 <option value={TrackType.TWO_TRACK}>2-Track</option>
                 <option value={TrackType.THREE_TRACK}>3-Track</option>
@@ -254,7 +259,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
       )}
 
       {(activeWindowType === WindowType.CASEMENT || activeWindowType === WindowType.VENTILATOR) && (
-          <CollapsibleCard title="Grid Layout" defaultOpen>
+          <CollapsibleCard title="Grid Layout" isOpen={openCard === 'Grid Layout'} onToggle={() => handleToggleCard('Grid Layout')}>
               <div className="grid grid-cols-2 gap-4">
                   <Input label="Rows" type="number" inputMode="numeric" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
                   <Input label="Columns" type="number" inputMode="numeric" value={gridCols} min={1} onChange={e => setGridSize(gridRows, Math.max(1, parseInt(e.target.value) || 1))} />
@@ -286,7 +291,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
       )}
 
       {windowType === WindowType.GLASS_PARTITION && (
-        <CollapsibleCard title="Partition Panel Setup" defaultOpen>
+        <CollapsibleCard title="Partition Panel Setup" isOpen={openCard === 'Partition Panel Setup'} onToggle={() => handleToggleCard('Partition Panel Setup')}>
           {/* FIX: Changed setConfig to onSetPartitionPanelCount to fix incorrect prop usage. */}
           <Input label="Number of Panels" type="number" inputMode="numeric" min={1} max={8} value={config.partitionPanels.count} onChange={e => onSetPartitionPanelCount(Math.max(1, parseInt(e.target.value) || 1))}/>
            <label className="flex items-center space-x-2 cursor-pointer mt-2">
@@ -317,7 +322,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
       )}
 
       {operablePanels.length > 0 && (
-          <CollapsibleCard title="Handle Configuration">
+          <CollapsibleCard title="Handle Configuration" isOpen={openCard === 'Handle Configuration'} onToggle={() => handleToggleCard('Handle Configuration')}>
               <Select label="Select Panel" value={selectedPanelId} onChange={e => setSelectedPanelId(e.target.value)}>
                 {operablePanels.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
               </Select>
@@ -342,7 +347,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
           </CollapsibleCard>
       )}
 
-      <CollapsibleCard title="Appearance">
+      <CollapsibleCard title="Appearance" isOpen={openCard === 'Appearance'} onToggle={() => handleToggleCard('Appearance')}>
         <div className="grid grid-cols-2 gap-4">
             <Select label="Glass Tint" value={config.glassType} onChange={(e) => setConfig('glassType', e.target.value as GlassType)}>
               <option value="clear">Clear</option> <option value="frosted">Frosted</option> <option value="tinted-blue">Tinted Blue</option> <option value="clear-sapphire">Clear Sapphire</option> <option value="brown-tinted">Brown Tinted</option> <option value="black-tinted">Black Tinted</option>
@@ -391,7 +396,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
       </CollapsibleCard>
       
       {!isCorner && windowType !== WindowType.GLASS_PARTITION && (
-        <CollapsibleCard title="Fixed Panels">
+        <CollapsibleCard title="Fixed Panels" isOpen={openCard === 'Fixed Panels'} onToggle={() => handleToggleCard('Fixed Panels')}>
            <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.TOP)}><PlusIcon className="w-4 h-4 mr-2" /> Top</Button>
               <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.BOTTOM)}><PlusIcon className="w-4 h-4 mr-2" /> Bottom</Button>
@@ -412,7 +417,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         </CollapsibleCard>
       )}
 
-      <CollapsibleCard title="Profile Series Dimensions">
+      <CollapsibleCard title="Profile Series Dimensions" isOpen={openCard === 'Profile Series Dimensions'} onToggle={() => handleToggleCard('Profile Series Dimensions')}>
         <div className="space-y-2">
           <Select label="Active Profile" value={series.id} onChange={(e) => onSeriesSelect(e.target.value)}>
             {filteredAvailableSeries.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -440,7 +445,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         {windowType === WindowType.GLASS_PARTITION && ( <> <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} /> <DimensionInput label="Hinged Panel Frame" value_mm={series.dimensions.casementShutter} onChange_mm={val => handleDimensionChange('casementShutter', val)} weightValue={series.weights?.casementShutter} onWeightChange={v => handleProfileDetailChange('weights', 'casementShutter', v)} lengthValue={series.lengths?.casementShutter} onLengthChange={v => handleProfileDetailChange('lengths', 'casementShutter', v)} /> <DimensionInput label="Top Track Height" value_mm={series.dimensions.topTrack} onChange_mm={val => handleDimensionChange('topTrack', val)} weightValue={series.weights?.topTrack} onWeightChange={v => handleProfileDetailChange('weights', 'topTrack', v)} lengthValue={series.lengths?.topTrack} onLengthChange={v => handleProfileDetailChange('lengths', 'topTrack', v)} /> <DimensionInput label="Bottom Track Height" value_mm={series.dimensions.bottomTrack} onChange_mm={val => handleDimensionChange('bottomTrack', val)} weightValue={series.weights?.bottomTrack} onWeightChange={v => handleProfileDetailChange('weights', 'bottomTrack', v)} lengthValue={series.lengths?.bottomTrack} onLengthChange={v => handleProfileDetailChange('lengths', 'bottomTrack', v)} /> <DimensionInput label="Glass Grid Profile" value_mm={series.dimensions.glassGridProfile} onChange_mm={val => handleDimensionChange('glassGridProfile', val)} weightValue={series.weights?.glassGridProfile} onWeightChange={v => handleProfileDetailChange('weights', 'glassGridProfile', v)} lengthValue={series.lengths?.glassGridProfile} onLengthChange={v => handleProfileDetailChange('lengths', 'glassGridProfile', v)} /> </> )}
       </CollapsibleCard>
 
-      <CollapsibleCard title="Hardware Configuration">
+      <CollapsibleCard title="Hardware Configuration" isOpen={openCard === 'Hardware Configuration'} onToggle={() => handleToggleCard('Hardware Configuration')}>
           <div className="space-y-3">
               {series.hardwareItems.map(item => (
                   <div key={item.id} className="p-3 bg-slate-700 rounded-md">

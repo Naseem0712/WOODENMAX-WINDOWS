@@ -1,21 +1,20 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ChevronDownIcon } from '../icons/ChevronDownIcon';
 
 interface CollapsibleCardProps {
   title: string;
   children: React.ReactNode;
   className?: string;
-  defaultOpen?: boolean;
+  isOpen: boolean;
+  onToggle: () => void;
 }
 
-export const CollapsibleCard: React.FC<CollapsibleCardProps> = ({ title, children, className, defaultOpen = false }) => {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-
+export const CollapsibleCard: React.FC<CollapsibleCardProps> = ({ title, children, className, isOpen, onToggle }) => {
   return (
     <div className={`bg-slate-700/50 rounded-lg shadow-md ${className}`}>
       <button
         className={`w-full flex justify-between items-center text-left text-lg font-semibold text-slate-100 p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${isOpen ? 'rounded-t-lg' : 'rounded-lg'}`}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={onToggle}
         aria-expanded={isOpen}
       >
         <span>{title}</span>
