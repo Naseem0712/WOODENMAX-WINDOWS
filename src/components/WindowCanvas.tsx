@@ -1,7 +1,5 @@
-
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-// FIX: Moved GlassType to a value import as it is used as a value (enum members are accessed).
-import type { WindowConfig, HandleConfig } from '../types';
+import type { WindowConfig, HandleConfig, CornerSideConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType } from '../types';
 import { PlusIcon } from './icons/PlusIcon';
 import { MinusIcon } from './icons/MinusIcon';
@@ -107,7 +105,6 @@ const MiteredFrame: React.FC<{
         position: 'absolute',
     };
 
-    // Use Math.max to prevent negative clip-path values on small scales
     const clipTs = Math.max(0, ts);
     const clipBs = Math.max(0, bs);
     const clipLs = Math.max(0, ls);
@@ -115,13 +112,9 @@ const MiteredFrame: React.FC<{
 
     return (
         <div className="absolute" style={{ width: width * scale, height: height * scale }}>
-            {/* Top */}
             <div style={{...baseStyle, top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
-            {/* Bottom */}
             <div style={{...baseStyle, bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
-            {/* Left */}
             <div style={{...baseStyle, top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
-            {/* Right */}
             <div style={{...baseStyle, top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
         </div>
     );
@@ -148,17 +141,7 @@ const SlidingShutter: React.FC<{
 
     return (
         <div className="absolute" style={{ width: width * scale, height: height * scale }}>
-             <MiteredFrame
-                width={width}
-                height={height}
-                topSize={topProfile}
-                bottomSize={bottomProfile}
-                leftSize={leftProfile}
-                rightSize={rightProfile}
-                scale={scale}
-                color={color}
-            />
-            
+             <MiteredFrame width={width} height={height} topSize={topProfile} bottomSize={bottomProfile} leftSize={leftProfile} rightSize={rightProfile} scale={scale} color={color} />
             <div className={`absolute`} style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale, ...(!isMesh && glassStyles[glassType]) }}>
                 {isMesh && <div className="w-full h-full" style={{backgroundColor: '#808080', opacity: 0.5, backgroundImage: `linear-gradient(45deg, #000 25%, transparent 25%), linear-gradient(-45deg, #000 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #000 75%), linear-gradient(-45deg, transparent 75%, #000 75%)`, backgroundSize: '4px 4px' }} />}
                 <ShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
@@ -185,7 +168,7 @@ const createWindowElements = (
         const leftFix = fixedPanels.find(p => p.position === FixedPanelPosition.LEFT);
         const rightFix = fixedPanels.find(p => p.position === FixedPanelPosition.RIGHT);
 
-        const frameOffset = (windowType !== WindowType.GLASS_PARTITION) ? dims.outerFrame : 0;
+        const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) ? dims.outerFrame : 0;
         const holeX1 = leftFix ? leftFix.size : frameOffset;
         const holeY1 = topFix ? topFix.size : frameOffset;
         const holeX2 = rightFix ? w - rightFix.size : w - frameOffset;
@@ -419,16 +402,7 @@ const createWindowElements = (
                     innerContent.push(
                         <div key={`panel-${i}`} className="absolute" style={{left: panelX*scale, top: panelAreaY*scale, width: currentPanelWidth*scale, height: panelAreaHeight*scale, zIndex}}>
                           {isFramed && <MiteredFrame width={currentPanelWidth} height={panelAreaHeight} profileSize={frameSize} scale={scale} color={profileColor} />}
-                          <GlassPanel 
-                            style={{
-                              left: (isFramed ? frameSize : 0) * scale, 
-                              top: (isFramed ? frameSize : 0) * scale, 
-                              width: (currentPanelWidth - (isFramed ? 2 * frameSize : 0)) * scale, 
-                              height: (panelAreaHeight - (isFramed ? 2 * frameSize : 0)) * scale
-                            }} 
-                            glassWidth={currentPanelWidth - (isFramed ? 2 * frameSize : 0)} 
-                            glassHeight={panelAreaHeight - (isFramed ? 2 * frameSize : 0)}
-                          >
+                          <GlassPanel style={{ left: (isFramed ? frameSize : 0) * scale, top: (isFramed ? frameSize : 0) * scale, width: (currentPanelWidth - (isFramed ? 2 * frameSize : 0)) * scale, height: (panelAreaHeight - (isFramed ? 2 * frameSize : 0)) * scale }} glassWidth={currentPanelWidth - (isFramed ? 2 * frameSize : 0)} glassHeight={panelAreaHeight - (isFramed ? 2 * frameSize : 0)}>
                              <ShutterIndicator type={type} />
                           </GlassPanel>
                         </div>
@@ -482,24 +456,12 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   const [zoom, setZoom] = useState(1);
   
   const numWidth = windowType === WindowType.CORNER 
-    ? (Number(config.leftWidth) || 0) + (Number(config.rightWidth) || 0) + 100
+    ? (Number(config.leftWidth) || 0) + (Number(config.rightWidth) || 0) + (Number(config.cornerPostWidth) || 0)
     : Number(width) || 0;
   const numHeight = Number(height) || 0;
 
   const dims = useMemo(() => ({
-    outerFrame: Number(series.dimensions.outerFrame) || 0,
-    fixedFrame: Number(series.dimensions.fixedFrame) || 0,
-    shutterHandle: Number(series.dimensions.shutterHandle) || 0,
-    shutterInterlock: Number(series.dimensions.shutterInterlock) || 0,
-    shutterTop: Number(series.dimensions.shutterTop) || 0,
-    shutterBottom: Number(series.dimensions.shutterBottom) || 0,
-    shutterMeeting: Number(series.dimensions.shutterMeeting) || 0,
-    casementShutter: Number(series.dimensions.casementShutter) || 0,
-    mullion: Number(series.dimensions.mullion) || 0,
-    louverBlade: Number(series.dimensions.louverBlade) || 0,
-    topTrack: Number(series.dimensions.topTrack) || 0,
-    bottomTrack: Number(series.dimensions.bottomTrack) || 0,
-    glassGridProfile: Number(series.dimensions.glassGridProfile) || 0,
+    outerFrame: Number(series.dimensions.outerFrame) || 0, fixedFrame: Number(series.dimensions.fixedFrame) || 0, shutterHandle: Number(series.dimensions.shutterHandle) || 0, shutterInterlock: Number(series.dimensions.shutterInterlock) || 0, shutterTop: Number(series.dimensions.shutterTop) || 0, shutterBottom: Number(series.dimensions.shutterBottom) || 0, shutterMeeting: Number(series.dimensions.shutterMeeting) || 0, casementShutter: Number(series.dimensions.casementShutter) || 0, mullion: Number(series.dimensions.mullion) || 0, louverBlade: Number(series.dimensions.louverBlade) || 0, topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0, glassGridProfile: Number(series.dimensions.glassGridProfile) || 0,
   }), [series.dimensions]);
 
   useEffect(() => {
@@ -532,29 +494,22 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   }), []);
 
   if (numWidth <= 0 || numHeight <= 0) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-transparent">
-        <p className="text-slate-500">Please enter valid dimensions to begin.</p>
-      </div>
-    );
+    return ( <div className="w-full h-full flex items-center justify-center bg-transparent"> <p className="text-slate-500">Please enter valid dimensions to begin.</p> </div> );
   }
 
   return (
     <div ref={containerRef} className="absolute inset-0 p-6 flex items-center justify-center bg-transparent overflow-auto">
-      <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none">
-          WoodenMax
-      </div>
-      
+      <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none"> WoodenMax </div>
        <div style={{ margin: 'auto' }}>
-            {windowType === WindowType.CORNER ? (
+            {windowType === WindowType.CORNER && config.leftConfig && config.rightConfig ? (
                 (() => {
                     const leftW = Number(config.leftWidth) || 0;
                     const rightW = Number(config.rightWidth) || 0;
-                    const postW = 100;
+                    const postW = Number(config.cornerPostWidth) || 0;
                     const totalW = leftW + rightW + postW;
 
-                    const cornerConfigLeft: WindowConfig = {...config, width: leftW, windowType: config.cornerSubType as WindowType, fixedPanels: [] };
-                    const cornerConfigRight: WindowConfig = {...config, width: rightW, windowType: config.cornerSubType as WindowType, fixedPanels: [] };
+                    const cornerConfigLeft: WindowConfig = { ...config, ...config.leftConfig, width: leftW, windowType: config.leftConfig.windowType, fixedPanels: [] };
+                    const cornerConfigRight: WindowConfig = { ...config, ...config.rightConfig, width: rightW, windowType: config.rightConfig.windowType, fixedPanels: [] };
                     
                     const leftElements = createWindowElements(cornerConfigLeft, scale, dims, glassStyles, () => {}, () => {});
                     const rightElements = createWindowElements(cornerConfigRight, scale, dims, glassStyles, () => {}, () => {});
@@ -578,11 +533,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
                     )
                 })()
             ) : (
-                <RenderedWindow 
-                    config={config} 
-                    elements={createWindowElements(config, scale, dims, glassStyles, onRemoveHorizontalDivider, onRemoveVerticalDivider)} 
-                    scale={scale} 
-                />
+                <RenderedWindow config={config} elements={createWindowElements(config, scale, dims, glassStyles, onRemoveHorizontalDivider, onRemoveVerticalDivider)} scale={scale} />
             )}
         </div>
       

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import type { QuotationItem, QuotationSettings } from '../types';
+import type { QuotationItem, QuotationSettings, BOM } from '../types';
 import { Button } from './ui/Button';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { TrashIcon } from './icons/TrashIcon';
@@ -9,6 +9,9 @@ import { UploadIcon } from './icons/UploadIcon';
 import { Select } from './ui/Select';
 import { PrintPreview } from './PrintPreview';
 import { DownloadIcon } from './icons/DownloadIcon';
+import { generateBillOfMaterials } from '../utils/materialCalculator';
+import { MaterialSummaryModal } from './MaterialSummaryModal';
+import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
 
 interface QuotationListModalProps {
   isOpen: boolean;
@@ -40,10 +43,12 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
   const companyLogoInputRef = useRef<HTMLInputElement>(null);
   const importQuotationInputRef = useRef<HTMLInputElement>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isMaterialSummaryOpen, setIsMaterialSummaryOpen] = useState(false);
+  const [bom, setBom] = useState<BOM | null>(null);
 
   useEffect(() => {
-    onTogglePreview(isPreviewOpen);
-  }, [isPreviewOpen, onTogglePreview]);
+    onTogglePreview(isPreviewOpen || isMaterialSummaryOpen);
+  }, [isPreviewOpen, isMaterialSummaryOpen, onTogglePreview]);
   
   useEffect(() => {
     if (isPreviewOpen) {
@@ -66,6 +71,15 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
         settings={settings}
         setSettings={setSettings}
     />;
+  }
+
+  if (isMaterialSummaryOpen && bom) {
+      return <MaterialSummaryModal 
+        isOpen={isMaterialSummaryOpen} 
+        onClose={() => setIsMaterialSummaryOpen(false)}
+        bom={bom}
+        settings={settings}
+      />
   }
 
   const handleSettingsChange = <
@@ -134,6 +148,16 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
     reader.readAsText(file);
     e.target.value = ''; // Reset file input
   };
+  
+  const handleGenerateBom = () => {
+      if (items.length === 0) {
+          alert("Please add items to the quotation before generating a material summary.");
+          return;
+      }
+      const calculatedBom = generateBillOfMaterials(items);
+      setBom(calculatedBom);
+      setIsMaterialSummaryOpen(true);
+  }
 
   const subTotal = items.reduce((total, item) => {
     const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
@@ -166,6 +190,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-4 border-b border-slate-700 no-print gap-4 sm:gap-0">
           <h2 className="text-2xl font-bold text-white">Quotation Generator</h2>
           <div className="flex items-center gap-2 flex-wrap justify-end">
+            <Button onClick={handleGenerateBom} variant="secondary"><ClipboardDocumentListIcon className="w-5 h-5 mr-2"/> Export Materials (BOM)</Button>
             <Button onClick={handleExport} variant="secondary"><DownloadIcon className="w-5 h-5 mr-2"/> Export JSON</Button>
             <Button onClick={() => importQuotationInputRef.current?.click()} variant="secondary"><UploadIcon className="w-5 h-5 mr-2"/> Import JSON</Button>
             <input type="file" ref={importQuotationInputRef} onChange={handleImport} className="hidden" accept="application/json" />

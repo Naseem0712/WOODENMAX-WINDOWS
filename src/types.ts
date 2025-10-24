@@ -1,4 +1,4 @@
-
+// FIX: Removed circular self-import which was causing type declaration conflicts.
 export enum WindowType {
   SLIDING = 'sliding',
   CASEMENT = 'casement',
@@ -130,6 +130,20 @@ export interface PartitionPanelConfig {
     framing?: 'none' | 'full';
 }
 
+export interface CornerSideConfig extends Pick<WindowConfig, 
+  'trackType' | 
+  'shutterConfig' | 
+  'fixedShutters' |
+  'slidingHandles' |
+  'verticalDividers' |
+  'horizontalDividers' |
+  'doorPositions' |
+  'ventilatorGrid'
+> {
+  windowType: WindowType.SLIDING | WindowType.CASEMENT | WindowType.VENTILATOR;
+}
+
+
 export interface WindowConfig {
   width: number | '';
   height: number | '';
@@ -167,9 +181,11 @@ export interface WindowConfig {
   };
   
   // Corner specific
-  cornerSubType?: WindowType;
   leftWidth?: number | '';
   rightWidth?: number | '';
+  leftConfig?: CornerSideConfig;
+  rightConfig?: CornerSideConfig;
+  cornerPostWidth: number | '';
 }
 
 export interface QuotationItem {
@@ -213,3 +229,28 @@ export interface QuotationSettings {
   terms: string;
   description: string;
 }
+
+// Bill of Materials Types
+export interface BOMProfile {
+  profileKey: keyof ProfileDimensions;
+  totalLength: number;
+  standardLength: number;
+  weightPerMeter?: number;
+  pieces: number[];
+  requiredBars: number;
+  totalWeight: number;
+}
+
+export interface BOMHardware {
+  name: string;
+  totalQuantity: number;
+}
+
+export interface BOMSeries {
+  seriesId: string;
+  seriesName: string;
+  profiles: BOMProfile[];
+  hardware: BOMHardware[];
+}
+
+export type BOM = BOMSeries[];

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback } from 'react';
-import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig } from './types';
+import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
@@ -29,17 +29,18 @@ type ConfigAction =
   | { type: 'ADD_FIXED_PANEL'; payload: FixedPanelPosition }
   | { type: 'REMOVE_FIXED_PANEL'; payload: string }
   | { type: 'UPDATE_FIXED_PANEL_SIZE'; payload: { id: string; size: number } }
-  | { type: 'TOGGLE_DOOR_POSITION'; payload: { row: number; col: number } }
-  | { type: 'HANDLE_VENTILATOR_CELL_CLICK'; payload: { row: number; col: number } }
-  | { type: 'SET_GRID_SIZE'; payload: { rows: number; cols: number } }
-  | { type: 'REMOVE_VERTICAL_DIVIDER'; payload: number }
-  | { type: 'REMOVE_HORIZONTAL_DIVIDER'; payload: number }
-  | { type: 'UPDATE_HANDLE'; payload: { panelId: string; newConfig: HandleConfig | null } }
+  | { type: 'TOGGLE_DOOR_POSITION'; payload: { row: number; col: number, side: 'left' | 'right' | null } }
+  | { type: 'HANDLE_VENTILATOR_CELL_CLICK'; payload: { row: number; col: number, side: 'left' | 'right' | null } }
+  | { type: 'SET_GRID_SIZE'; payload: { rows: number; cols: number, side: 'left' | 'right' | null } }
+  | { type: 'REMOVE_VERTICAL_DIVIDER'; payload: { index: number, side: 'left' | 'right' | null } }
+  | { type: 'REMOVE_HORIZONTAL_DIVIDER'; payload: { index: number, side: 'left' | 'right' | null } }
+  | { type: 'UPDATE_HANDLE'; payload: { panelId: string; newConfig: HandleConfig | null, side: 'left' | 'right' | null } }
   | { type: 'SET_WINDOW_TYPE'; payload: WindowType }
   | { type: 'SET_PARTITION_PANEL_COUNT'; payload: number }
   | { type: 'CYCLE_PARTITION_PANEL_TYPE'; payload: number }
   | { type: 'SET_PARTITION_HAS_TOP_CHANNEL'; payload: boolean }
   | { type: 'CYCLE_PARTITION_PANEL_FRAMING'; payload: number }
+  | { type: 'SET_SIDE_CONFIG'; payload: { side: 'left' | 'right'; config: Partial<CornerSideConfig> } }
   | { type: 'RESET_DESIGN' };
 
 
@@ -148,6 +149,18 @@ const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
     description: 'Supply and installation of premium aluminium windows and partitions as per the agreed specifications.'
 };
 
+const defaultCornerSideConfig: CornerSideConfig = {
+    windowType: WindowType.SLIDING,
+    trackType: TrackType.TWO_TRACK,
+    shutterConfig: ShutterConfigType.TWO_GLASS,
+    fixedShutters: [],
+    slidingHandles: [],
+    verticalDividers: [],
+    horizontalDividers: [],
+    doorPositions: [],
+    ventilatorGrid: [],
+};
+
 const initialConfig: ConfigState = {
     width: 1800,
     height: 2100,
@@ -168,9 +181,11 @@ const initialConfig: ConfigState = {
     doorPositions: [{ row: 0, col: 0 }, { row: 0, col: 1 }],
     ventilatorGrid: [],
     partitionPanels: { count: 2, types: [{ type: 'fixed' }, { type: 'sliding' }], hasTopChannel: true },
-    cornerSubType: WindowType.SLIDING,
     leftWidth: 1200,
     rightWidth: 1200,
+    cornerPostWidth: 100,
+    leftConfig: defaultCornerSideConfig,
+    rightConfig: { ...defaultCornerSideConfig, verticalDividers: [0.5], doorPositions: [{ row: 0, col: 0 }, { row: 0, col: 1 }] },
 };
 
 const SERIES_MAP: Record<WindowType, ProfileSeries> = {
@@ -182,9 +197,25 @@ const SERIES_MAP: Record<WindowType, ProfileSeries> = {
 };
 
 function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
+    const getSideConfig = (side: 'left' | 'right' | null): [keyof ConfigState | null, ConfigState | CornerSideConfig] => {
+      if (state.windowType === WindowType.CORNER && side) {
+        const key = side === 'left' ? 'leftConfig' : 'rightConfig';
+        return [key, state[key]!];
+      }
+      return [null, state];
+    };
+
     switch (action.type) {
         case 'SET_FIELD':
             return { ...state, [action.field]: action.payload };
+        case 'SET_SIDE_CONFIG': {
+            const { side, config } = action.payload;
+            const configKey = side === 'left' ? 'leftConfig' : 'rightConfig';
+            return {
+                ...state,
+                [configKey]: { ...state[configKey]!, ...config },
+            };
+        }
         case 'ADD_FIXED_PANEL':
             if (state.fixedPanels.some(p => p.position === action.payload)) return state;
             return { ...state, fixedPanels: [...state.fixedPanels, { id: uuidv4(), position: action.payload, size: 300 }] };
@@ -193,18 +224,23 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
         case 'UPDATE_FIXED_PANEL_SIZE':
             return { ...state, fixedPanels: state.fixedPanels.map(p => p.id === action.payload.id ? { ...p, size: action.payload.size } : p) };
         case 'TOGGLE_DOOR_POSITION': {
-            const { row, col } = action.payload;
-            const exists = state.doorPositions.some(p => p.row === row && p.col === col);
-            if (exists) {
-                return { ...state, doorPositions: state.doorPositions.filter(p => p.row !== row || p.col !== col) };
-            } else {
-                return { ...state, doorPositions: [...state.doorPositions, { row, col }] };
+            const { row, col, side } = action.payload;
+            const [configKey, config] = getSideConfig(side);
+            const exists = config.doorPositions.some(p => p.row === row && p.col === col);
+            const newDoorPositions = exists 
+                ? config.doorPositions.filter(p => p.row !== row || p.col !== col) 
+                : [...config.doorPositions, { row, col }];
+            
+            if (configKey) {
+                return { ...state, [configKey]: { ...config, doorPositions: newDoorPositions } };
             }
+            return { ...state, doorPositions: newDoorPositions };
         }
         case 'HANDLE_VENTILATOR_CELL_CLICK': {
-            const { row, col } = action.payload;
+            const { row, col, side } = action.payload;
+            const [configKey, config] = getSideConfig(side);
             const sequence: VentilatorCellType[] = ['glass', 'louvers', 'door', 'exhaust_fan'];
-            const newGrid = state.ventilatorGrid.map(r => r.slice());
+            const newGrid = config.ventilatorGrid.map(r => r.slice());
             const currentType = newGrid[row][col].type;
             const currentIndex = sequence.indexOf(currentType);
             const nextType = sequence[(currentIndex + 1) % sequence.length];
@@ -212,47 +248,66 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             if (nextType !== 'door' && newGrid[row][col].handle) {
                 delete newGrid[row][col].handle;
             }
+            if (configKey) {
+                return { ...state, [configKey]: { ...config, ventilatorGrid: newGrid } };
+            }
             return { ...state, ventilatorGrid: newGrid };
         }
         case 'SET_GRID_SIZE': {
-            const { rows, cols } = action.payload;
+            const { rows, cols, side } = action.payload;
+            const [configKey, config] = getSideConfig(side);
             const newH = Array.from({ length: rows - 1 }).map((_, i) => (i + 1) / rows);
             const newV = Array.from({ length: cols - 1 }).map((_, i) => (i + 1) / cols);
-            return { ...state, horizontalDividers: newH, verticalDividers: newV };
+            const newConfig = { ...config, horizontalDividers: newH, verticalDividers: newV };
+            if (configKey) {
+                return { ...state, [configKey]: newConfig };
+            }
+            return { ...state, ...newConfig };
         }
         case 'REMOVE_VERTICAL_DIVIDER': {
-            const index = action.payload;
-            const verticalDividers = state.verticalDividers.filter((_, i) => i !== index);
-            const ventilatorGrid = state.ventilatorGrid.map(row => { row.splice(index + 1, 1); return row; });
-            const doorPositions = state.doorPositions.filter(p => p.col !== index + 1).map(p => p.col > index + 1 ? { ...p, col: p.col - 1 } : p);
-            return { ...state, verticalDividers, ventilatorGrid, doorPositions };
+            const { index, side } = action.payload;
+            const [configKey, config] = getSideConfig(side);
+            const verticalDividers = config.verticalDividers.filter((_, i) => i !== index);
+            const ventilatorGrid = config.ventilatorGrid.map(row => { row.splice(index + 1, 1); return row; });
+            const doorPositions = config.doorPositions.filter(p => p.col !== index + 1).map(p => p.col > index + 1 ? { ...p, col: p.col - 1 } : p);
+            const newConfig = { ...config, verticalDividers, ventilatorGrid, doorPositions };
+            if (configKey) {
+                return { ...state, [configKey]: newConfig };
+            }
+            return { ...state, ...newConfig };
         }
         case 'REMOVE_HORIZONTAL_DIVIDER': {
-            const index = action.payload;
-            const horizontalDividers = state.horizontalDividers.filter((_, i) => i !== index);
-            const ventilatorGrid = [...state.ventilatorGrid];
+            const { index, side } = action.payload;
+            const [configKey, config] = getSideConfig(side);
+            const horizontalDividers = config.horizontalDividers.filter((_, i) => i !== index);
+            const ventilatorGrid = [...config.ventilatorGrid];
             ventilatorGrid.splice(index + 1, 1);
-            const doorPositions = state.doorPositions.filter(p => p.row !== index + 1).map(p => p.row > index + 1 ? { ...p, row: p.row - 1 } : p);
-            return { ...state, horizontalDividers, ventilatorGrid, doorPositions };
+            const doorPositions = config.doorPositions.filter(p => p.row !== index + 1).map(p => p.row > index + 1 ? { ...p, row: p.row - 1 } : p);
+            const newConfig = { ...config, horizontalDividers, ventilatorGrid, doorPositions };
+            if (configKey) {
+                return { ...state, [configKey]: newConfig };
+            }
+            return { ...state, ...newConfig };
         }
         case 'UPDATE_HANDLE': {
-            const { panelId, newConfig } = action.payload;
+            const { panelId, newConfig, side } = action.payload;
+            const [configKey, config] = getSideConfig(side);
             const parts = panelId.split('-');
             const type = parts[0];
-            let newState = { ...state };
+            let newSideConfig = { ...config };
 
             switch (type) {
                 case 'sliding': {
                     const index = parseInt(parts[1], 10);
-                    const newHandles = [...state.slidingHandles];
+                    const newHandles = [...config.slidingHandles];
                     newHandles[index] = newConfig;
-                    newState.slidingHandles = newHandles;
+                    newSideConfig.slidingHandles = newHandles;
                     break;
                 }
                 case 'casement': {
                     const row = parseInt(parts[1], 10);
                     const col = parseInt(parts[2], 10);
-                    newState.doorPositions = state.doorPositions.map(p => {
+                    newSideConfig.doorPositions = config.doorPositions.map(p => {
                         if (p.row === row && p.col === col) {
                             if (newConfig) return { ...p, handle: newConfig };
                             const { handle, ...rest } = p;
@@ -265,16 +320,16 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
                 case 'ventilator': {
                     const row = parseInt(parts[1], 10);
                     const col = parseInt(parts[2], 10);
-                    const newGrid = state.ventilatorGrid.map(r => r.slice());
+                    const newGrid = config.ventilatorGrid.map(r => r.slice());
                     if (newConfig) {
                         newGrid[row][col] = { ...newGrid[row][col], handle: newConfig };
                     } else if (newGrid[row][col]) {
                         delete newGrid[row][col].handle;
                     }
-                    newState.ventilatorGrid = newGrid;
+                    newSideConfig.ventilatorGrid = newGrid;
                     break;
                 }
-                case 'partition': {
+                case 'partition': { // This will not be used in corner mode
                     const index = parseInt(parts[1], 10);
                     const newTypes = [...state.partitionPanels.types];
                     if (newConfig) {
@@ -282,20 +337,26 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
                     } else if (newTypes[index]) {
                         delete newTypes[index].handle;
                     }
-                    newState.partitionPanels = { ...state.partitionPanels, types: newTypes };
-                    break;
+                    return { ...state, partitionPanels: { ...state.partitionPanels, types: newTypes } };
                 }
             }
-            return newState;
+
+            if (configKey) {
+                return { ...state, [configKey]: newSideConfig };
+            }
+            return { ...state, ...newSideConfig };
         }
         case 'SET_WINDOW_TYPE': {
           const newType = action.payload;
-          const newState = { ...state, windowType: newType };
+          const newState: ConfigState = { ...state, windowType: newType };
           if (newType === WindowType.GLASS_PARTITION) {
             newState.fixedPanels = [];
           }
            if (newType === WindowType.CORNER) {
-              newState.cornerSubType = WindowType.SLIDING;
+              newState.leftConfig = state.leftConfig || defaultCornerSideConfig;
+              newState.rightConfig = state.rightConfig || defaultCornerSideConfig;
+              newState.leftWidth = state.leftWidth || 1200;
+              newState.rightWidth = state.rightWidth || 1200;
           }
           return newState;
         }
@@ -338,7 +399,6 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
              return {
                 ...initialConfig,
                 windowType: state.windowType,
-                cornerSubType: initialConfig.cornerSubType,
             };
         }
         default:
@@ -350,9 +410,7 @@ const getInitialConfig = (): ConfigState => {
   try {
     const saved = window.localStorage.getItem('woodenmax-current-config');
     if (saved) {
-      // Merge with default to ensure new fields are included if the app updates
       const parsed = JSON.parse(saved);
-      // Ensure partitionPanels has the new properties
       if (parsed.partitionPanels && typeof parsed.partitionPanels.hasTopChannel === 'undefined') {
           parsed.partitionPanels.hasTopChannel = true;
       }
@@ -372,20 +430,18 @@ const getInitialConfig = (): ConfigState => {
 const App: React.FC = () => {
   
   const [windowConfigState, dispatch] = useReducer(configReducer, getInitialConfig());
-  const { windowType, trackType, shutterConfig, fixedShutters, slidingHandles, verticalDividers, horizontalDividers, doorPositions, ventilatorGrid, partitionPanels, cornerSubType } = windowConfigState;
+  const { windowType } = windowConfigState;
 
   const [isPanelOpen, setIsPanelOpen] = useState(window.innerWidth >= 1024);
   const [isMobileQuoteOpen, setIsMobileQuoteOpen] = useState(false);
+  const [activeCornerSide, setActiveCornerSide] = useState<'left' | 'right'>('left');
   
-  // Series State
   const [series, setSeries] = useState<ProfileSeries>(() => {
     try {
       const item = window.localStorage.getItem('aluminium-window-last-series');
       if (item) {
         const parsed = JSON.parse(item);
-        if(parsed.id && parsed.name && parsed.dimensions) {
-          return parsed;
-        }
+        if(parsed.id && parsed.name && parsed.dimensions) { return parsed; }
       }
     } catch (error) { console.error("Could not load last used series", error); }
     return DEFAULT_SLIDING_SERIES;
@@ -398,7 +454,6 @@ const App: React.FC = () => {
     } catch (error) { console.error("Could not load profiles", error); return []; }
   });
 
-  // Color State
   const [savedColors, setSavedColors] = useState<SavedColor[]>(() => {
       try {
         const item = window.localStorage.getItem('aluminium-window-colors');
@@ -411,7 +466,6 @@ const App: React.FC = () => {
       } catch (error) { return []; }
   });
   
-  // Quotation State
   const [windowTitle, setWindowTitle] = useState<string>(() => window.localStorage.getItem('woodenmax-quotation-panel-title') || 'Window 1');
   const [quantity, setQuantity] = useState<number | ''>(() => { try { const s = window.localStorage.getItem('woodenmax-quotation-panel-quantity'); return s ? JSON.parse(s) : 1; } catch { return 1; } });
   const [areaType, setAreaType] = useState<AreaType>(() => (window.localStorage.getItem('woodenmax-quotation-panel-areaType') as AreaType) || AreaType.SQFT);
@@ -426,9 +480,7 @@ const App: React.FC = () => {
       } catch (error) { return DEFAULT_QUOTATION_SETTINGS; }
   });
   
-  // PWA Install State
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  
   const panelRef = useRef<HTMLDivElement>(null);
   
   const windowConfig: WindowConfig = useMemo(() => ({
@@ -437,84 +489,42 @@ const App: React.FC = () => {
   }), [windowConfigState, series]);
 
   // --- PERSISTENCE EFFECTS ---
+  useEffect(() => { window.localStorage.setItem('woodenmax-current-config', JSON.stringify(windowConfigState)); }, [windowConfigState]);
+  useEffect(() => { window.localStorage.setItem('woodenmax-quotation-items', JSON.stringify(quotationItems)); }, [quotationItems]);
   useEffect(() => {
-    try {
-      window.localStorage.setItem('woodenmax-current-config', JSON.stringify(windowConfigState));
-    } catch (error) {
-      console.error("Could not save current config to localStorage", error);
-    }
-  }, [windowConfigState]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('woodenmax-quotation-items', JSON.stringify(quotationItems));
-    } catch (error) {
-      console.error("Could not save quotation items", error);
-    }
-  }, [quotationItems]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('woodenmax-quotation-panel-title', windowTitle);
-      window.localStorage.setItem('woodenmax-quotation-panel-quantity', JSON.stringify(quantity));
-      window.localStorage.setItem('woodenmax-quotation-panel-areaType', areaType);
-      window.localStorage.setItem('woodenmax-quotation-panel-rate', JSON.stringify(rate));
-    } catch (error) {
-      console.error("Could not save quotation panel state", error);
-    }
+    window.localStorage.setItem('woodenmax-quotation-panel-title', windowTitle);
+    window.localStorage.setItem('woodenmax-quotation-panel-quantity', JSON.stringify(quantity));
+    window.localStorage.setItem('woodenmax-quotation-panel-areaType', areaType);
+    window.localStorage.setItem('woodenmax-quotation-panel-rate', JSON.stringify(rate));
   }, [windowTitle, quantity, areaType, rate]);
-  
   useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setInstallPrompt(e as BeforeInstallPromptEvent);
-    };
+    const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e as BeforeInstallPromptEvent); };
     window.addEventListener('beforeinstallprompt', handler);
-
-    const appInstalledHandler = () => {
-        setInstallPrompt(null);
-    };
+    const appInstalledHandler = () => { setInstallPrompt(null); };
     window.addEventListener('appinstalled', appInstalledHandler);
-
     return () => {
       window.removeEventListener('beforeinstallprompt', handler);
       window.removeEventListener('appinstalled', appInstalledHandler);
     };
   }, []);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('aluminium-window-profiles', JSON.stringify(savedSeries));
-    } catch (error) { console.error("Could not save profiles", error); }
-  }, [savedSeries]);
-
-  useEffect(() => {
-    try {
-        window.localStorage.setItem('aluminium-window-last-series', JSON.stringify(series));
-    } catch (error) { console.error("Could not save last series", error); }
-  }, [series]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('aluminium-window-colors', JSON.stringify(savedColors));
-    } catch (error) { console.error("Could not save colors", error); }
-  }, [savedColors]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('woodenmax-quotation-settings', JSON.stringify(quotationSettings));
-    } catch (error) { console.error("Could not save quotation settings", error); }
-  }, [quotationSettings]);
+  useEffect(() => { window.localStorage.setItem('aluminium-window-profiles', JSON.stringify(savedSeries)); }, [savedSeries]);
+  useEffect(() => { window.localStorage.setItem('aluminium-window-last-series', JSON.stringify(series)); }, [series]);
+  useEffect(() => { window.localStorage.setItem('aluminium-window-colors', JSON.stringify(savedColors)); }, [savedColors]);
+  useEffect(() => { window.localStorage.setItem('woodenmax-quotation-settings', JSON.stringify(quotationSettings)); }, [quotationSettings]);
   
   const SERIES_MAP_MEMO = useMemo(() => SERIES_MAP, []);
 
   useEffect(() => {
-    const typeToSync = windowType === WindowType.CORNER ? cornerSubType : windowType;
-    if (series.type !== typeToSync) {
+    const activeConfig = windowType === WindowType.CORNER 
+      ? (activeCornerSide === 'left' ? windowConfigState.leftConfig : windowConfigState.rightConfig) 
+      : windowConfigState;
+    const typeToSync = activeConfig?.windowType;
+
+    if (typeToSync && series.type !== typeToSync) {
         const foundSeries = savedSeries.find(s => s.type === typeToSync);
         setSeries(foundSeries || SERIES_MAP_MEMO[typeToSync as WindowType] || DEFAULT_SLIDING_SERIES);
     }
-  }, [windowType, series.type, savedSeries, SERIES_MAP_MEMO, cornerSubType]);
+  }, [windowType, windowConfigState, activeCornerSide, series.type, savedSeries, SERIES_MAP_MEMO]);
   
   const availableSeries = useMemo(() => [
     DEFAULT_SLIDING_SERIES, DEFAULT_CASEMENT_SERIES, DEFAULT_VENTILATOR_SERIES, 
@@ -522,51 +532,124 @@ const App: React.FC = () => {
   ], [savedSeries]);
   
   const numShutters = useMemo(() => {
-    const activeType = windowType === WindowType.CORNER ? cornerSubType : windowType;
-    if (activeType !== WindowType.SLIDING) return 0;
-    switch (shutterConfig) {
+    const activeConfig = windowType === WindowType.CORNER
+        ? (activeCornerSide === 'left' ? windowConfig.leftConfig : windowConfig.rightConfig)
+        : windowConfig;
+    if (!activeConfig || activeConfig.windowType !== WindowType.SLIDING) return 0;
+    
+    switch (activeConfig.shutterConfig) {
       case ShutterConfigType.TWO_GLASS: return 2;
       case ShutterConfigType.THREE_GLASS: return 3;
       case ShutterConfigType.TWO_GLASS_ONE_MESH: return 3;
       case ShutterConfigType.FOUR_GLASS: return 4;
       default: return 0;
     }
-  }, [shutterConfig, windowType, cornerSubType]);
+  }, [windowConfig, windowType, activeCornerSide]);
 
   useEffect(() => {
-    if (trackType === TrackType.TWO_TRACK && ![ShutterConfigType.TWO_GLASS, ShutterConfigType.FOUR_GLASS].includes(shutterConfig)) {
-      dispatch({ type: 'SET_FIELD', field: 'shutterConfig', payload: ShutterConfigType.TWO_GLASS });
-    }
-    if (trackType === TrackType.THREE_TRACK && ![ShutterConfigType.THREE_GLASS, ShutterConfigType.TWO_GLASS_ONE_MESH].includes(shutterConfig)) {
-      dispatch({ type: 'SET_FIELD', field: 'shutterConfig', payload: ShutterConfigType.THREE_GLASS });
-    }
-  }, [trackType, shutterConfig]);
+    const checkAndUpdateSideConfig = (side: 'left' | 'right') => {
+        const sideConfig = windowConfigState[side === 'left' ? 'leftConfig' : 'rightConfig'];
+        if (!sideConfig) return;
 
-  useEffect(() => {
-    const newFixedShutters = Array(numShutters).fill(false);
-    for(let i=0; i < Math.min(fixedShutters.length, newFixedShutters.length); i++) { newFixedShutters[i] = fixedShutters[i]; }
-    dispatch({ type: 'SET_FIELD', field: 'fixedShutters', payload: newFixedShutters });
-    
-    const newSlidingHandles = Array(numShutters).fill(null);
-    for(let i=0; i < Math.min(slidingHandles.length, newSlidingHandles.length); i++) { newSlidingHandles[i] = slidingHandles[i]; }
-    dispatch({ type: 'SET_FIELD', field: 'slidingHandles', payload: newSlidingHandles });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [numShutters]);
-  
-  useEffect(() => {
-    const gridRows = horizontalDividers.length + 1;
-    const gridCols = verticalDividers.length + 1;
-    const newGrid: VentilatorCell[][] = Array.from({ length: gridRows }, () => 
-        Array.from({ length: gridCols }, () => ({ type: 'glass' }))
-    );
-    for (let r = 0; r < Math.min(gridRows, ventilatorGrid.length); r++) {
-        for (let c = 0; c < Math.min(gridCols, ventilatorGrid[r]?.length || 0); c++) {
-            newGrid[r][c] = ventilatorGrid[r][c];
+        let changed = false;
+        const newSideConfig: Partial<CornerSideConfig> = {};
+
+        if (sideConfig.trackType === TrackType.TWO_TRACK && ![ShutterConfigType.TWO_GLASS, ShutterConfigType.FOUR_GLASS].includes(sideConfig.shutterConfig)) {
+            newSideConfig.shutterConfig = ShutterConfigType.TWO_GLASS;
+            changed = true;
+        }
+        if (sideConfig.trackType === TrackType.THREE_TRACK && ![ShutterConfigType.THREE_GLASS, ShutterConfigType.TWO_GLASS_ONE_MESH].includes(sideConfig.shutterConfig)) {
+            newSideConfig.shutterConfig = ShutterConfigType.THREE_GLASS;
+            changed = true;
+        }
+
+        if (changed) {
+            dispatch({ type: 'SET_SIDE_CONFIG', payload: { side, config: newSideConfig } });
+        }
+    };
+    if (windowType === WindowType.CORNER) {
+        checkAndUpdateSideConfig('left');
+        checkAndUpdateSideConfig('right');
+    } else if (windowType === WindowType.SLIDING) {
+        if (windowConfigState.trackType === TrackType.TWO_TRACK && ![ShutterConfigType.TWO_GLASS, ShutterConfigType.FOUR_GLASS].includes(windowConfigState.shutterConfig)) {
+            dispatch({ type: 'SET_FIELD', field: 'shutterConfig', payload: ShutterConfigType.TWO_GLASS });
+        }
+        if (windowConfigState.trackType === TrackType.THREE_TRACK && ![ShutterConfigType.THREE_GLASS, ShutterConfigType.TWO_GLASS_ONE_MESH].includes(windowConfigState.shutterConfig)) {
+            dispatch({ type: 'SET_FIELD', field: 'shutterConfig', payload: ShutterConfigType.THREE_GLASS });
         }
     }
-    dispatch({ type: 'SET_FIELD', field: 'ventilatorGrid', payload: newGrid });
+  }, [windowConfigState, windowType]);
+  
+  useEffect(() => {
+    const updateSideShutters = (side: 'left' | 'right') => {
+        const sideConfig = windowConfigState[side === 'left' ? 'leftConfig' : 'rightConfig'];
+        if (!sideConfig || sideConfig.windowType !== WindowType.SLIDING) return;
+        
+        let numSideShutters = 0;
+        switch (sideConfig.shutterConfig) {
+            case ShutterConfigType.TWO_GLASS: numSideShutters = 2; break;
+            case ShutterConfigType.THREE_GLASS: case ShutterConfigType.TWO_GLASS_ONE_MESH: numSideShutters = 3; break;
+            case ShutterConfigType.FOUR_GLASS: numSideShutters = 4; break;
+        }
+
+        if (sideConfig.fixedShutters.length !== numSideShutters || sideConfig.slidingHandles.length !== numSideShutters) {
+             const newFixedShutters = Array(numSideShutters).fill(false);
+             for(let i=0; i < Math.min(sideConfig.fixedShutters.length, newFixedShutters.length); i++) { newFixedShutters[i] = sideConfig.fixedShutters[i]; }
+             const newSlidingHandles = Array(numSideShutters).fill(null);
+             for(let i=0; i < Math.min(sideConfig.slidingHandles.length, newSlidingHandles.length); i++) { newSlidingHandles[i] = sideConfig.slidingHandles[i]; }
+             dispatch({ type: 'SET_SIDE_CONFIG', payload: { side, config: { fixedShutters: newFixedShutters, slidingHandles: newSlidingHandles } } });
+        }
+    };
+    if (windowType === WindowType.CORNER) {
+        updateSideShutters('left');
+        updateSideShutters('right');
+    } else if (windowType === WindowType.SLIDING) {
+        if (windowConfigState.fixedShutters.length !== numShutters || windowConfigState.slidingHandles.length !== numShutters) {
+            const newFixedShutters = Array(numShutters).fill(false);
+            for(let i=0; i < Math.min(windowConfigState.fixedShutters.length, newFixedShutters.length); i++) { newFixedShutters[i] = windowConfigState.fixedShutters[i]; }
+            const newSlidingHandles = Array(numShutters).fill(null);
+            for(let i=0; i < Math.min(windowConfigState.slidingHandles.length, newSlidingHandles.length); i++) { newSlidingHandles[i] = windowConfigState.slidingHandles[i]; }
+            dispatch({ type: 'SET_FIELD', field: 'fixedShutters', payload: newFixedShutters });
+            dispatch({ type: 'SET_FIELD', field: 'slidingHandles', payload: newSlidingHandles });
+        }
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [verticalDividers, horizontalDividers]);
+  }, [windowConfigState, windowType, numShutters]);
+  
+  useEffect(() => {
+    const updateSideGrid = (side: 'left' | 'right') => {
+      const sideConfig = windowConfigState[side === 'left' ? 'leftConfig' : 'rightConfig'];
+      if (!sideConfig || ![WindowType.CASEMENT, WindowType.VENTILATOR].includes(sideConfig.windowType)) return;
+
+      const gridRows = sideConfig.horizontalDividers.length + 1;
+      const gridCols = sideConfig.verticalDividers.length + 1;
+      const newGrid: VentilatorCell[][] = Array.from({ length: gridRows }, () => 
+          Array.from({ length: gridCols }, () => ({ type: 'glass' }))
+      );
+      for (let r = 0; r < Math.min(gridRows, sideConfig.ventilatorGrid.length); r++) {
+          for (let c = 0; c < Math.min(gridCols, sideConfig.ventilatorGrid[r]?.length || 0); c++) {
+              newGrid[r][c] = sideConfig.ventilatorGrid[r][c];
+          }
+      }
+      dispatch({ type: 'SET_SIDE_CONFIG', payload: { side, config: { ventilatorGrid: newGrid } } });
+    };
+
+    if (windowType === WindowType.CORNER) {
+        updateSideGrid('left');
+        updateSideGrid('right');
+    } else if ([WindowType.CASEMENT, WindowType.VENTILATOR].includes(windowType)) {
+        const gridRows = windowConfigState.horizontalDividers.length + 1;
+        const gridCols = windowConfigState.verticalDividers.length + 1;
+        const newGrid: VentilatorCell[][] = Array.from({ length: gridRows }, () => Array.from({ length: gridCols }, () => ({ type: 'glass' })));
+        for (let r = 0; r < Math.min(gridRows, windowConfigState.ventilatorGrid.length); r++) {
+            for (let c = 0; c < Math.min(gridCols, windowConfigState.ventilatorGrid[r]?.length || 0); c++) {
+                newGrid[r][c] = windowConfigState.ventilatorGrid[r][c];
+            }
+        }
+        dispatch({ type: 'SET_FIELD', field: 'ventilatorGrid', payload: newGrid });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowConfigState.leftConfig?.verticalDividers, windowConfigState.leftConfig?.horizontalDividers, windowConfigState.rightConfig?.verticalDividers, windowConfigState.rightConfig?.horizontalDividers, windowConfigState.verticalDividers, windowConfigState.horizontalDividers, windowType]);
 
   const addFixedPanel = useCallback((position: FixedPanelPosition) => dispatch({ type: 'ADD_FIXED_PANEL', payload: position }), []);
   const removeFixedPanel = useCallback((id: string) => dispatch({ type: 'REMOVE_FIXED_PANEL', payload: id }), []);
@@ -576,69 +659,62 @@ const App: React.FC = () => {
     const selected = availableSeries.find(s => s.id === id);
     if(selected) {
       setSeries(selected);
-       const activeType = windowType === WindowType.CORNER ? cornerSubType : windowType;
-      if (selected.type !== activeType) {
+       const activeConfig = windowType === WindowType.CORNER ? (activeCornerSide === 'left' ? windowConfig.leftConfig : windowConfig.rightConfig) : windowConfig;
+      if (selected.type !== activeConfig?.windowType) {
         if(windowType === WindowType.CORNER) {
-            dispatch({ type: 'SET_FIELD', field: 'cornerSubType', payload: selected.type });
+            dispatch({ type: 'SET_SIDE_CONFIG', payload: { side: activeCornerSide, config: { windowType: selected.type as CornerSideConfig['windowType'] } } });
         } else {
             dispatch({ type: 'SET_WINDOW_TYPE', payload: selected.type });
         }
       }
     }
-  }, [availableSeries, windowType, cornerSubType]);
+  }, [availableSeries, windowType, windowConfig, activeCornerSide]);
   
   const handleSeriesSave = useCallback((name: string) => {
     if (name && name.trim() !== '') {
-       const activeType = windowType === WindowType.CORNER ? cornerSubType : windowType;
+       const activeConfig = windowType === WindowType.CORNER ? (activeCornerSide === 'left' ? windowConfig.leftConfig : windowConfig.rightConfig) : windowConfig;
       const newSeries: ProfileSeries = {
         ...series,
         id: uuidv4(),
         name: name.trim(),
-        type: activeType as WindowType,
+        type: activeConfig?.windowType as WindowType,
       };
       setSavedSeries(prev => [...prev, newSeries]);
       setSeries(newSeries);
     }
-  }, [series, windowType, cornerSubType]);
+  }, [series, windowType, windowConfig, activeCornerSide]);
   
   const handleSeriesDelete = useCallback((id: string) => {
     if (id.includes('-default')) { return; }
-     const activeType = windowType === WindowType.CORNER ? cornerSubType : windowType;
+     const activeConfig = windowType === WindowType.CORNER ? (activeCornerSide === 'left' ? windowConfig.leftConfig : windowConfig.rightConfig) : windowConfig;
     if (window.confirm("Are you sure you want to delete this profile?")) {
       setSavedSeries(prev => prev.filter(s => s.id !== id));
       if (series.id === id) {
-        setSeries(SERIES_MAP_MEMO[activeType as WindowType]);
+        setSeries(SERIES_MAP_MEMO[activeConfig?.windowType as WindowType]);
       }
     }
-  }, [series.id, windowType, cornerSubType, SERIES_MAP_MEMO]);
+  }, [series.id, windowType, windowConfig, activeCornerSide, SERIES_MAP_MEMO]);
   
   const handleHardwareChange = useCallback((id: string, field: keyof HardwareItem, value: string | number) => {
-    setSeries(prevSeries => ({
-        ...prevSeries,
-        hardwareItems: prevSeries.hardwareItems.map(item => item.id === id ? { ...item, [field]: value } : item)
-    }));
+    setSeries(prevSeries => ({ ...prevSeries, hardwareItems: prevSeries.hardwareItems.map(item => item.id === id ? { ...item, [field]: value } : item) }));
   }, []);
   
   const addHardwareItem = useCallback(() => {
-    setSeries(prevSeries => ({
-        ...prevSeries,
-        hardwareItems: [...prevSeries.hardwareItems, { id: uuidv4(), name: 'New Hardware', qtyPerShutter: 1, rate: 0, unit: 'per_shutter_or_door' }]
-    }));
+    setSeries(prevSeries => ({ ...prevSeries, hardwareItems: [...prevSeries.hardwareItems, { id: uuidv4(), name: 'New Hardware', qtyPerShutter: 1, rate: 0, unit: 'per_shutter_or_door' }] }));
   }, []);
   
   const removeHardwareItem = useCallback((id: string) => {
-    setSeries(prevSeries => ({
-        ...prevSeries,
-        hardwareItems: prevSeries.hardwareItems.filter(item => item.id !== id)
-    }));
+    setSeries(prevSeries => ({ ...prevSeries, hardwareItems: prevSeries.hardwareItems.filter(item => item.id !== id) }));
   }, []);
 
-  const toggleDoorPosition = useCallback((row: number, col: number) => dispatch({ type: 'TOGGLE_DOOR_POSITION', payload: { row, col } }), []);
-  const handleVentilatorCellClick = useCallback((row: number, col: number) => dispatch({ type: 'HANDLE_VENTILATOR_CELL_CLICK', payload: { row, col } }), []);
-  const handleSetGridSize = useCallback((rows: number, cols: number) => dispatch({ type: 'SET_GRID_SIZE', payload: { rows, cols } }), []);
-  const handleRemoveVerticalDivider = useCallback((index: number) => dispatch({ type: 'REMOVE_VERTICAL_DIVIDER', payload: index }), []);
-  const handleRemoveHorizontalDivider = useCallback((index: number) => dispatch({ type: 'REMOVE_HORIZONTAL_DIVIDER', payload: index }), []);
-  const handleUpdateHandle = useCallback((panelId: string, newConfig: HandleConfig | null) => dispatch({ type: 'UPDATE_HANDLE', payload: { panelId, newConfig } }), []);
+  const getSide = useCallback(() => windowType === WindowType.CORNER ? activeCornerSide : null, [windowType, activeCornerSide]);
+
+  const toggleDoorPosition = useCallback((row: number, col: number) => dispatch({ type: 'TOGGLE_DOOR_POSITION', payload: { row, col, side: getSide() } }), [getSide]);
+  const handleVentilatorCellClick = useCallback((row: number, col: number) => dispatch({ type: 'HANDLE_VENTILATOR_CELL_CLICK', payload: { row, col, side: getSide() } }), [getSide]);
+  const handleSetGridSize = useCallback((rows: number, cols: number) => dispatch({ type: 'SET_GRID_SIZE', payload: { rows, cols, side: getSide() } }), [getSide]);
+  const handleRemoveVerticalDivider = useCallback((index: number) => dispatch({ type: 'REMOVE_VERTICAL_DIVIDER', payload: { index, side: getSide() } }), [getSide]);
+  const handleRemoveHorizontalDivider = useCallback((index: number) => dispatch({ type: 'REMOVE_HORIZONTAL_DIVIDER', payload: { index, side: getSide() } }), [getSide]);
+  const handleUpdateHandle = useCallback((panelId: string, newConfig: HandleConfig | null) => dispatch({ type: 'UPDATE_HANDLE', payload: { panelId, newConfig, side: getSide() } }), [getSide]);
   const onCyclePartitionPanelType = useCallback((index: number) => dispatch({ type: 'CYCLE_PARTITION_PANEL_TYPE', payload: index }), []);
   const onSetPartitionHasTopChannel = useCallback((hasChannel: boolean) => dispatch({ type: 'SET_PARTITION_HAS_TOP_CHANNEL', payload: hasChannel }), []);
   const onCyclePartitionPanelFraming = useCallback((index: number) => dispatch({ type: 'CYCLE_PARTITION_PANEL_FRAMING', payload: index }), []);
@@ -649,29 +725,28 @@ const App: React.FC = () => {
   }, []);
 
   const hardwareCostPerWindow = useMemo(() => {
-    let numDoorsOrShutters = 0;
-    const typeForCost = windowType === WindowType.CORNER ? cornerSubType : windowType;
-    
-    switch(typeForCost) {
-        case WindowType.SLIDING: numDoorsOrShutters = numShutters; break;
-        case WindowType.CASEMENT: numDoorsOrShutters = doorPositions.length; break;
-        case WindowType.VENTILATOR: 
-          numDoorsOrShutters = ventilatorGrid.flat().filter(cell => cell.type === 'door' || cell.type === 'louvers' || cell.type === 'exhaust_fan').length; 
-          break;
-        case WindowType.GLASS_PARTITION: 
-            numDoorsOrShutters = partitionPanels.types.filter(t => t.type !== 'fixed').length;
-            break;
-    }
-    
-    const singleWindowCost = series.hardwareItems.reduce((total, item) => {
-        const qty = Number(item.qtyPerShutter) || 0;
-        const itemRate = Number(item.rate) || 0;
-        const count = item.unit === 'per_shutter_or_door' ? numDoorsOrShutters : 1;
-        return total + (qty * itemRate * count);
-    }, 0);
+    const calculateSideCost = (config: WindowConfig | CornerSideConfig | undefined) => {
+        if (!config) return 0;
+        let numDoorsOrShutters = 0;
+        switch(config.windowType) {
+            case WindowType.SLIDING: numDoorsOrShutters = config.shutterConfig === '2G' ? 2 : config.shutterConfig === '4G' ? 4 : 3; break;
+            case WindowType.CASEMENT: numDoorsOrShutters = config.doorPositions.length; break;
+            case WindowType.VENTILATOR: numDoorsOrShutters = config.ventilatorGrid.flat().filter(cell => cell.type === 'door' || cell.type === 'louvers' || cell.type === 'exhaust_fan').length; break;
+            case WindowType.GLASS_PARTITION: numDoorsOrShutters = (config as WindowConfig).partitionPanels.types.filter(t => t.type !== 'fixed').length; break;
+        }
+        return series.hardwareItems.reduce((total, item) => {
+            const qty = Number(item.qtyPerShutter) || 0;
+            const itemRate = Number(item.rate) || 0;
+            const count = item.unit === 'per_shutter_or_door' ? numDoorsOrShutters : 1;
+            return total + (qty * itemRate * count);
+        }, 0);
+    };
 
-    return windowType === WindowType.CORNER ? singleWindowCost * 2 : singleWindowCost;
-  }, [series.hardwareItems, numShutters, doorPositions.length, ventilatorGrid, windowType, partitionPanels, cornerSubType]);
+    if (windowType === WindowType.CORNER) {
+        return calculateSideCost(windowConfig.leftConfig) + calculateSideCost(windowConfig.rightConfig);
+    }
+    return calculateSideCost(windowConfig);
+  }, [series.hardwareItems, windowConfig, windowType]);
 
   const handleSaveToQuotation = useCallback(() => {
     const colorName = savedColors.find(c => c.hex === windowConfig.profileColor)?.name;
@@ -690,33 +765,30 @@ const App: React.FC = () => {
     alert(`"${newItem.title}" saved to quotation! You now have ${quotationItems.length + 1} item(s).`);
   }, [windowTitle, windowConfig, quantity, areaType, rate, hardwareCostPerWindow, series.hardwareItems, savedColors, quotationItems.length]);
 
-  const handleRemoveQuotationItem = useCallback((id: string) => {
-      setQuotationItems(prev => prev.filter(item => item.id !== id));
-  }, []);
+  const handleRemoveQuotationItem = useCallback((id: string) => { setQuotationItems(prev => prev.filter(item => item.id !== id)); }, []);
   
   const handleInstallClick = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
-    if (outcome === 'accepted') {
-      console.log('User accepted the A2HS prompt');
-    } else {
-      console.log('User dismissed the A2HS prompt');
-    }
+    if (outcome === 'accepted') { console.log('User accepted the A2HS prompt'); } 
+    else { console.log('User dismissed the A2HS prompt'); }
     setInstallPrompt(null);
   };
   
   const setConfig = useCallback((field: keyof WindowConfig, value: any) => {
-    if (field === 'series') {
-        setSeries(value);
-    } else {
-        dispatch({ type: 'SET_FIELD', field: field as keyof ConfigState, payload: value });
-    }
+    if (field === 'series') { setSeries(value); } 
+    else { dispatch({ type: 'SET_FIELD', field: field as keyof ConfigState, payload: value }); }
   }, []);
+
+  const setSideConfig = useCallback((config: Partial<CornerSideConfig>) => {
+    dispatch({ type: 'SET_SIDE_CONFIG', payload: { side: activeCornerSide, config } });
+  }, [activeCornerSide]);
   
   const commonControlProps = useMemo(() => ({
     config: windowConfig,
     setConfig,
+    setSideConfig,
     setGridSize: handleSetGridSize,
     availableSeries: availableSeries,
     onSeriesSelect: handleSeriesSelect,
@@ -737,20 +809,13 @@ const App: React.FC = () => {
     onSetPartitionHasTopChannel,
     onCyclePartitionPanelFraming,
     onResetDesign: handleResetDesign,
-  }), [windowConfig, setConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleResetDesign]);
+    activeCornerSide,
+    setActiveCornerSide
+  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleResetDesign, activeCornerSide]);
 
   return (
     <>
-      <QuotationListModal 
-        isOpen={isQuotationModalOpen}
-        onClose={() => setIsQuotationModalOpen(false)}
-        items={quotationItems}
-        setItems={setQuotationItems}
-        onRemove={handleRemoveQuotationItem}
-        settings={quotationSettings}
-        setSettings={setQuotationSettings}
-        onTogglePreview={setIsPreviewing}
-      />
+      <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} />
       <div className={`flex flex-col h-screen font-sans bg-slate-900 overflow-hidden ${isPreviewing ? 'hidden' : ''}`}>
         <header className="bg-slate-800 p-3 flex items-center shadow-md z-40 no-print">
             <Logo className="h-10 w-10 mr-4 flex-shrink-0" />
@@ -758,100 +823,35 @@ const App: React.FC = () => {
                 <h1 className="text-2xl font-bold text-white tracking-wider">WoodenMax</h1>
                 <p className="text-sm text-indigo-300">Reshaping spaces</p>
             </div>
-             {installPrompt && (
-                <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse">
-                    <DownloadIcon className="w-5 h-5 mr-2" /> Add to Home Screen
-                </Button>
-            )}
+             {installPrompt && ( <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse"> <DownloadIcon className="w-5 h-5 mr-2" /> Add to Home Screen </Button> )}
         </header>
         <div className="flex flex-row flex-grow min-h-0">
-            {/* Desktop Side Panel */}
             <div ref={panelRef} className={`hidden lg:block flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isPanelOpen ? 'w-96' : 'w-0'}`}>
                 <div className={`h-full overflow-hidden ${isPanelOpen ? 'w-96' : 'w-0'}`}>
                     <ControlsPanel {...commonControlProps} onClose={() => setIsPanelOpen(false)} />
                 </div>
             </div>
-
             <div className="relative flex-1 flex flex-col min-w-0">
-                {!isPanelOpen && (
-                  <button 
-                    onClick={() => setIsPanelOpen(true)}
-                    className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex"
-                    aria-label="Expand panel"
-                  >
-                    <ChevronLeftIcon className="w-5 h-5 rotate-180" />
-                  </button>
-                )}
+                {!isPanelOpen && ( <button onClick={() => setIsPanelOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex" aria-label="Expand panel"> <ChevronLeftIcon className="w-5 h-5 rotate-180" /> </button> )}
               <div className="flex-grow relative">
-                 <WindowCanvas 
-                    config={windowConfig} 
-                    onRemoveVerticalDivider={handleRemoveVerticalDivider}
-                    onRemoveHorizontalDivider={handleRemoveHorizontalDivider}
-                  />
+                 <WindowCanvas config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} />
               </div>
               <div className="flex-shrink-0 no-print hidden lg:block">
-                  <QuotationPanel 
-                      width={Number(windowConfig.width) || 0}
-                      height={Number(windowConfig.height) || 0}
-                      quantity={quantity}
-                      setQuantity={setQuantity}
-                      areaType={areaType}
-                      setAreaType={setAreaType}
-                      rate={rate}
-                      setRate={setRate}
-                      onSave={handleSaveToQuotation}
-                      windowTitle={windowTitle}
-                      setWindowTitle={setWindowTitle}
-                      hardwareCostPerWindow={hardwareCostPerWindow}
-                      quotationItemCount={quotationItems.length}
-                      onViewQuotation={() => setIsQuotationModalOpen(true)}
-                  />
+                  <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={() => setIsQuotationModalOpen(true)} />
               </div>
-
-              {/* Mobile Bottom Action Bar */}
               <div className="lg:hidden p-2 bg-slate-800 border-t-2 border-slate-700 grid grid-cols-2 gap-2 no-print">
-                  <Button onClick={() => setIsPanelOpen(true)} variant="secondary" className="h-12">
-                      <AdjustmentsIcon className="w-5 h-5 mr-2" /> Configure
-                  </Button>
-                  <Button onClick={() => setIsMobileQuoteOpen(true)} variant="secondary" className="h-12">
-                       <ListBulletIcon className="w-5 h-5 mr-2" /> Quotation
-                  </Button>
+                  <Button onClick={() => setIsPanelOpen(true)} variant="secondary" className="h-12"> <AdjustmentsIcon className="w-5 h-5 mr-2" /> Configure </Button>
+                  <Button onClick={() => setIsMobileQuoteOpen(true)} variant="secondary" className="h-12"> <ListBulletIcon className="w-5 h-5 mr-2" /> Quotation </Button>
               </div>
             </div>
         </div>
-
-        {/* Mobile Controls Panel (Bottom Sheet) */}
-        <div 
-          className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${isPanelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-          onClick={() => setIsPanelOpen(false)}
-        ></div>
+        <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${isPanelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsPanelOpen(false)}></div>
         <div className={`lg:hidden fixed bottom-0 left-0 right-0 max-h-[85vh] flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${isPanelOpen ? 'translate-y-0' : 'translate-y-full'}`}>
            <ControlsPanel {...commonControlProps} onClose={() => setIsPanelOpen(false)} />
         </div>
-
-         {/* Mobile Quotation Panel (Bottom Sheet) */}
-        <div 
-          className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${isMobileQuoteOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-          onClick={() => setIsMobileQuoteOpen(false)}
-        ></div>
+        <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${isMobileQuoteOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsMobileQuoteOpen(false)}></div>
         <div className={`lg:hidden fixed bottom-0 left-0 right-0 flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${isMobileQuoteOpen ? 'translate-y-0' : 'translate-y-full'}`}>
-            <QuotationPanel 
-                width={Number(windowConfig.width) || 0}
-                height={Number(windowConfig.height) || 0}
-                quantity={quantity}
-                setQuantity={setQuantity}
-                areaType={areaType}
-                setAreaType={setAreaType}
-                rate={rate}
-                setRate={setRate}
-                onSave={handleSaveToQuotation}
-                windowTitle={windowTitle}
-                setWindowTitle={setWindowTitle}
-                hardwareCostPerWindow={hardwareCostPerWindow}
-                quotationItemCount={quotationItems.length}
-                onViewQuotation={() => setIsQuotationModalOpen(true)}
-                onClose={() => setIsMobileQuoteOpen(false)}
-            />
+            <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={() => setIsQuotationModalOpen(true)} onClose={() => setIsMobileQuoteOpen(false)} />
         </div>
       </div>
     </>
