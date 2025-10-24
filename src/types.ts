@@ -130,17 +130,16 @@ export interface PartitionPanelConfig {
     framing?: 'none' | 'full';
 }
 
-export interface CornerSideConfig extends Pick<WindowConfig, 
-  'trackType' | 
-  'shutterConfig' | 
-  'fixedShutters' |
-  'slidingHandles' |
-  'verticalDividers' |
-  'horizontalDividers' |
-  'doorPositions' |
-  'ventilatorGrid'
-> {
+export interface CornerSideConfig {
   windowType: WindowType.SLIDING | WindowType.CASEMENT | WindowType.VENTILATOR;
+  trackType: TrackType;
+  shutterConfig: ShutterConfigType;
+  fixedShutters: boolean[];
+  slidingHandles: (HandleConfig | null)[];
+  verticalDividers: number[];
+  horizontalDividers: number[];
+  doorPositions: { row: number; col: number; handle?: HandleConfig }[];
+  ventilatorGrid: VentilatorCell[][];
 }
 
 
