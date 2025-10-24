@@ -727,18 +727,33 @@ const App: React.FC = () => {
   const hardwareCostPerWindow = useMemo(() => {
     const calculateSideCost = (config: WindowConfig | CornerSideConfig | undefined) => {
         if (!config) return 0;
-        let numDoorsOrShutters = 0;
-        switch(config.windowType) {
-            case WindowType.SLIDING: numDoorsOrShutters = config.shutterConfig === '2G' ? 2 : config.shutterConfig === '4G' ? 4 : 3; break;
-            case WindowType.CASEMENT: numDoorsOrShutters = config.doorPositions.length; break;
-            case WindowType.VENTILATOR: numDoorsOrShutters = config.ventilatorGrid.flat().filter(cell => cell.type === 'door' || cell.type === 'louvers' || cell.type === 'exhaust_fan').length; break;
-            case WindowType.GLASS_PARTITION: numDoorsOrShutters = (config as WindowConfig).partitionPanels.types.filter(t => t.type !== 'fixed').length; break;
-        }
+        
         return series.hardwareItems.reduce((total, item) => {
             const qty = Number(item.qtyPerShutter) || 0;
             const itemRate = Number(item.rate) || 0;
-            const count = item.unit === 'per_shutter_or_door' ? numDoorsOrShutters : 1;
-            return total + (qty * itemRate * count);
+            let panelCount = 0;
+
+            if (item.unit === 'per_window') {
+                panelCount = 1;
+            } else if (item.unit === 'per_shutter_or_door') {
+                if (config.windowType === WindowType.VENTILATOR) {
+                    const doorCells = config.ventilatorGrid.flat().filter(c => c.type === 'door').length;
+                    const louverCells = config.ventilatorGrid.flat().filter(c => c.type === 'louvers').length;
+                    const name = item.name.toLowerCase();
+                    if (name.includes('louver')) {
+                        panelCount = louverCells;
+                    } else { // Hinge, lock, handle, etc., are for doors
+                        panelCount = doorCells;
+                    }
+                } else {
+                     switch(config.windowType) {
+                        case WindowType.SLIDING: panelCount = config.shutterConfig === '2G' ? 2 : config.shutterConfig === '4G' ? 4 : 3; break;
+                        case WindowType.CASEMENT: panelCount = config.doorPositions.length; break;
+                        case WindowType.GLASS_PARTITION: panelCount = (config as WindowConfig).partitionPanels.types.filter(t => t.type !== 'fixed').length; break;
+                    }
+                }
+            }
+            return total + (qty * itemRate * panelCount);
         }, 0);
     };
 

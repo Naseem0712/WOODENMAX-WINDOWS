@@ -180,17 +180,33 @@ export function generateBillOfMaterials(items: QuotationItem[]): BOM {
         }
         
         // Calculate and add hardware for all quantities
-        let numDoorsOrShutters = 0;
-        switch(config.windowType) {
-            case WindowType.SLIDING: numDoorsOrShutters = config.shutterConfig === '2G' ? 2 : config.shutterConfig === '4G' ? 4 : 3; break;
-            case WindowType.CASEMENT: numDoorsOrShutters = config.doorPositions.length; break;
-            case WindowType.VENTILATOR: numDoorsOrShutters = config.ventilatorGrid.flat().filter(cell => cell.type === 'door' || cell.type === 'louvers').length; break;
-            case WindowType.GLASS_PARTITION: numDoorsOrShutters = config.partitionPanels.types.filter(t => t.type !== 'fixed').length; break;
-        }
+        for (const hw of series.hardwareItems) {
+            const qtyPerUnit = Number(hw.qtyPerShutter) || 0;
+            let unitsPerWindow = 0;
 
-        for(const hw of series.hardwareItems) {
-            const count = hw.unit === 'per_shutter_or_door' ? numDoorsOrShutters : 1;
-            const totalQty = (Number(hw.qtyPerShutter) || 0) * count * quantity;
+            if (hw.unit === 'per_window') {
+                unitsPerWindow = 1;
+            } else if (hw.unit === 'per_shutter_or_door') {
+                if (config.windowType === WindowType.VENTILATOR) {
+                    const doorCells = config.ventilatorGrid.flat().filter(c => c.type === 'door').length;
+                    const louverCells = config.ventilatorGrid.flat().filter(c => c.type === 'louvers').length;
+                    const name = hw.name.toLowerCase();
+                    if (name.includes('louver')) {
+                        unitsPerWindow = louverCells;
+                    } else {
+                        unitsPerWindow = doorCells;
+                    }
+                } else {
+                    switch(config.windowType) {
+                        case WindowType.SLIDING: unitsPerWindow = config.shutterConfig === '2G' ? 2 : config.shutterConfig === '4G' ? 4 : 3; break;
+                        case WindowType.CASEMENT: unitsPerWindow = config.doorPositions.length; break;
+                        case WindowType.GLASS_PARTITION: unitsPerWindow = config.partitionPanels.types.filter(t => t.type !== 'fixed').length; break;
+                    }
+                }
+            }
+
+            const totalQty = qtyPerUnit * unitsPerWindow * quantity;
+
             if (totalQty > 0) {
                 seriesData.hardware.set(hw.name, (seriesData.hardware.get(hw.name) || 0) + totalQty);
             }
