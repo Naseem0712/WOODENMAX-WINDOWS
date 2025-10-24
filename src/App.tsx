@@ -430,13 +430,15 @@ const getInitialConfig = (): ConfigState => {
   return initialConfig;
 };
 
+type MobilePanelState = 'none' | 'configure' | 'quotation';
+
 const App: React.FC = () => {
   
   const [windowConfigState, dispatch] = useReducer(configReducer, getInitialConfig());
   const { windowType } = windowConfigState;
 
-  const [isPanelOpen, setIsPanelOpen] = useState(window.innerWidth >= 1024);
-  const [isMobileQuoteOpen, setIsMobileQuoteOpen] = useState(false);
+  const [isDesktopPanelOpen, setIsDesktopPanelOpen] = useState(window.innerWidth >= 1024);
+  const [activeMobilePanel, setActiveMobilePanel] = useState<MobilePanelState>('none');
   const [activeCornerSide, setActiveCornerSide] = useState<'left' | 'right'>('left');
   
   const [series, setSeries] = useState<ProfileSeries>(() => {
@@ -866,15 +868,9 @@ const App: React.FC = () => {
     setActiveCornerSide
   }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleResetDesign, activeCornerSide]);
 
-  const handleOpenConfigure = () => {
-    setIsMobileQuoteOpen(false);
-    setIsPanelOpen(true);
-  }
-
-  const handleOpenQuote = () => {
-    setIsPanelOpen(false);
-    setIsMobileQuoteOpen(true);
-  }
+  const handleOpenConfigure = () => setActiveMobilePanel('configure');
+  const handleOpenQuote = () => setActiveMobilePanel('quotation');
+  const handleCloseMobilePanels = () => setActiveMobilePanel('none');
 
   return (
     <>
@@ -895,13 +891,13 @@ const App: React.FC = () => {
             </div>
         </header>
         <div className="flex flex-row flex-grow min-h-0">
-            <div ref={panelRef} className={`hidden lg:block flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isPanelOpen ? 'w-96' : 'w-0'}`}>
-                <div className={`h-full overflow-hidden ${isPanelOpen ? 'w-96' : 'w-0'}`}>
-                    <ControlsPanel {...commonControlProps} onClose={() => setIsPanelOpen(false)} />
+            <div ref={panelRef} className={`hidden lg:block flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
+                <div className={`h-full overflow-hidden ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
+                    <ControlsPanel {...commonControlProps} onClose={() => setIsDesktopPanelOpen(false)} />
                 </div>
             </div>
             <div className="relative flex-1 flex flex-col min-w-0">
-                {!isPanelOpen && ( <button onClick={() => setIsPanelOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex" aria-label="Expand panel"> <ChevronLeftIcon className="w-5 h-5 rotate-180" /> </button> )}
+                {!isDesktopPanelOpen && ( <button onClick={() => setIsDesktopPanelOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex" aria-label="Expand panel"> <ChevronLeftIcon className="w-5 h-5 rotate-180" /> </button> )}
               <div className="flex-grow relative">
                  <WindowCanvas config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} />
               </div>
@@ -914,13 +910,16 @@ const App: React.FC = () => {
               </div>
             </div>
         </div>
-        <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${isPanelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsPanelOpen(false)}></div>
-        <div className={`lg:hidden fixed bottom-0 left-0 right-0 max-h-[85vh] flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${isPanelOpen ? 'translate-y-0' : 'translate-y-full'}`}>
-           <ControlsPanel {...commonControlProps} onClose={() => setIsPanelOpen(false)} />
+        {/* Mobile Configure Panel */}
+        <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${activeMobilePanel === 'configure' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={handleCloseMobilePanels}></div>
+        <div className={`lg:hidden fixed bottom-0 left-0 right-0 max-h-[85vh] flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'configure' ? 'translate-y-0' : 'translate-y-full'}`}>
+           <ControlsPanel {...commonControlProps} onClose={handleCloseMobilePanels} />
         </div>
-        <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${isMobileQuoteOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsMobileQuoteOpen(false)}></div>
-        <div className={`lg:hidden fixed bottom-0 left-0 right-0 flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${isMobileQuoteOpen ? 'translate-y-0' : 'translate-y-full'}`}>
-            <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onBatchAdd={() => setIsBatchAddModalOpen(true)} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={() => setIsQuotationModalOpen(true)} onClose={() => setIsMobileQuoteOpen(false)} />
+        
+        {/* Mobile Quotation Panel */}
+        <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${activeMobilePanel === 'quotation' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={handleCloseMobilePanels}></div>
+        <div className={`lg:hidden fixed bottom-0 left-0 right-0 flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'quotation' ? 'translate-y-0' : 'translate-y-full'}`}>
+            <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onBatchAdd={() => setIsBatchAddModalOpen(true)} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={() => setIsQuotationModalOpen(true)} onClose={handleCloseMobilePanels} />
         </div>
       </div>
     </>

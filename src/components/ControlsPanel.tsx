@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType } from '../types';
@@ -267,7 +268,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
               <div className="mt-4">
                   <label className="block text-sm font-medium text-slate-300 mb-2">Panel Configuration (Click to toggle)</label>
                   <p className="text-xs text-slate-400 mb-2">You can also click grid lines on the canvas to merge panels.</p>
-                  <div className="bg-slate-900 p-2 rounded-md">
+                  <div className="bg-slate-900 p-2 rounded-md max-h-64 overflow-auto custom-scrollbar">
                     <div className="grid gap-1" style={{gridTemplateRows: `repeat(${gridRows}, 1fr)`, gridTemplateColumns: `repeat(${gridCols}, 1fr)`}}>
                         {Array.from({length: gridRows * gridCols}).map((_, index) => {
                             const row = Math.floor(index / gridCols);

@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -5,9 +6,16 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   unit?: string;
 }
 
-export const Input: React.FC<InputProps> = ({ label, id, unit, className, ...props }) => {
+export const Input: React.FC<InputProps> = ({ label, id, unit, className, onFocus, ...props }) => {
   const baseClasses = "w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm";
   
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.target.select();
+    if (onFocus) {
+      onFocus(e);
+    }
+  };
+
   return (
     <div>
       <label htmlFor={id} className="block text-sm font-medium text-slate-300 mb-1">
@@ -17,6 +25,7 @@ export const Input: React.FC<InputProps> = ({ label, id, unit, className, ...pro
         <input
           id={id}
           className={`${baseClasses} ${className || ''}`}
+          onFocus={handleFocus}
           {...props}
         />
         {unit && (
