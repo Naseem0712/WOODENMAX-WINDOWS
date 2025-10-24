@@ -1,3 +1,4 @@
+
 export enum WindowType {
   SLIDING = 'sliding',
   CASEMENT = 'casement',
@@ -99,7 +100,8 @@ export enum GlassType {
   TINTED_BLUE = 'tinted-blue',
   CLEAR_SAPPHIRE = 'clear-sapphire',
   BROWN_TINTED = 'brown-tinted',
-  BLACK_TINTED = 'black-tinded',
+  // FIX: Corrected typo from 'black-tinded' to 'black-tinted'.
+  BLACK_TINTED = 'black-tinted',
 }
 
 export enum AreaType {

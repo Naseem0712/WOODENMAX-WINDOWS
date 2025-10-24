@@ -1,6 +1,8 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+// FIX: Moved GlassType to a value import as it is used as a value (enum members are accessed).
 import type { WindowConfig, HandleConfig } from '../types';
-import { FixedPanelPosition, GlassType, ShutterConfigType, WindowType } from '../types';
+import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType } from '../types';
 import { PlusIcon } from './icons/PlusIcon';
 import { MinusIcon } from './icons/MinusIcon';
 import { ArrowsPointingInIcon } from './icons/ArrowsPointingInIcon';
@@ -165,81 +167,33 @@ const SlidingShutter: React.FC<{
     );
 };
 
-export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
-  const { config, onRemoveHorizontalDivider, onRemoveVerticalDivider } = props;
-  const { width, height, series, fixedPanels, glassType, profileColor, windowType } = config;
+const createWindowElements = (
+    config: WindowConfig, 
+    scale: number, 
+    dims: any, 
+    glassStyles: Record<GlassType, React.CSSProperties>,
+    onRemoveHorizontalDivider: (index: number) => void,
+    onRemoveVerticalDivider: (index: number) => void
+) => {
+    const { width, height, series, fixedPanels, glassType, profileColor, windowType } = config;
+    const numHeight = Number(height) || 0;
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [zoom, setZoom] = useState(1);
-  
-  const numWidth = windowType === WindowType.CORNER 
-    ? (Number(config.leftWidth) || 0) + (Number(config.rightWidth) || 0) + 100
-    : Number(width) || 0;
-  const numHeight = Number(height) || 0;
+    const geometry = (() => {
+        const w = Number(width) || 0;
+        const topFix = fixedPanels.find(p => p.position === FixedPanelPosition.TOP);
+        const bottomFix = fixedPanels.find(p => p.position === FixedPanelPosition.BOTTOM);
+        const leftFix = fixedPanels.find(p => p.position === FixedPanelPosition.LEFT);
+        const rightFix = fixedPanels.find(p => p.position === FixedPanelPosition.RIGHT);
 
-  const dims = useMemo(() => ({
-    outerFrame: Number(series.dimensions.outerFrame) || 0,
-    fixedFrame: Number(series.dimensions.fixedFrame) || 0,
-    shutterHandle: Number(series.dimensions.shutterHandle) || 0,
-    shutterInterlock: Number(series.dimensions.shutterInterlock) || 0,
-    shutterTop: Number(series.dimensions.shutterTop) || 0,
-    shutterBottom: Number(series.dimensions.shutterBottom) || 0,
-    shutterMeeting: Number(series.dimensions.shutterMeeting) || 0,
-    casementShutter: Number(series.dimensions.casementShutter) || 0,
-    mullion: Number(series.dimensions.mullion) || 0,
-    louverBlade: Number(series.dimensions.louverBlade) || 0,
-    topTrack: Number(series.dimensions.topTrack) || 0,
-    bottomTrack: Number(series.dimensions.bottomTrack) || 0,
-    glassGridProfile: Number(series.dimensions.glassGridProfile) || 0,
-  }), [series.dimensions]);
+        const frameOffset = (windowType !== WindowType.GLASS_PARTITION) ? dims.outerFrame : 0;
+        const holeX1 = leftFix ? leftFix.size : frameOffset;
+        const holeY1 = topFix ? topFix.size : frameOffset;
+        const holeX2 = rightFix ? w - rightFix.size : w - frameOffset;
+        const holeY2 = bottomFix ? numHeight - bottomFix.size : numHeight - frameOffset;
+        
+        return { topFix, bottomFix, leftFix, rightFix, frameOffset, holeX1, holeY1, holeX2, holeY2 };
+    })();
 
-  useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-        if (e.ctrlKey) {
-            e.preventDefault();
-            setZoom(prev => Math.max(0.2, Math.min(prev - e.deltaY * 0.001, 5)));
-        }
-    };
-    const currentRef = containerRef.current;
-    currentRef?.addEventListener('wheel', handleWheel, { passive: false });
-    return () => currentRef?.removeEventListener('wheel', handleWheel);
-  }, []);
-
-  const scale = useMemo(() => {
-    if (numWidth <= 0 || numHeight <= 0) return 1;
-    const containerWidth = containerRef.current?.clientWidth || window.innerWidth;
-    const containerHeight = containerRef.current?.clientHeight || window.innerHeight;
-    const fitScale = Math.min((containerWidth * 0.9) / numWidth, (containerHeight * 0.9) / numHeight, 10);
-    return fitScale * zoom;
-  }, [numWidth, numHeight, zoom, containerRef.current?.clientWidth, containerRef.current?.clientHeight]);
-
-  const glassStyles = useMemo((): Record<GlassType, React.CSSProperties> => ({
-    [GlassType.CLEAR]: { backgroundColor: 'hsl(190, 80%, 85%)', opacity: 0.7 },
-    [GlassType.FROSTED]: { backgroundColor: 'hsl(200, 100%, 95%)', opacity: 0.9, backdropFilter: 'blur(2px)' },
-    [GlassType.TINTED_BLUE]: { backgroundColor: 'hsl(205, 90%, 60%)', opacity: 0.6 },
-    [GlassType.CLEAR_SAPPHIRE]: { backgroundColor: 'hsl(210, 80%, 70%)', opacity: 0.65 },
-    [GlassType.BROWN_TINTED]: { backgroundColor: 'hsl(30, 30%, 30%)', opacity: 0.6 },
-    [GlassType.BLACK_TINTED]: { backgroundColor: 'hsl(0, 0%, 20%)', opacity: 0.7 },
-  }), []);
-
-  const geometry = useMemo(() => {
-    const w = Number(width) || 0;
-    const topFix = fixedPanels.find(p => p.position === FixedPanelPosition.TOP);
-    const bottomFix = fixedPanels.find(p => p.position === FixedPanelPosition.BOTTOM);
-    const leftFix = fixedPanels.find(p => p.position === FixedPanelPosition.LEFT);
-    const rightFix = fixedPanels.find(p => p.position === FixedPanelPosition.RIGHT);
-
-    const frameOffset = (windowType !== WindowType.GLASS_PARTITION) ? dims.outerFrame : 0;
-    const holeX1 = leftFix ? leftFix.size : frameOffset;
-    const holeY1 = topFix ? topFix.size : frameOffset;
-    const holeX2 = rightFix ? w - rightFix.size : w - frameOffset;
-    const holeY2 = bottomFix ? numHeight - bottomFix.size : numHeight - frameOffset;
-    
-    return { topFix, bottomFix, leftFix, rightFix, frameOffset, holeX1, holeY1, holeX2, holeY2 };
-  }, [fixedPanels, windowType, dims.outerFrame, width, numHeight]);
-
-
-  const renderedElements = useMemo(() => {
     const profileElements: React.ReactNode[] = [];
     const glassElements: React.ReactNode[] = [];
     const handleElements: React.ReactNode[] = [];
@@ -292,7 +246,6 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
 
     const innerContent: React.ReactNode[] = [];
     if (innerAreaWidth > 0 && innerAreaHeight > 0) {
-      // ... All logic for sliding, casement, etc.
        switch (windowType) {
             case WindowType.SLIDING: {
                 const { shutterConfig, fixedShutters, slidingHandles } = config;
@@ -486,8 +439,97 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
         }
     }
 
-    return { profileElements, glassElements, handleElements, innerContent, innerAreaWidth, innerAreaHeight, holeX1, holeY1 };
-  }, [config, dims, scale, geometry, glassStyles, glassType, profileColor, onRemoveHorizontalDivider, onRemoveVerticalDivider, width, numHeight]);
+    return { profileElements, glassElements, handleElements, innerContent, innerAreaWidth, innerAreaHeight, holeX1, holeY1, geometry };
+};
+
+const RenderedWindow: React.FC<{
+    config: WindowConfig;
+    elements: ReturnType<typeof createWindowElements>;
+    scale: number;
+    showLabels?: boolean;
+}> = ({ config, elements, scale, showLabels = true }) => {
+    const { width, height } = config;
+    const numHeight = Number(height) || 0;
+
+    return (
+        <div className="relative shadow-lg" style={{ width: (Number(width) || 0) * scale, height: numHeight * scale }}>
+          {elements.glassElements}
+          {elements.profileElements}
+          
+          {elements.innerAreaWidth > 0 && elements.innerAreaHeight > 0 && (
+            <div className="absolute" style={{ top: elements.holeY1 * scale, left: elements.holeX1 * scale, width: elements.innerAreaWidth * scale, height: elements.innerAreaHeight * scale }}>
+                {elements.innerContent}
+                {elements.handleElements}
+            </div>
+          )}
+          
+          {showLabels && <>
+            <DimensionLabel value={Number(width) || 0} className="-top-8 left-1/2 -translate-x-1/2" />
+            <DimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 -left-16 rotate-[-90deg]" />
+            
+            {elements.geometry.topFix && <DimensionLabel value={elements.geometry.topFix.size} className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 text-cyan-200" style={{top: elements.geometry.topFix.size * scale / 2}}/>}
+            {elements.geometry.leftFix && <DimensionLabel value={elements.geometry.leftFix.size} className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 text-cyan-200" style={{top: (elements.geometry.holeY1 + ((numHeight - elements.geometry.holeY1 - elements.geometry.holeY2)/2)) * scale, left: elements.geometry.leftFix.size * scale / 2}}/>}
+          </>}
+        </div>
+    );
+};
+
+export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
+  const { config, onRemoveHorizontalDivider, onRemoveVerticalDivider } = props;
+  const { width, height, series, profileColor, windowType } = config;
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
+  
+  const numWidth = windowType === WindowType.CORNER 
+    ? (Number(config.leftWidth) || 0) + (Number(config.rightWidth) || 0) + 100
+    : Number(width) || 0;
+  const numHeight = Number(height) || 0;
+
+  const dims = useMemo(() => ({
+    outerFrame: Number(series.dimensions.outerFrame) || 0,
+    fixedFrame: Number(series.dimensions.fixedFrame) || 0,
+    shutterHandle: Number(series.dimensions.shutterHandle) || 0,
+    shutterInterlock: Number(series.dimensions.shutterInterlock) || 0,
+    shutterTop: Number(series.dimensions.shutterTop) || 0,
+    shutterBottom: Number(series.dimensions.shutterBottom) || 0,
+    shutterMeeting: Number(series.dimensions.shutterMeeting) || 0,
+    casementShutter: Number(series.dimensions.casementShutter) || 0,
+    mullion: Number(series.dimensions.mullion) || 0,
+    louverBlade: Number(series.dimensions.louverBlade) || 0,
+    topTrack: Number(series.dimensions.topTrack) || 0,
+    bottomTrack: Number(series.dimensions.bottomTrack) || 0,
+    glassGridProfile: Number(series.dimensions.glassGridProfile) || 0,
+  }), [series.dimensions]);
+
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+        if (e.ctrlKey) {
+            e.preventDefault();
+            setZoom(prev => Math.max(0.2, Math.min(prev - e.deltaY * 0.001, 5)));
+        }
+    };
+    const currentRef = containerRef.current;
+    currentRef?.addEventListener('wheel', handleWheel, { passive: false });
+    return () => currentRef?.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  const scale = useMemo(() => {
+    if (numWidth <= 0 || numHeight <= 0) return 1;
+    const containerWidth = containerRef.current?.clientWidth || window.innerWidth;
+    const containerHeight = containerRef.current?.clientHeight || window.innerHeight;
+    const fitScale = Math.min((containerWidth * 0.9) / numWidth, (containerHeight * 0.9) / numHeight, 10);
+    return fitScale * zoom;
+  }, [numWidth, numHeight, zoom]);
+
+  const glassStyles = useMemo((): Record<GlassType, React.CSSProperties> => ({
+    [GlassType.CLEAR]: { backgroundColor: 'hsl(190, 80%, 85%)', opacity: 0.7 },
+    [GlassType.FROSTED]: { backgroundColor: 'hsl(200, 100%, 95%)', opacity: 0.9, backdropFilter: 'blur(2px)' },
+    [GlassType.TINTED_BLUE]: { backgroundColor: 'hsl(205, 90%, 60%)', opacity: 0.6 },
+    [GlassType.CLEAR_SAPPHIRE]: { backgroundColor: 'hsl(210, 80%, 70%)', opacity: 0.65 },
+    [GlassType.BROWN_TINTED]: { backgroundColor: 'hsl(30, 30%, 30%)', opacity: 0.6 },
+    [GlassType.BLACK_TINTED]: { backgroundColor: 'hsl(0, 0%, 20%)', opacity: 0.7 },
+  }), []);
 
   if (numWidth <= 0 || numHeight <= 0) {
     return (
@@ -497,88 +539,52 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     );
   }
 
-  const renderSingleWindow = (currentWidth: number) => {
-    // This is a simplified render function that reuses some logic.
-    // In a real scenario, this would be a separate component.
-    const tempConfig = { ...config, width: currentWidth, fixedPanels: [] }; // No fixed panels inside a corner piece
-    const { cornerSubType } = config;
-    
-    const w = Number(currentWidth);
-    const h = Number(height);
-    const frameOffset = dims.outerFrame;
-    const innerAreaWidth = w - 2 * frameOffset;
-    const innerAreaHeight = h - 2 * frameOffset;
-
-    const innerContent: React.ReactNode[] = [];
-     // Simplified logic from the main `renderedElements` memo
-    if (cornerSubType === WindowType.SLIDING) {
-        // Sliding logic here...
-    } else if (cornerSubType === WindowType.CASEMENT || cornerSubType === WindowType.VENTILATOR) {
-        // Casement/Ventilator logic here...
-    }
-
-    return (
-        <div className="relative" style={{ width: w * scale, height: h * scale }}>
-            <MiteredFrame width={w} height={h} profileSize={dims.outerFrame} scale={scale} color={profileColor} />
-            <div className="absolute" style={{ top: frameOffset * scale, left: frameOffset * scale, width: innerAreaWidth * scale, height: innerAreaHeight * scale }}>
-                {/* Simplified inner content rendering */}
-            </div>
-             <DimensionLabel value={w} className="-top-8 left-1/2 -translate-x-1/2" />
-        </div>
-    );
-  }
-
   return (
     <div ref={containerRef} className="absolute inset-0 p-6 flex items-center justify-center bg-transparent overflow-auto">
       <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none">
           WoodenMax
       </div>
       
-       {windowType === WindowType.CORNER ? (
-        (() => {
-          const leftW = Number(config.leftWidth) || 0;
-          const rightW = Number(config.rightWidth) || 0;
-          const postW = 100;
-          const totalW = leftW + rightW + postW;
-          const cornerConfigLeft = {...config, width: leftW, fixedPanels: [] };
-          const cornerConfigRight = {...config, width: rightW, fixedPanels: [] };
+       <div style={{ margin: 'auto' }}>
+            {windowType === WindowType.CORNER ? (
+                (() => {
+                    const leftW = Number(config.leftWidth) || 0;
+                    const rightW = Number(config.rightWidth) || 0;
+                    const postW = 100;
+                    const totalW = leftW + rightW + postW;
 
-          return (
-             <div className="relative shadow-lg flex" style={{ width: totalW * scale, height: numHeight * scale, margin: 'auto' }}>
-                <div className="relative flex-shrink-0">
-                  <WindowCanvas config={cornerConfigLeft} onRemoveHorizontalDivider={() => {}} onRemoveVerticalDivider={() => {}} />
-                </div>
-                <div className="relative flex-shrink-0" style={{width: postW * scale, height: numHeight * scale}}>
-                   <ProfilePiece color={profileColor} style={{ left: 0, top: 0, width: '100%', height: '100%' }} />
-                   <DimensionLabel value={postW} className="-top-8 left-1/2 -translate-x-1/2" />
-                </div>
-                 <div className="relative flex-shrink-0">
-                  <WindowCanvas config={cornerConfigRight} onRemoveHorizontalDivider={() => {}} onRemoveVerticalDivider={() => {}} />
-                </div>
-                <DimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 -left-16 rotate-[-90deg]" />
-            </div>
-          )
-        })()
-      ) : (
-        <div className="relative shadow-lg" style={{ width: (Number(width) || 0) * scale, height: numHeight * scale, margin: 'auto' }}>
-          {renderedElements.glassElements}
-          {renderedElements.profileElements}
-          
-          {renderedElements.innerAreaWidth > 0 && renderedElements.innerAreaHeight > 0 && (
-            <div className="absolute" style={{ top: renderedElements.holeY1 * scale, left: renderedElements.holeX1 * scale, width: renderedElements.innerAreaWidth * scale, height: renderedElements.innerAreaHeight * scale }}>
-                {renderedElements.innerContent}
-                {renderedElements.handleElements}
-            </div>
-          )}
-          
-          <DimensionLabel value={Number(width) || 0} className="-top-8 left-1/2 -translate-x-1/2" />
-          <DimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 -left-16 rotate-[-90deg]" />
-          
-          {geometry.topFix && <DimensionLabel value={geometry.topFix.size} className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 text-cyan-200" style={{top: geometry.topFix.size * scale / 2}}/>}
-          {geometry.leftFix && <DimensionLabel value={geometry.leftFix.size} className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 text-cyan-200" style={{top: (geometry.holeY1 + ((numHeight - geometry.holeY1 - geometry.holeY2)/2)) * scale, left: geometry.leftFix.size * scale / 2}}/>}
+                    const cornerConfigLeft: WindowConfig = {...config, width: leftW, windowType: config.cornerSubType as WindowType, fixedPanels: [] };
+                    const cornerConfigRight: WindowConfig = {...config, width: rightW, windowType: config.cornerSubType as WindowType, fixedPanels: [] };
+                    
+                    const leftElements = createWindowElements(cornerConfigLeft, scale, dims, glassStyles, () => {}, () => {});
+                    const rightElements = createWindowElements(cornerConfigRight, scale, dims, glassStyles, () => {}, () => {});
 
+                    return (
+                        <div className="relative shadow-lg flex items-start" style={{ width: totalW * scale, height: numHeight * scale }}>
+                            <div className="relative flex-shrink-0">
+                                <RenderedWindow config={cornerConfigLeft} elements={leftElements} scale={scale} showLabels={false} />
+                                <DimensionLabel value={leftW} className="-top-8 left-1/2 -translate-x-1/2" />
+                            </div>
+                            <div className="relative flex-shrink-0" style={{width: postW * scale, height: numHeight * scale}}>
+                                <ProfilePiece color={profileColor} style={{ left: 0, top: 0, width: '100%', height: '100%' }} />
+                                <DimensionLabel value={postW} className="-top-8 left-1/2 -translate-x-1/2" />
+                            </div>
+                            <div className="relative flex-shrink-0">
+                                <RenderedWindow config={cornerConfigRight} elements={rightElements} scale={scale} showLabels={false} />
+                                <DimensionLabel value={rightW} className="-top-8 left-1/2 -translate-x-1/2" />
+                            </div>
+                            <DimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 -left-16 rotate-[-90deg]" />
+                        </div>
+                    )
+                })()
+            ) : (
+                <RenderedWindow 
+                    config={config} 
+                    elements={createWindowElements(config, scale, dims, glassStyles, onRemoveHorizontalDivider, onRemoveVerticalDivider)} 
+                    scale={scale} 
+                />
+            )}
         </div>
-      )}
       
       <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2 no-print">
          <button onClick={() => setZoom(z => z * 1.2)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><PlusIcon className="w-6 h-6"/></button>
