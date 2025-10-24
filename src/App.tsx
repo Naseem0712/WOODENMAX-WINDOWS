@@ -12,6 +12,9 @@ import { Button } from './components/ui/Button';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import { AdjustmentsIcon } from './components/icons/AdjustmentsIcon';
 import { ListBulletIcon } from './components/icons/ListBulletIcon';
+import { DocumentTextIcon } from './components/icons/DocumentTextIcon';
+import { BatchAddModal, type BatchAddItem } from './components/BatchAddModal';
+import { ContentModal } from './components/ContentModal';
 
 interface BeforeInstallPromptEvent extends Event {
     readonly platforms: Array<string>;
@@ -473,6 +476,9 @@ const App: React.FC = () => {
   const [quotationItems, setQuotationItems] = useState<QuotationItem[]>(() => { try { const s = window.localStorage.getItem('woodenmax-quotation-items'); return s ? JSON.parse(s) : []; } catch { return []; } });
   const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isBatchAddModalOpen, setIsBatchAddModalOpen] = useState(false);
+  const [isContentModalOpen, setIsContentModalOpen] = useState(false);
+
   const [quotationSettings, setQuotationSettings] = useState<QuotationSettings>(() => {
       try {
         const item = window.localStorage.getItem('woodenmax-quotation-settings');
@@ -715,6 +721,7 @@ const App: React.FC = () => {
   const handleRemoveVerticalDivider = useCallback((index: number) => dispatch({ type: 'REMOVE_VERTICAL_DIVIDER', payload: { index, side: getSide() } }), [getSide]);
   const handleRemoveHorizontalDivider = useCallback((index: number) => dispatch({ type: 'REMOVE_HORIZONTAL_DIVIDER', payload: { index, side: getSide() } }), [getSide]);
   const handleUpdateHandle = useCallback((panelId: string, newConfig: HandleConfig | null) => dispatch({ type: 'UPDATE_HANDLE', payload: { panelId, newConfig, side: getSide() } }), [getSide]);
+  const onSetPartitionPanelCount = useCallback((count: number) => dispatch({ type: 'SET_PARTITION_PANEL_COUNT', payload: count }), []);
   const onCyclePartitionPanelType = useCallback((index: number) => dispatch({ type: 'CYCLE_PARTITION_PANEL_TYPE', payload: index }), []);
   const onSetPartitionHasTopChannel = useCallback((hasChannel: boolean) => dispatch({ type: 'SET_PARTITION_HAS_TOP_CHANNEL', payload: hasChannel }), []);
   const onCyclePartitionPanelFraming = useCallback((index: number) => dispatch({ type: 'CYCLE_PARTITION_PANEL_FRAMING', payload: index }), []);
@@ -780,6 +787,36 @@ const App: React.FC = () => {
     alert(`"${newItem.title}" saved to quotation! You now have ${quotationItems.length + 1} item(s).`);
   }, [windowTitle, windowConfig, quantity, areaType, rate, hardwareCostPerWindow, series.hardwareItems, savedColors, quotationItems.length]);
 
+  const handleBatchSave = useCallback((items: BatchAddItem[]) => {
+    const colorName = savedColors.find(c => c.hex === windowConfig.profileColor)?.name;
+    const newQuotationItems: QuotationItem[] = items
+      .filter(item => Number(item.width) > 0 && Number(item.height) > 0)
+      .map(item => {
+        const itemConfig = JSON.parse(JSON.stringify(windowConfig));
+        itemConfig.width = Number(item.width);
+        itemConfig.height = Number(item.height);
+        
+        // Note: hardwareCost is based on the original design.
+        // A more complex implementation could recalculate it per size.
+        return {
+          id: uuidv4(),
+          title: item.title || 'Untitled Window',
+          config: itemConfig,
+          quantity: Number(item.quantity) || 1,
+          areaType,
+          rate: Number(item.rate) || 0,
+          hardwareCost: hardwareCostPerWindow,
+          hardwareItems: JSON.parse(JSON.stringify(series.hardwareItems)),
+          profileColorName: colorName,
+        };
+    });
+
+    setQuotationItems(prev => [...prev, ...newQuotationItems]);
+    setIsBatchAddModalOpen(false);
+    alert(`${newQuotationItems.length} item(s) saved to quotation! You now have ${quotationItems.length + newQuotationItems.length} item(s).`);
+  }, [windowConfig, areaType, hardwareCostPerWindow, series.hardwareItems, savedColors, quotationItems.length]);
+
+
   const handleRemoveQuotationItem = useCallback((id: string) => { setQuotationItems(prev => prev.filter(item => item.id !== id)); }, []);
   
   const handleInstallClick = async () => {
@@ -820,17 +857,21 @@ const App: React.FC = () => {
     savedColors: savedColors,
     setSavedColors: setSavedColors,
     onUpdateHandle: handleUpdateHandle,
+    onSetPartitionPanelCount,
     onCyclePartitionPanelType,
     onSetPartitionHasTopChannel,
     onCyclePartitionPanelFraming,
     onResetDesign: handleResetDesign,
     activeCornerSide,
     setActiveCornerSide
-  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleResetDesign, activeCornerSide]);
+  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleResetDesign, activeCornerSide]);
 
   return (
     <>
       <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} />
+      <BatchAddModal isOpen={isBatchAddModalOpen} onClose={() => setIsBatchAddModalOpen(false)} baseConfig={windowConfig} baseRate={rate} onSave={handleBatchSave} />
+      <ContentModal isOpen={isContentModalOpen} onClose={() => setIsContentModalOpen(false)} />
+      
       <div className={`flex flex-col h-screen font-sans bg-slate-900 overflow-hidden ${isPreviewing ? 'hidden' : ''}`}>
         <header className="bg-slate-800 p-3 flex items-center shadow-md z-40 no-print">
             <Logo className="h-10 w-10 mr-4 flex-shrink-0" />
@@ -838,7 +879,10 @@ const App: React.FC = () => {
                 <h1 className="text-2xl font-bold text-white tracking-wider">WoodenMax</h1>
                 <p className="text-sm text-indigo-300">Reshaping spaces</p>
             </div>
-             {installPrompt && ( <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse"> <DownloadIcon className="w-5 h-5 mr-2" /> Add to Home Screen </Button> )}
+            <div className='flex items-center gap-2'>
+              <Button onClick={() => setIsContentModalOpen(true)} variant="secondary" className="hidden sm:inline-flex"> <DocumentTextIcon className="w-5 h-5 mr-2" /> Features & Guides </Button>
+              {installPrompt && ( <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse"> <DownloadIcon className="w-5 h-5 mr-2" /> Add to Home Screen </Button> )}
+            </div>
         </header>
         <div className="flex flex-row flex-grow min-h-0">
             <div ref={panelRef} className={`hidden lg:block flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isPanelOpen ? 'w-96' : 'w-0'}`}>
@@ -852,7 +896,7 @@ const App: React.FC = () => {
                  <WindowCanvas config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} />
               </div>
               <div className="flex-shrink-0 no-print hidden lg:block">
-                  <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={() => setIsQuotationModalOpen(true)} />
+                  <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onBatchAdd={() => setIsBatchAddModalOpen(true)} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={() => setIsQuotationModalOpen(true)} />
               </div>
               <div className="lg:hidden p-2 bg-slate-800 border-t-2 border-slate-700 grid grid-cols-2 gap-2 no-print">
                   <Button onClick={() => setIsPanelOpen(true)} variant="secondary" className="h-12"> <AdjustmentsIcon className="w-5 h-5 mr-2" /> Configure </Button>
@@ -866,7 +910,7 @@ const App: React.FC = () => {
         </div>
         <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${isMobileQuoteOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsMobileQuoteOpen(false)}></div>
         <div className={`lg:hidden fixed bottom-0 left-0 right-0 flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${isMobileQuoteOpen ? 'translate-y-0' : 'translate-y-full'}`}>
-            <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={() => setIsQuotationModalOpen(true)} onClose={() => setIsMobileQuoteOpen(false)} />
+            <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onBatchAdd={() => setIsBatchAddModalOpen(true)} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={() => setIsQuotationModalOpen(true)} onClose={() => setIsMobileQuoteOpen(false)} />
         </div>
       </div>
     </>

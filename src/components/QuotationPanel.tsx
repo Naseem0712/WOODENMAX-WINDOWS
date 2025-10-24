@@ -4,6 +4,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
 import { XMarkIcon } from './icons/XMarkIcon';
+import { PlusIcon } from './icons/PlusIcon';
 
 interface QuotationPanelProps {
     width: number;
@@ -17,6 +18,7 @@ interface QuotationPanelProps {
     rate: number | '';
     setRate: (value: number | '') => void;
     onSave: () => void;
+    onBatchAdd: () => void;
     hardwareCostPerWindow: number;
     quotationItemCount: number;
     onViewQuotation: () => void;
@@ -34,7 +36,7 @@ const CostDisplay: React.FC<{label:string, value: number, isTotal?: boolean}> = 
 
 
 export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
-    width, height, quantity, setQuantity, areaType, setAreaType, rate, setRate, onSave, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount, onViewQuotation, onClose
+    width, height, quantity, setQuantity, areaType, setAreaType, rate, setRate, onSave, onBatchAdd, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount, onViewQuotation, onClose
 }) => {
 
     const numQuantity = Number(quantity) || 0;
@@ -114,9 +116,14 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
                     <Button onClick={onViewQuotation} variant="secondary" className="w-full h-10">
                         View Quotation ({quotationItemCount})
                     </Button>
-                    <Button onClick={onSave} className="w-full h-10" disabled={totalCost <= 0}>
-                        Save to Quotation
-                    </Button>
+                    <div className="grid grid-cols-2 gap-2">
+                        <Button onClick={onSave} className="w-full h-10 text-xs" disabled={totalCost <= 0}>
+                           Add Single
+                        </Button>
+                         <Button onClick={onBatchAdd} variant="secondary" className="w-full h-10 text-xs">
+                           <PlusIcon className='w-4 h-4 mr-1'/> Add Multiple
+                        </Button>
+                    </div>
                 </div>
 
             </div>
