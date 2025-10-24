@@ -172,7 +172,9 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
   
-  const numWidth = Number(width) || 0;
+  const numWidth = windowType === WindowType.CORNER 
+    ? (Number(config.leftWidth) || 0) + (Number(config.rightWidth) || 0) + 100
+    : Number(width) || 0;
   const numHeight = Number(height) || 0;
 
   const dims = useMemo(() => ({
@@ -221,6 +223,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   }), []);
 
   const geometry = useMemo(() => {
+    const w = Number(width) || 0;
     const topFix = fixedPanels.find(p => p.position === FixedPanelPosition.TOP);
     const bottomFix = fixedPanels.find(p => p.position === FixedPanelPosition.BOTTOM);
     const leftFix = fixedPanels.find(p => p.position === FixedPanelPosition.LEFT);
@@ -229,11 +232,11 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     const frameOffset = (windowType !== WindowType.GLASS_PARTITION) ? dims.outerFrame : 0;
     const holeX1 = leftFix ? leftFix.size : frameOffset;
     const holeY1 = topFix ? topFix.size : frameOffset;
-    const holeX2 = rightFix ? numWidth - rightFix.size : numWidth - frameOffset;
+    const holeX2 = rightFix ? w - rightFix.size : w - frameOffset;
     const holeY2 = bottomFix ? numHeight - bottomFix.size : numHeight - frameOffset;
     
     return { topFix, bottomFix, leftFix, rightFix, frameOffset, holeX1, holeY1, holeX2, holeY2 };
-  }, [fixedPanels, windowType, dims.outerFrame, numWidth, numHeight]);
+  }, [fixedPanels, windowType, dims.outerFrame, width, numHeight]);
 
 
   const renderedElements = useMemo(() => {
@@ -241,6 +244,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     const glassElements: React.ReactNode[] = [];
     const handleElements: React.ReactNode[] = [];
     const { topFix, bottomFix, leftFix, rightFix, frameOffset, holeX1, holeY1, holeX2, holeY2 } = geometry;
+    const w = Number(width) || 0;
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
@@ -251,15 +255,15 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
       </div> 
     );
   
-    if (windowType !== WindowType.GLASS_PARTITION) {
-      profileElements.push(<MiteredFrame key="outer-frame" width={numWidth} height={numHeight} profileSize={dims.outerFrame} scale={scale} color={profileColor} />);
+    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) {
+      profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} profileSize={dims.outerFrame} scale={scale} color={profileColor} />);
     }
 
     if (leftFix) profileElements.push(<ProfilePiece key="divider-left" color={profileColor} style={{ top: frameOffset * scale, left: (holeX1 - dims.fixedFrame) * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffset) * scale }} />);
     if (rightFix) profileElements.push(<ProfilePiece key="divider-right" color={profileColor} style={{ top: frameOffset * scale, left: holeX2 * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffset) * scale }} />);
     
     const hDividerX = leftFix ? holeX1 : frameOffset;
-    const hDividerWidth = (rightFix ? holeX2 : numWidth - frameOffset) - hDividerX;
+    const hDividerWidth = (rightFix ? holeX2 : w - frameOffset) - hDividerX;
   
     if (topFix) {
         profileElements.push(<ProfilePiece key="divider-top" color={profileColor} style={{ top: (holeY1 - dims.fixedFrame) * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
@@ -281,7 +285,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
         glassElements.push(<GlassPanel key="glass-left" style={{ top: vGlassY * scale, left: frameOffset * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH}/>);
     }
     if (rightFix) {
-        const glassW = numWidth - holeX2 - frameOffset - dims.fixedFrame;
+        const glassW = w - holeX2 - frameOffset - dims.fixedFrame;
         const glassH = vGlassHeight;
         glassElements.push(<GlassPanel key="glass-right" style={{ top: vGlassY * scale, left: (holeX2 + dims.fixedFrame) * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH}/>);
     }
@@ -483,7 +487,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     }
 
     return { profileElements, glassElements, handleElements, innerContent, innerAreaWidth, innerAreaHeight, holeX1, holeY1 };
-  }, [config, dims, scale, geometry, glassStyles, glassType, profileColor, onRemoveHorizontalDivider, onRemoveVerticalDivider, numWidth, numHeight]);
+  }, [config, dims, scale, geometry, glassStyles, glassType, profileColor, onRemoveHorizontalDivider, onRemoveVerticalDivider, width, numHeight]);
 
   if (numWidth <= 0 || numHeight <= 0) {
     return (
@@ -493,30 +497,88 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     );
   }
 
+  const renderSingleWindow = (currentWidth: number) => {
+    // This is a simplified render function that reuses some logic.
+    // In a real scenario, this would be a separate component.
+    const tempConfig = { ...config, width: currentWidth, fixedPanels: [] }; // No fixed panels inside a corner piece
+    const { cornerSubType } = config;
+    
+    const w = Number(currentWidth);
+    const h = Number(height);
+    const frameOffset = dims.outerFrame;
+    const innerAreaWidth = w - 2 * frameOffset;
+    const innerAreaHeight = h - 2 * frameOffset;
+
+    const innerContent: React.ReactNode[] = [];
+     // Simplified logic from the main `renderedElements` memo
+    if (cornerSubType === WindowType.SLIDING) {
+        // Sliding logic here...
+    } else if (cornerSubType === WindowType.CASEMENT || cornerSubType === WindowType.VENTILATOR) {
+        // Casement/Ventilator logic here...
+    }
+
+    return (
+        <div className="relative" style={{ width: w * scale, height: h * scale }}>
+            <MiteredFrame width={w} height={h} profileSize={dims.outerFrame} scale={scale} color={profileColor} />
+            <div className="absolute" style={{ top: frameOffset * scale, left: frameOffset * scale, width: innerAreaWidth * scale, height: innerAreaHeight * scale }}>
+                {/* Simplified inner content rendering */}
+            </div>
+             <DimensionLabel value={w} className="-top-8 left-1/2 -translate-x-1/2" />
+        </div>
+    );
+  }
+
   return (
     <div ref={containerRef} className="absolute inset-0 p-6 flex items-center justify-center bg-transparent overflow-auto">
       <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none">
           WoodenMax
       </div>
-      <div className="relative shadow-lg" style={{ width: numWidth * scale, height: numHeight * scale, margin: 'auto' }}>
-        
-        {renderedElements.glassElements}
-        {renderedElements.profileElements}
-        
-        {renderedElements.innerAreaWidth > 0 && renderedElements.innerAreaHeight > 0 && (
-          <div className="absolute" style={{ top: renderedElements.holeY1 * scale, left: renderedElements.holeX1 * scale, width: renderedElements.innerAreaWidth * scale, height: renderedElements.innerAreaHeight * scale }}>
-              {renderedElements.innerContent}
-              {renderedElements.handleElements}
-          </div>
-        )}
-        
-        <DimensionLabel value={numWidth} className="-top-8 left-1/2 -translate-x-1/2" />
-        <DimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 -left-16 rotate-[-90deg]" />
-        
-        {geometry.topFix && <DimensionLabel value={geometry.topFix.size} className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 text-cyan-200" style={{top: geometry.topFix.size * scale / 2}}/>}
-        {geometry.leftFix && <DimensionLabel value={geometry.leftFix.size} className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 text-cyan-200" style={{top: (geometry.holeY1 + ((numHeight - geometry.holeY1 - geometry.holeY2)/2)) * scale, left: geometry.leftFix.size * scale / 2}}/>}
+      
+       {windowType === WindowType.CORNER ? (
+        (() => {
+          const leftW = Number(config.leftWidth) || 0;
+          const rightW = Number(config.rightWidth) || 0;
+          const postW = 100;
+          const totalW = leftW + rightW + postW;
+          const cornerConfigLeft = {...config, width: leftW, fixedPanels: [] };
+          const cornerConfigRight = {...config, width: rightW, fixedPanels: [] };
 
-      </div>
+          return (
+             <div className="relative shadow-lg flex" style={{ width: totalW * scale, height: numHeight * scale, margin: 'auto' }}>
+                <div className="relative flex-shrink-0">
+                  <WindowCanvas config={cornerConfigLeft} onRemoveHorizontalDivider={() => {}} onRemoveVerticalDivider={() => {}} />
+                </div>
+                <div className="relative flex-shrink-0" style={{width: postW * scale, height: numHeight * scale}}>
+                   <ProfilePiece color={profileColor} style={{ left: 0, top: 0, width: '100%', height: '100%' }} />
+                   <DimensionLabel value={postW} className="-top-8 left-1/2 -translate-x-1/2" />
+                </div>
+                 <div className="relative flex-shrink-0">
+                  <WindowCanvas config={cornerConfigRight} onRemoveHorizontalDivider={() => {}} onRemoveVerticalDivider={() => {}} />
+                </div>
+                <DimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 -left-16 rotate-[-90deg]" />
+            </div>
+          )
+        })()
+      ) : (
+        <div className="relative shadow-lg" style={{ width: (Number(width) || 0) * scale, height: numHeight * scale, margin: 'auto' }}>
+          {renderedElements.glassElements}
+          {renderedElements.profileElements}
+          
+          {renderedElements.innerAreaWidth > 0 && renderedElements.innerAreaHeight > 0 && (
+            <div className="absolute" style={{ top: renderedElements.holeY1 * scale, left: renderedElements.holeX1 * scale, width: renderedElements.innerAreaWidth * scale, height: renderedElements.innerAreaHeight * scale }}>
+                {renderedElements.innerContent}
+                {renderedElements.handleElements}
+            </div>
+          )}
+          
+          <DimensionLabel value={Number(width) || 0} className="-top-8 left-1/2 -translate-x-1/2" />
+          <DimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 -left-16 rotate-[-90deg]" />
+          
+          {geometry.topFix && <DimensionLabel value={geometry.topFix.size} className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 text-cyan-200" style={{top: geometry.topFix.size * scale / 2}}/>}
+          {geometry.leftFix && <DimensionLabel value={geometry.leftFix.size} className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 text-cyan-200" style={{top: (geometry.holeY1 + ((numHeight - geometry.holeY1 - geometry.holeY2)/2)) * scale, left: geometry.leftFix.size * scale / 2}}/>}
+
+        </div>
+      )}
       
       <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2 no-print">
          <button onClick={() => setZoom(z => z * 1.2)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><PlusIcon className="w-6 h-6"/></button>

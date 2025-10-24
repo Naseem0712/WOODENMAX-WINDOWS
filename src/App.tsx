@@ -39,7 +39,8 @@ type ConfigAction =
   | { type: 'SET_PARTITION_PANEL_COUNT'; payload: number }
   | { type: 'CYCLE_PARTITION_PANEL_TYPE'; payload: number }
   | { type: 'SET_PARTITION_HAS_TOP_CHANNEL'; payload: boolean }
-  | { type: 'CYCLE_PARTITION_PANEL_FRAMING'; payload: number };
+  | { type: 'CYCLE_PARTITION_PANEL_FRAMING'; payload: number }
+  | { type: 'RESET_DESIGN' };
 
 
 const BASE_DIMENSIONS = {
@@ -128,6 +129,15 @@ const DEFAULT_GLASS_PARTITION_SERIES: ProfileSeries = {
   },
 };
 
+const DEFAULT_CORNER_SERIES: ProfileSeries = {
+    id: 'series-corner-default',
+    name: 'Standard Corner Series',
+    type: WindowType.CORNER,
+    dimensions: { ...BASE_DIMENSIONS, outerFrame: 60, fixedFrame: 25, casementShutter: 70, mullion: 80, glassGridProfile: 15 },
+    hardwareItems: [], // Hardware derived from sub-type
+    glassOptions: DEFAULT_GLASS_OPTIONS,
+};
+
 const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
     company: { logo: '', name: 'WoodenMax', address: '123 Wood Lane, Timber Town', email: 'info@woodenmax.com', website: 'www.woodenmax.com' },
     customer: { name: '', address: '', contactPerson: '' },
@@ -158,8 +168,18 @@ const initialConfig: ConfigState = {
     doorPositions: [{ row: 0, col: 0 }, { row: 0, col: 1 }],
     ventilatorGrid: [],
     partitionPanels: { count: 2, types: [{ type: 'fixed' }, { type: 'sliding' }], hasTopChannel: true },
+    cornerSubType: WindowType.SLIDING,
+    leftWidth: 1200,
+    rightWidth: 1200,
 };
 
+const SERIES_MAP: Record<WindowType, ProfileSeries> = {
+    [WindowType.SLIDING]: DEFAULT_SLIDING_SERIES,
+    [WindowType.CASEMENT]: DEFAULT_CASEMENT_SERIES,
+    [WindowType.VENTILATOR]: DEFAULT_VENTILATOR_SERIES,
+    [WindowType.GLASS_PARTITION]: DEFAULT_GLASS_PARTITION_SERIES,
+    [WindowType.CORNER]: DEFAULT_CORNER_SERIES,
+};
 
 function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
     switch (action.type) {
@@ -269,9 +289,13 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             return newState;
         }
         case 'SET_WINDOW_TYPE': {
-          const newState = { ...state, windowType: action.payload };
-          if (action.payload === WindowType.GLASS_PARTITION) {
+          const newType = action.payload;
+          const newState = { ...state, windowType: newType };
+          if (newType === WindowType.GLASS_PARTITION) {
             newState.fixedPanels = [];
+          }
+           if (newType === WindowType.CORNER) {
+              newState.cornerSubType = WindowType.SLIDING;
           }
           return newState;
         }
@@ -310,6 +334,13 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             newTypes[index] = { ...newTypes[index], framing: currentFraming === 'none' ? 'full' : 'none' };
             return { ...state, partitionPanels: { ...state.partitionPanels, types: newTypes } };
         }
+        case 'RESET_DESIGN': {
+             return {
+                ...initialConfig,
+                windowType: state.windowType,
+                cornerSubType: initialConfig.cornerSubType,
+            };
+        }
         default:
             return state;
     }
@@ -341,7 +372,7 @@ const getInitialConfig = (): ConfigState => {
 const App: React.FC = () => {
   
   const [windowConfigState, dispatch] = useReducer(configReducer, getInitialConfig());
-  const { windowType, trackType, shutterConfig, fixedShutters, slidingHandles, verticalDividers, horizontalDividers, doorPositions, ventilatorGrid, partitionPanels } = windowConfigState;
+  const { windowType, trackType, shutterConfig, fixedShutters, slidingHandles, verticalDividers, horizontalDividers, doorPositions, ventilatorGrid, partitionPanels, cornerSubType } = windowConfigState;
 
   const [isPanelOpen, setIsPanelOpen] = useState(window.innerWidth >= 1024);
   const [isMobileQuoteOpen, setIsMobileQuoteOpen] = useState(false);
@@ -475,27 +506,24 @@ const App: React.FC = () => {
     } catch (error) { console.error("Could not save quotation settings", error); }
   }, [quotationSettings]);
   
-  const SERIES_MAP: Record<WindowType, ProfileSeries> = useMemo(() => ({
-    [WindowType.SLIDING]: DEFAULT_SLIDING_SERIES,
-    [WindowType.CASEMENT]: DEFAULT_CASEMENT_SERIES,
-    [WindowType.VENTILATOR]: DEFAULT_VENTILATOR_SERIES,
-    [WindowType.GLASS_PARTITION]: DEFAULT_GLASS_PARTITION_SERIES,
-  }), []);
+  const SERIES_MAP_MEMO = useMemo(() => SERIES_MAP, []);
 
   useEffect(() => {
-    if (series.type !== windowType) {
-        const foundSeries = savedSeries.find(s => s.type === windowType);
-        setSeries(foundSeries || SERIES_MAP[windowType] || DEFAULT_SLIDING_SERIES);
+    const typeToSync = windowType === WindowType.CORNER ? cornerSubType : windowType;
+    if (series.type !== typeToSync) {
+        const foundSeries = savedSeries.find(s => s.type === typeToSync);
+        setSeries(foundSeries || SERIES_MAP_MEMO[typeToSync as WindowType] || DEFAULT_SLIDING_SERIES);
     }
-  }, [windowType, series.type, savedSeries, SERIES_MAP]);
+  }, [windowType, series.type, savedSeries, SERIES_MAP_MEMO, cornerSubType]);
   
   const availableSeries = useMemo(() => [
     DEFAULT_SLIDING_SERIES, DEFAULT_CASEMENT_SERIES, DEFAULT_VENTILATOR_SERIES, 
-    DEFAULT_GLASS_PARTITION_SERIES, ...savedSeries
+    DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_CORNER_SERIES, ...savedSeries
   ], [savedSeries]);
   
   const numShutters = useMemo(() => {
-    if (windowType !== WindowType.SLIDING) return 0;
+    const activeType = windowType === WindowType.CORNER ? cornerSubType : windowType;
+    if (activeType !== WindowType.SLIDING) return 0;
     switch (shutterConfig) {
       case ShutterConfigType.TWO_GLASS: return 2;
       case ShutterConfigType.THREE_GLASS: return 3;
@@ -503,7 +531,7 @@ const App: React.FC = () => {
       case ShutterConfigType.FOUR_GLASS: return 4;
       default: return 0;
     }
-  }, [shutterConfig, windowType]);
+  }, [shutterConfig, windowType, cornerSubType]);
 
   useEffect(() => {
     if (trackType === TrackType.TWO_TRACK && ![ShutterConfigType.TWO_GLASS, ShutterConfigType.FOUR_GLASS].includes(shutterConfig)) {
@@ -548,34 +576,41 @@ const App: React.FC = () => {
     const selected = availableSeries.find(s => s.id === id);
     if(selected) {
       setSeries(selected);
-      if (selected.type !== windowType) {
-        dispatch({ type: 'SET_WINDOW_TYPE', payload: selected.type });
+       const activeType = windowType === WindowType.CORNER ? cornerSubType : windowType;
+      if (selected.type !== activeType) {
+        if(windowType === WindowType.CORNER) {
+            dispatch({ type: 'SET_FIELD', field: 'cornerSubType', payload: selected.type });
+        } else {
+            dispatch({ type: 'SET_WINDOW_TYPE', payload: selected.type });
+        }
       }
     }
-  }, [availableSeries, windowType]);
+  }, [availableSeries, windowType, cornerSubType]);
   
   const handleSeriesSave = useCallback((name: string) => {
     if (name && name.trim() !== '') {
+       const activeType = windowType === WindowType.CORNER ? cornerSubType : windowType;
       const newSeries: ProfileSeries = {
         ...series,
         id: uuidv4(),
         name: name.trim(),
-        type: windowType,
+        type: activeType as WindowType,
       };
       setSavedSeries(prev => [...prev, newSeries]);
       setSeries(newSeries);
     }
-  }, [series, windowType]);
+  }, [series, windowType, cornerSubType]);
   
   const handleSeriesDelete = useCallback((id: string) => {
     if (id.includes('-default')) { return; }
+     const activeType = windowType === WindowType.CORNER ? cornerSubType : windowType;
     if (window.confirm("Are you sure you want to delete this profile?")) {
       setSavedSeries(prev => prev.filter(s => s.id !== id));
       if (series.id === id) {
-        setSeries(SERIES_MAP[windowType]);
+        setSeries(SERIES_MAP_MEMO[activeType as WindowType]);
       }
     }
-  }, [series.id, windowType, SERIES_MAP]);
+  }, [series.id, windowType, cornerSubType, SERIES_MAP_MEMO]);
   
   const handleHardwareChange = useCallback((id: string, field: keyof HardwareItem, value: string | number) => {
     setSeries(prevSeries => ({
@@ -607,11 +642,17 @@ const App: React.FC = () => {
   const onCyclePartitionPanelType = useCallback((index: number) => dispatch({ type: 'CYCLE_PARTITION_PANEL_TYPE', payload: index }), []);
   const onSetPartitionHasTopChannel = useCallback((hasChannel: boolean) => dispatch({ type: 'SET_PARTITION_HAS_TOP_CHANNEL', payload: hasChannel }), []);
   const onCyclePartitionPanelFraming = useCallback((index: number) => dispatch({ type: 'CYCLE_PARTITION_PANEL_FRAMING', payload: index }), []);
+  const handleResetDesign = useCallback(() => {
+    if (window.confirm("Are you sure you want to reset the current design? All changes will be lost.")) {
+        dispatch({ type: 'RESET_DESIGN' });
+    }
+  }, []);
 
   const hardwareCostPerWindow = useMemo(() => {
     let numDoorsOrShutters = 0;
+    const typeForCost = windowType === WindowType.CORNER ? cornerSubType : windowType;
     
-    switch(windowType) {
+    switch(typeForCost) {
         case WindowType.SLIDING: numDoorsOrShutters = numShutters; break;
         case WindowType.CASEMENT: numDoorsOrShutters = doorPositions.length; break;
         case WindowType.VENTILATOR: 
@@ -622,14 +663,15 @@ const App: React.FC = () => {
             break;
     }
     
-    return series.hardwareItems.reduce((total, item) => {
+    const singleWindowCost = series.hardwareItems.reduce((total, item) => {
         const qty = Number(item.qtyPerShutter) || 0;
         const itemRate = Number(item.rate) || 0;
         const count = item.unit === 'per_shutter_or_door' ? numDoorsOrShutters : 1;
         return total + (qty * itemRate * count);
     }, 0);
 
-  }, [series.hardwareItems, numShutters, doorPositions.length, ventilatorGrid, windowType, partitionPanels]);
+    return windowType === WindowType.CORNER ? singleWindowCost * 2 : singleWindowCost;
+  }, [series.hardwareItems, numShutters, doorPositions.length, ventilatorGrid, windowType, partitionPanels, cornerSubType]);
 
   const handleSaveToQuotation = useCallback(() => {
     const colorName = savedColors.find(c => c.hex === windowConfig.profileColor)?.name;
@@ -694,7 +736,8 @@ const App: React.FC = () => {
     onCyclePartitionPanelType,
     onSetPartitionHasTopChannel,
     onCyclePartitionPanelFraming,
-  }), [windowConfig, setConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming]);
+    onResetDesign: handleResetDesign,
+  }), [windowConfig, setConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleResetDesign]);
 
   return (
     <>

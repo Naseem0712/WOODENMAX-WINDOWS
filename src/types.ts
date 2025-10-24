@@ -3,6 +3,7 @@ export enum WindowType {
   CASEMENT = 'casement',
   VENTILATOR = 'ventilator',
   GLASS_PARTITION = 'glass_partition',
+  CORNER = 'corner',
 }
 
 export interface SavedColor {
@@ -98,7 +99,7 @@ export enum GlassType {
   TINTED_BLUE = 'tinted-blue',
   CLEAR_SAPPHIRE = 'clear-sapphire',
   BROWN_TINTED = 'brown-tinted',
-  BLACK_TINTED = 'black-tinted',
+  BLACK_TINTED = 'black-tinded',
 }
 
 export enum AreaType {
@@ -162,6 +163,11 @@ export interface WindowConfig {
     types: PartitionPanelConfig[]; 
     hasTopChannel: boolean;
   };
+  
+  // Corner specific
+  cornerSubType?: WindowType;
+  leftWidth?: number | '';
+  rightWidth?: number | '';
 }
 
 export interface QuotationItem {

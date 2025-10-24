@@ -10,6 +10,7 @@ import { DimensionInput } from './ui/DimensionInput';
 import { v4 as uuidv4 } from 'uuid';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { CollapsibleCard } from './ui/CollapsibleCard';
+import { RefreshIcon } from './icons/RefreshIcon';
 
 
 interface ControlsPanelProps {
@@ -41,6 +42,7 @@ interface ControlsPanelProps {
   onCyclePartitionPanelType: (index: number) => void;
   onSetPartitionHasTopChannel: (hasChannel: boolean) => void;
   onCyclePartitionPanelFraming: (index: number) => void;
+  onResetDesign: () => void;
 }
 
 function getContrastYIQ(hexcolor: string){
@@ -68,10 +70,10 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
     onHardwareChange, onAddHardware, onRemoveHardware,
     toggleDoorPosition, onVentilatorCellClick,
     savedColors, setSavedColors, onUpdateHandle,
-    onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming
+    onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onResetDesign
   } = props;
 
-  const { windowType, series, verticalDividers, horizontalDividers, fixedPanels } = config;
+  const { windowType, series, verticalDividers, horizontalDividers, fixedPanels, cornerSubType } = config;
   const gridRows = horizontalDividers.length + 1;
   const gridCols = verticalDividers.length + 1;
 
@@ -82,9 +84,11 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
   const [newColor, setNewColor] = useState({ name: '', hex: '#ffffff' });
   const [selectedPanelId, setSelectedPanelId] = useState<string>('');
 
+  const activeWindowType = windowType === WindowType.CORNER ? cornerSubType : windowType;
+
   const operablePanels = useMemo(() => {
     const panels: { id: string; label: string }[] = [];
-    switch (config.windowType) {
+    switch (activeWindowType) {
         case WindowType.SLIDING:
             config.slidingHandles.forEach((_, i) => {
                 panels.push({ id: `sliding-${i}`, label: `Shutter ${i + 1}` });
@@ -119,7 +123,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         setSelectedPanelId(panels[0].id);
     }
     return panels;
-  }, [config, selectedPanelId]);
+  }, [config, selectedPanelId, activeWindowType]);
 
 
   const currentHandle = useMemo((): HandleConfig | null => {
@@ -186,7 +190,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
   }
 
   const isDefaultSeries = series.id.includes('-default');
-  const filteredAvailableSeries = availableSeries.filter(s => s.type === windowType);
+  const filteredAvailableSeries = availableSeries.filter(s => s.type === activeWindowType);
 
   const getVentilatorCellLabel = (type: VentilatorCellType) => {
     switch(type) {
@@ -218,30 +222,58 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
     <div className="w-full p-4 space-y-4 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
       <div className="flex justify-between items-center pb-2 border-b border-slate-700">
         <h2 className="text-2xl font-bold text-white">Configuration</h2>
-        <button 
-            onClick={onClose} 
-            className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white" 
-            aria-label="Close panel"
-        >
-            <XMarkIcon className="w-6 h-6" />
-        </button>
+        <div className="flex items-center gap-2">
+            <button
+                onClick={onResetDesign}
+                className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white"
+                aria-label="Reset design"
+                title="Reset Design"
+            >
+                <RefreshIcon className="w-6 h-6" />
+            </button>
+            <button 
+                onClick={onClose} 
+                className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white" 
+                aria-label="Close panel"
+            >
+                <XMarkIcon className="w-6 h-6" />
+            </button>
+        </div>
       </div>
 
       <CollapsibleCard title="Design Type" defaultOpen>
-          <div className="grid grid-cols-2 bg-slate-700 rounded-md p-1 gap-1">
+          <div className="grid grid-cols-3 bg-slate-700 rounded-md p-1 gap-1">
               <button onClick={() => setConfig('windowType', WindowType.SLIDING)} className={`p-2 text-sm font-semibold rounded ${windowType === WindowType.SLIDING ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Sliding</button>
               <button onClick={() => setConfig('windowType', WindowType.CASEMENT)} className={`p-2 text-sm font-semibold rounded ${windowType === WindowType.CASEMENT ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Casement</button>
               <button onClick={() => setConfig('windowType', WindowType.VENTILATOR)} className={`p-2 text-sm font-semibold rounded ${windowType === WindowType.VENTILATOR ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Ventilator</button>
               <button onClick={() => setConfig('windowType', WindowType.GLASS_PARTITION)} className={`p-2 text-sm font-semibold rounded ${windowType === WindowType.GLASS_PARTITION ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Partition</button>
+              <button onClick={() => setConfig('windowType', WindowType.CORNER)} className={`p-2 text-sm font-semibold rounded ${windowType === WindowType.CORNER ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Corner</button>
           </div>
       </CollapsibleCard>
       
       <CollapsibleCard title="Overall Dimensions" defaultOpen>
-        <DimensionInput label="Total Width" value_mm={config.width} onChange_mm={v => setConfig('width', v)} placeholder="e.g., 1800" />
+        {windowType === WindowType.CORNER ? (
+            <div className="grid grid-cols-2 gap-4">
+                 <DimensionInput label="Left Wall Width" value_mm={config.leftWidth} onChange_mm={v => setConfig('leftWidth', v)} placeholder="e.g., 1200" />
+                 <DimensionInput label="Right Wall Width" value_mm={config.rightWidth} onChange_mm={v => setConfig('rightWidth', v)} placeholder="e.g., 1200" />
+            </div>
+        ) : (
+            <DimensionInput label="Total Width" value_mm={config.width} onChange_mm={v => setConfig('width', v)} placeholder="e.g., 1800" />
+        )}
         <DimensionInput label="Total Height" value_mm={config.height} onChange_mm={v => setConfig('height', v)} placeholder="e.g., 1200" />
       </CollapsibleCard>
+      
+      {windowType === WindowType.CORNER && (
+         <CollapsibleCard title="Corner Window Setup" defaultOpen>
+            <Select label="Corner Design Type" value={config.cornerSubType} onChange={(e) => setConfig('cornerSubType', e.target.value as WindowType)}>
+              <option value={WindowType.SLIDING}>Sliding</option>
+              <option value={WindowType.CASEMENT}>Casement / Fixed</option>
+              <option value={WindowType.VENTILATOR}>Ventilator</option>
+            </Select>
+         </CollapsibleCard>
+      )}
 
-      {windowType === WindowType.SLIDING && (
+      {activeWindowType === WindowType.SLIDING && (
         <CollapsibleCard title="Track & Shutter Setup" defaultOpen>
             <Select label="Track Type" value={config.trackType} onChange={(e) => setConfig('trackType', parseInt(e.target.value) as TrackType)}>
             <option value={TrackType.TWO_TRACK}>2-Track</option>
@@ -269,7 +301,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         </CollapsibleCard>
       )}
 
-      {(windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) && (
+      {(activeWindowType === WindowType.CASEMENT || activeWindowType === WindowType.VENTILATOR) && (
           <CollapsibleCard title="Grid Layout" defaultOpen>
               <div className="grid grid-cols-2 gap-4">
                   <Input label="Rows" type="number" inputMode="numeric" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
@@ -284,11 +316,11 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
                             const row = Math.floor(index / gridCols);
                             const col = index % gridCols;
                             
-                            if (windowType === WindowType.CASEMENT) {
+                            if (activeWindowType === WindowType.CASEMENT) {
                                 const isDoor = config.doorPositions.some(p => p.row === row && p.col === col);
                                 return ( <button key={`${row}-${col}`} onClick={() => toggleDoorPosition(row, col)} className={`aspect-square rounded text-xs font-semibold flex items-center justify-center ${isDoor ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{isDoor ? 'Door' : 'Fixed'}</button> );
                             }
-                            if (windowType === WindowType.VENTILATOR) {
+                            if (activeWindowType === WindowType.VENTILATOR) {
                                 const cell = config.ventilatorGrid[row]?.[col];
                                 const cellType = cell?.type || 'glass';
                                 const colorClass = cellType === 'door' ? 'bg-indigo-500 text-white' 
@@ -450,7 +482,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         </div>
       </CollapsibleCard>
       
-      {windowType !== WindowType.GLASS_PARTITION && (
+      {windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && (
         <CollapsibleCard title="Fixed Panels">
            <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.TOP)}><PlusIcon className="w-4 h-4 mr-2" /> Top</Button>
@@ -496,7 +528,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         
         <hr className="border-slate-700 my-4" />
 
-        {windowType === WindowType.SLIDING && (
+        {activeWindowType === WindowType.SLIDING && (
             <>
                 <DimensionInput label="Outer Frame" value_mm={series.dimensions.outerFrame} onChange_mm={val => handleDimensionChange('outerFrame', val)} weightValue={series.weights?.outerFrame} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrame', v)} lengthValue={series.lengths?.outerFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrame', v)} />
                 { (fixedPanels.length > 0) && <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} />}
@@ -506,7 +538,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
                 <DimensionInput label="Shutter Top/Bottom" value_mm={series.dimensions.shutterTop} onChange_mm={val => handleDimensionChange('shutterTop', val)} weightValue={series.weights?.shutterTop} onWeightChange={v => handleProfileDetailChange('weights', 'shutterTop', v)} lengthValue={series.lengths?.shutterTop} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterTop', v)} />
             </>
         )}
-        {(windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) && (
+        {(activeWindowType === WindowType.CASEMENT || activeWindowType === WindowType.VENTILATOR) && (
             <>
                 <DimensionInput label="Outer Frame" value_mm={series.dimensions.outerFrame} onChange_mm={val => handleDimensionChange('outerFrame', val)} weightValue={series.weights?.outerFrame} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrame', v)} lengthValue={series.lengths?.outerFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrame', v)} />
                 <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} />
@@ -514,7 +546,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
                 <DimensionInput label="Mullion Profile" value_mm={series.dimensions.mullion} onChange_mm={val => handleDimensionChange('mullion', val)} weightValue={series.weights?.mullion} onWeightChange={v => handleProfileDetailChange('weights', 'mullion', v)} lengthValue={series.lengths?.mullion} onLengthChange={v => handleProfileDetailChange('lengths', 'mullion', v)} />
             </>
         )}
-        {windowType === WindowType.VENTILATOR && (
+        {activeWindowType === WindowType.VENTILATOR && (
             <DimensionInput label="Louver Blade" value_mm={series.dimensions.louverBlade} onChange_mm={val => handleDimensionChange('louverBlade', val)} weightValue={series.weights?.louverBlade} onWeightChange={v => handleProfileDetailChange('weights', 'louverBlade', v)} lengthValue={series.lengths?.louverBlade} onLengthChange={v => handleProfileDetailChange('lengths', 'louverBlade', v)} />
         )}
         {windowType === WindowType.GLASS_PARTITION && (
