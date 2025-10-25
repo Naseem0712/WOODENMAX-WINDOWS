@@ -92,7 +92,7 @@ const PrintGlassGrid: React.FC<{width: number, height: number, rows: number, col
     }
      for (let i = 1; i <= cols; i++) {
         const left = (i * width / (cols + 1)) - (profileSize / 2);
-        elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={color} style={{ left: left * scale, top: 0, width: profileSize * scale, height: height * scale }} />);
+        elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={color} style={{ left: left * scale, top: 0, width: profileSize * scale, height: profileSize * scale }} />);
     }
     return <>{elements}</>
 }
@@ -217,7 +217,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0, glassGridProfile: Number(series.dimensions.glassGridProfile) || 0,
     };
 
-    const glassStyle = { backgroundColor: '#E2E8F0', boxSizing: 'border-box' as const };
+    const glassStyle = { backgroundColor: '#E2E8F0', boxSizing: 'border-box' as const, border: '0.5px solid #999' };
 
     const topFix = fixedPanels.find(p => p.position === FixedPanelPosition.TOP);
     const bottomFix = fixedPanels.find(p => p.position === FixedPanelPosition.BOTTOM);

@@ -65,9 +65,9 @@ const Handle: React.FC<{ config: HandleConfig, scale: number, color: string }> =
 };
 
 
-const ProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => ( <div style={{ backgroundColor: color, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)', position: 'absolute', ...style }} /> );
+const ProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = React.memo(({ style, color }) => ( <div style={{ backgroundColor: color, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)', position: 'absolute', ...style }} /> ));
 
-const GlassGrid: React.FC<{width: number, height: number, rows: number, cols: number, profileSize: number, scale: number, color: string}> = ({ width, height, rows, cols, profileSize, scale, color }) => {
+const GlassGrid: React.FC<{width: number, height: number, rows: number, cols: number, profileSize: number, scale: number, color: string}> = React.memo(({ width, height, rows, cols, profileSize, scale, color }) => {
     if (rows <= 0 && cols <= 0) return null;
     const elements: React.ReactNode[] = [];
 
@@ -81,7 +81,7 @@ const GlassGrid: React.FC<{width: number, height: number, rows: number, cols: nu
     }
 
     return <>{elements}</>
-}
+});
 
 const MiteredFrame: React.FC<{
     width: number;
@@ -93,7 +93,7 @@ const MiteredFrame: React.FC<{
     rightSize?: number;
     scale: number;
     color: string;
-}> = ({ width, height, profileSize = 0, topSize, bottomSize, leftSize, rightSize, scale, color }) => {
+}> = React.memo(({ width, height, profileSize = 0, topSize, bottomSize, leftSize, rightSize, scale, color }) => {
     const ts = (topSize ?? profileSize) * scale;
     const bs = (bottomSize ?? profileSize) * scale;
     const ls = (leftSize ?? profileSize) * scale;
@@ -118,7 +118,20 @@ const MiteredFrame: React.FC<{
             <div style={{...baseStyle, top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
         </div>
     );
-};
+});
+
+const ButtJointFrame: React.FC<{ width: number; height: number; top: number; bottom: number; left: number; right: number; scale: number; color: string; }> = React.memo(({ width, height, top, bottom, left, right, scale, color }) => {
+    const ts = top * scale; const bs = bottom * scale; const ls = left * scale; const rs = right * scale;
+    const h = height * scale;
+    return (
+        <>
+            <ProfilePiece color={color} style={{ top: 0, left: 0, width: width * scale, height: ts }} />
+            <ProfilePiece color={color} style={{ bottom: 0, left: 0, width: width * scale, height: bs }} />
+            <ProfilePiece color={color} style={{ top: ts, left: 0, width: ls, height: h - ts - bs }} />
+            <ProfilePiece color={color} style={{ top: ts, right: 0, width: rs, height: h - ts - bs }} />
+        </>
+    );
+});
 
 const SlidingShutter: React.FC<{
     width: number;
@@ -134,21 +147,21 @@ const SlidingShutter: React.FC<{
     glassStyles: Record<GlassType, React.CSSProperties>;
     isFixed?: boolean;
     isSliding?: boolean;
-}> = ({ width, height, topProfile, rightProfile, bottomProfile, leftProfile, color, scale, isMesh, glassType, glassStyles, isFixed = false, isSliding = false }) => {
+}> = React.memo(({ width, height, topProfile, rightProfile, bottomProfile, leftProfile, color, scale, isMesh, glassType, glassStyles, isFixed = false, isSliding = false }) => {
     
     const glassWidth = width - leftProfile - rightProfile;
     const glassHeight = height - topProfile - bottomProfile;
 
     return (
         <div className="absolute" style={{ width: width * scale, height: height * scale }}>
-             <MiteredFrame width={width} height={height} topSize={topProfile} bottomSize={bottomProfile} leftSize={leftProfile} rightSize={rightProfile} scale={scale} color={color} />
+             <ButtJointFrame width={width} height={height} top={topProfile} bottom={bottomProfile} left={leftProfile} right={rightProfile} scale={scale} color={color} />
             <div className={`absolute`} style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale, ...(!isMesh && glassStyles[glassType]) }}>
                 {isMesh && <div className="w-full h-full" style={{backgroundColor: '#808080', opacity: 0.5, backgroundImage: `linear-gradient(45deg, #000 25%, transparent 25%), linear-gradient(-45deg, #000 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #000 75%), linear-gradient(-45deg, transparent 75%, #000 75%)`, backgroundSize: '4px 4px' }} />}
                 <ShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
             </div>
         </div>
     );
-};
+});
 
 const createWindowElements = (
     config: WindowConfig, 
@@ -186,7 +199,7 @@ const createWindowElements = (
     const innerAreaHeight = holeY2 - holeY1;
     
     const GlassPanel: React.FC<{style: React.CSSProperties, children?: React.ReactNode, glassWidth: number, glassHeight: number}> = ({ style, children, glassWidth, glassHeight }) => ( 
-      <div className="absolute" style={{...glassStyles[glassType], ...style}}>
+      <div className="absolute" style={{...glassStyles[glassType], ...style, boxShadow: 'inset 0 0 1px 1px rgba(0,0,0,0.1)'}}>
         <GlassGrid width={glassWidth} height={glassHeight} rows={config.glassGrid.rows} cols={config.glassGrid.cols} profileSize={dims.glassGridProfile} scale={scale} color={profileColor} />
         {children}
       </div> 
