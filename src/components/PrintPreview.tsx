@@ -81,7 +81,7 @@ const PrintShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | '
     return <div className={baseStyle} style={style}>{text}</div>;
 }
 
-const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => ( <div style={{ backgroundColor: color, position: 'absolute', ...style, boxSizing: 'border-box' }} /> );
+const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => ( <div style={{ backgroundColor: color, position: 'absolute', ...style, boxSizing: 'border-box', boxShadow: 'inset 0 0 0 0.2px rgba(0,0,0,0.4)' }} /> );
 
 const PrintGlassGrid: React.FC<{width: number, height: number, rows: number, cols: number, profileSize: number, scale: number, color: string}> = ({ width, height, rows, cols, profileSize, scale, color }) => {
     if ((rows <= 0 && cols <= 0) || profileSize <= 0) return null;
@@ -117,6 +117,7 @@ const PrintableMiteredFrame: React.FC<{
         backgroundColor: color,
         position: 'absolute',
         boxSizing: 'border-box',
+        boxShadow: 'inset 0 0 0 0.2px rgba(0,0,0,0.4)',
     };
 
     const clipTs = Math.max(0, ts);
@@ -276,21 +277,15 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
 
-    const PrintSlidingShutter: React.FC<{ width: number; height: number; topProfile: number; bottomProfile: number; rightProfile: number; leftProfile: number; isMesh: boolean; isFixed?: boolean; isSliding?: boolean; }> = ({ width, height, topProfile, rightProfile, bottomProfile, leftProfile, isMesh, isFixed = false, isSliding = false }) => {
+    const PrintSlidingShutter: React.FC<{ width: number; height: number; topProfile: number; bottomProfile: number; rightProfile: number; leftProfile: number; isMesh: boolean; isFixed?: boolean; isSliding?: boolean; }> = ({ width, height, topProfile, bottomProfile, rightProfile, leftProfile, isFixed = false, isSliding = false }) => {
         const glassWidth = width - leftProfile - rightProfile;
         const glassHeight = height - topProfile - bottomProfile;
         return (
             <div className="absolute" style={{ width: width * scale, height: height * scale }}>
-                <PrintableMiteredFrame
-                    width={width}
-                    height={height}
-                    topSize={topProfile}
-                    bottomSize={bottomProfile}
-                    leftSize={leftProfile}
-                    rightSize={rightProfile}
-                    scale={scale}
-                    color={profileColor}
-                />
+                <PrintProfilePiece color={profileColor} style={{ top: 0, left: 0, width: width * scale, height: topProfile * scale }} />
+                <PrintProfilePiece color={profileColor} style={{ bottom: 0, left: 0, width: width * scale, height: bottomProfile * scale }} />
+                <PrintProfilePiece color={profileColor} style={{ top: topProfile * scale, left: 0, width: leftProfile * scale, height: glassHeight * scale }} />
+                <PrintProfilePiece color={profileColor} style={{ top: topProfile * scale, right: 0, width: rightProfile * scale, height: glassHeight * scale }} />
                 <GlassPanel style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale }} glassWidthPx={glassWidth*scale} glassHeightPx={glassHeight*scale}>
                     <PrintShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
                 </GlassPanel>
@@ -764,10 +759,8 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         
                         <EditableSection title="Description" value={settings.description} onChange={(val) => setSettings({...settings, description: val})} />
                         <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} />
-                    </div>
-
-                    <div className="print-footer-container">
-                        <div className="print-footer">
+                        
+                        <div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs" style={{breakBefore: 'avoid'}}>
                             <div className="flex-grow">
                                 <h3 className="font-bold text-sm mb-1">Bank Details</h3>
                                 <p><strong>A/C Name:</strong> {settings.bankDetails.name}</p>
@@ -777,10 +770,15 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                 <p><strong>A/C Type:</strong> {settings.bankDetails.accountType}</p>
                             </div>
                             <div className="w-1/3 text-center self-end">
-                                <div className="border-t-2 border-black pt-2">
+                                <div className="border-t-2 border-black pt-2 mt-16">
                                     Authorised Signature
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <div className="print-footer-container">
+                        <div className="print-footer">
                             <div className="text-right text-[7pt] self-end">
                                 Page <span className="page-counter"></span>
                             </div>
