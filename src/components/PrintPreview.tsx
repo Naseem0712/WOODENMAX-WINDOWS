@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig } from '../types';
+import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, HardwareItem } from '../types';
 import { Button } from './ui/Button';
 import { PrinterIcon } from './icons/PrinterIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -563,7 +563,13 @@ const getItemDetails = (item: QuotationItem) => {
         }
     }
 
-    return { panelCounts, hardwareDetails };
+    const relevantHardware = item.hardwareItems.filter(hw => {
+        const nameLower = hw.name.toLowerCase();
+        return nameLower.includes('handle') || nameLower.includes('lock');
+    });
+
+
+    return { panelCounts, hardwareDetails, relevantHardware };
 }
 
 
@@ -713,8 +719,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                     
                                     const unitAmount = (singleArea * item.rate) + item.hardwareCost;
 
-                                    const { panelCounts, hardwareDetails } = getItemDetails(item);
-                                    const handleItem = hardwareDetails.find(hw => hw.name.toLowerCase().includes('handle'));
+                                    const { panelCounts, relevantHardware } = getItemDetails(item);
 
                                     return (
                                         <tr key={item.id} className="border-b border-gray-300 print-item">
@@ -733,10 +738,14 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                         <tr><td className='pr-2 font-semibold'>Color:</td><td>{item.profileColorName}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Glass:</td><td>{item.config.glassThickness}mm {item.config.glassType}{item.config.glassSpecialType !== 'none' ? ` (${item.config.glassSpecialType})` : ''} {item.config.customGlassName && `- ${item.config.customGlassName}`}</td></tr>
                                                         {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
-                                                        {handleItem && (
+                                                        {relevantHardware.length > 0 && (
                                                             <tr>
-                                                                <td className='pr-2 font-semibold pt-1'>Hardware:</td>
-                                                                <td className='pt-1'>{handleItem.name}</td>
+                                                                <td className='pr-2 font-semibold pt-1 align-top'>Hardware:</td>
+                                                                <td className='pt-1'>
+                                                                    {relevantHardware.map((hw, i) => (
+                                                                        <span key={i} className="block">{hw.name}</span>
+                                                                    ))}
+                                                                </td>
                                                             </tr>
                                                         )}
                                                     </tbody>
