@@ -92,7 +92,7 @@ const PrintGlassGrid: React.FC<{width: number, height: number, rows: number, col
     }
      for (let i = 1; i <= cols; i++) {
         const left = (i * width / (cols + 1)) - (profileSize / 2);
-        elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={color} style={{ left: left * scale, top: 0, width: profileSize * scale, height: profileSize * scale }} />);
+        elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={color} style={{ left: left * scale, top: 0, width: profileSize * scale, height: height * scale }} />);
     }
     return <>{elements}</>
 }
@@ -137,30 +137,6 @@ const PrintableMiteredFrame: React.FC<{
         </div>
     );
 };
-
-const PrintableShutterFrame: React.FC<{
-    width: number; height: number; scale: number; color: string;
-    top: number; bottom: number; left: number; right: number;
-    isLeftMitered: boolean; isRightMitered: boolean;
-}> = ({ width, height, scale, color, top, bottom, left, right, isLeftMitered, isRightMitered }) => {
-    const ts = top * scale; const bs = bottom * scale; const ls = left * scale; const rs = right * scale;
-    const baseStyle: React.CSSProperties = { backgroundColor: color, position: 'absolute', boxSizing: 'border-box' };
-    const elements = [];
-    elements.push(<div key="top" style={{...baseStyle, top: 0, left: 0, width: width*scale, height: ts, clipPath: `polygon(0 0, 100% 0, ${isRightMitered ? `calc(100% - ${rs}px)` : '100%'} 100%, ${isLeftMitered ? `${ls}px` : '0'} 100%)`}} />);
-    elements.push(<div key="bottom" style={{...baseStyle, bottom: 0, left: 0, width: width*scale, height: bs, clipPath: `polygon(${isLeftMitered ? `${ls}px` : '0'} 0, ${isRightMitered ? `calc(100% - ${rs}px)` : '100%'} 0, 100% 100%, 0 100%)`}} />);
-    if (isLeftMitered) {
-        elements.push(<div key="left" style={{...baseStyle, top: 0, left: 0, width: ls, height: height*scale, clipPath: `polygon(0 0, 100% ${ts}px, 100% calc(100% - ${bs}px), 0 100%)`}} />);
-    } else {
-        elements.push(<div key="left" style={{...baseStyle, top: ts, left: 0, width: ls, height: height*scale - ts - bs }} />);
-    }
-    if (isRightMitered) {
-        elements.push(<div key="right" style={{...baseStyle, top: 0, right: 0, width: rs, height: height*scale, clipPath: `polygon(0 ${ts}px, 100% 0, 100% 100%, 0 calc(100% - ${bs}px))`}} />);
-    } else {
-        elements.push(<div key="right" style={{...baseStyle, top: ts, right: 0, width: rs, height: height*scale - ts - bs}} />);
-    }
-    return <>{elements}</>;
-};
-
 
 const PrintableHandle: React.FC<{ config: HandleConfig | null, scale: number }> = ({ config, scale }) => {
     if (!config) return null;
@@ -302,15 +278,24 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
 
     const PrintSlidingShutter: React.FC<{
         width: number; height: number; topProfile: number; bottomProfile: number; leftProfile: number; rightProfile: number;
-        isMesh: boolean; isFixed?: boolean; isSliding?: boolean; isLeftMitered: boolean; isRightMitered: boolean;
-    }> = ({ width, height, topProfile, bottomProfile, leftProfile, rightProfile, isMesh, isFixed = false, isSliding = false, isLeftMitered, isRightMitered }) => {
+        isMesh: boolean; isFixed?: boolean; isSliding?: boolean;
+    }> = ({ width, height, topProfile, bottomProfile, leftProfile, rightProfile, isMesh, isFixed = false, isSliding = false }) => {
         const glassWidth = width - leftProfile - rightProfile;
         const glassHeight = height - topProfile - bottomProfile;
         const meshStyle: React.CSSProperties = isMesh ? {backgroundColor: '#ccc', opacity: 0.6, backgroundImage: `linear-gradient(45deg, #aaa 25%, transparent 25%), linear-gradient(-45deg, #aaa 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #aaa 75%), linear-gradient(-45deg, transparent 75%, #aaa 75%)`, backgroundSize: '3px 3px' } : {};
         
         return (
             <div className="absolute" style={{ width: width * scale, height: height * scale }}>
-                <PrintableShutterFrame width={width} height={height} scale={scale} color={profileColor} top={topProfile} bottom={bottomProfile} left={leftProfile} right={rightProfile} isLeftMitered={isLeftMitered} isRightMitered={isRightMitered} />
+                <PrintableMiteredFrame 
+                    width={width} 
+                    height={height} 
+                    scale={scale} 
+                    color={profileColor} 
+                    topSize={topProfile} 
+                    bottomSize={bottomProfile} 
+                    leftSize={leftProfile} 
+                    rightSize={rightProfile} 
+                />
                 <GlassPanel style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale, ...meshStyle }} glassWidthPx={glassWidth*scale} glassHeightPx={glassHeight*scale}>
                     <PrintShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
                 </GlassPanel>
@@ -342,7 +327,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                 { l: dims.shutterHandle, r: dims.shutterInterlock }, { l: dims.shutterInterlock, r: dims.shutterMeeting },
                                 { l: dims.shutterMeeting, r: dims.shutterInterlock }, { l: dims.shutterInterlock, r: dims.shutterHandle }
                             ];
-                            return profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><PrintSlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} isLeftMitered={p.l === dims.shutterHandle} isRightMitered={p.r === dims.shutterHandle} /></div>);
+                            return profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><PrintSlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>);
                         } else {
                             const shutterDivider = hasMesh ? 2 : numShutters;
                             const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * dims.shutterInterlock) / shutterDivider;
@@ -357,7 +342,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                 let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - dims.shutterInterlock);
                                 const leftProfile = i === 0 ? dims.shutterHandle : dims.shutterInterlock;
                                 const rightProfile = i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock;
-                                return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><PrintSlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={leftProfile} rightProfile={rightProfile} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} isLeftMitered={leftProfile === dims.shutterHandle} isRightMitered={rightProfile === dims.shutterHandle}/></div> );
+                                return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><PrintSlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={leftProfile} rightProfile={rightProfile} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
                             });
                         }
                     })()}

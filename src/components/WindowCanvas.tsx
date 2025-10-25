@@ -154,7 +154,16 @@ const SlidingShutter: React.FC<{
 
     return (
         <div className="absolute" style={{ width: width * scale, height: height * scale }}>
-             <ButtJointFrame width={width} height={height} top={topProfile} bottom={bottomProfile} left={leftProfile} right={rightProfile} scale={scale} color={color} />
+             <MiteredFrame 
+                width={width}
+                height={height}
+                topSize={topProfile}
+                bottomSize={bottomProfile}
+                leftSize={leftProfile}
+                rightSize={rightProfile}
+                scale={scale}
+                color={color}
+             />
             <div className={`absolute`} style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale, ...(!isMesh && glassStyles[glassType]) }}>
                 {isMesh && <div className="w-full h-full" style={{backgroundColor: '#808080', opacity: 0.5, backgroundImage: `linear-gradient(45deg, #000 25%, transparent 25%), linear-gradient(-45deg, #000 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #000 75%), linear-gradient(-45deg, transparent 75%, #000 75%)`, backgroundSize: '4px 4px' }} />}
                 <ShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
