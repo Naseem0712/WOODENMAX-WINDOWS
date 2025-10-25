@@ -134,6 +134,9 @@ const WindowAnnotations: React.FC<{ config: WindowConfig }> = ({ config }) => {
             const panelWidth = innerAreaWidth / partitionPanels.count;
             annotations.push(`Panel Width: ${panelWidth.toFixed(0)}mm`);
             break;
+        case WindowType.CORNER:
+            // Annotations for corner windows might be more complex, handle if needed
+            break;
     }
 
     if (annotations.length === 0) return null;
@@ -660,4 +663,130 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                     </div>
                 </div>
 
-                {/* Main Content (Items +
+                {/* Main Content (Items + Summary) */}
+                <div className="print-content" style={{display: 'block'}}>
+                    <h3 className="text-xl font-bold text-black text-center my-4">{settings.title}</h3>
+                    
+                    {/* Items Table */}
+                    <div className="w-full text-[8pt]">
+                        <table className="w-full" style={{borderCollapse: 'collapse'}}>
+                            <thead className="bg-gray-200">
+                                <tr className="border-b-2 border-t-2 border-black">
+                                    <th className="p-1 text-center w-[5%]">#</th>
+                                    <th className="p-1 text-left w-[35%]">Item Description</th>
+                                    <th className="p-1 text-center w-[15%]">Dimensions (WxH)</th>
+                                    <th className="p-1 text-center w-[10%]">Qty</th>
+                                    <th className="p-1 text-right w-[15%]">Rate</th>
+                                    <th className="p-1 text-right w-[20%]">Total Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {items.map((item, index) => {
+                                    const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
+                                    const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
+                                    const totalArea = singleArea * item.quantity;
+                                    const baseCost = totalArea * item.rate;
+                                    const totalHardwareCost = item.hardwareCost * item.quantity;
+                                    const totalCost = baseCost + totalHardwareCost;
+                                    const panelSummary = getPanelSummary(item.config);
+                                    return (
+                                        <tr key={item.id} className="border-b border-gray-300 print-item">
+                                            <td className="p-2 align-top text-center">{index + 1}</td>
+                                            <td className="p-2 align-top">
+                                                <p className="font-bold print-window-title">{item.title}</p>
+                                                <div className="flex gap-4">
+                                                    <div className="w-1/3">
+                                                        <PrintableWindow config={item.config} />
+                                                        <WindowAnnotations config={item.config} />
+                                                    </div>
+                                                    <div className="w-2/3 print-item-details">
+                                                        <table className="w-full text-[7pt]">
+                                                            <tbody>
+                                                                <tr><td className="font-semibold pr-2">Profile:</td><td>{item.config.series.name} {item.profileColorName && `(${item.profileColorName})`}</td></tr>
+                                                                <tr><td className="font-semibold pr-2">Glass:</td><td>{item.config.glassThickness}mm {item.config.glassType}{item.config.glassSpecialType !== 'none' ? ` (${item.config.glassSpecialType})` : ''} {item.config.customGlassName && `- ${item.config.customGlassName}`}</td></tr>
+                                                                {panelSummary && <tr><td className="font-semibold pr-2">{panelSummary.label}:</td><td>{panelSummary.value}</td></tr>}
+                                                                <tr><td className="font-semibold pr-2">Total Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
+                                                                <tr><td className="font-semibold pr-2">Hardware Cost:</td><td>₹{Math.round(totalHardwareCost).toLocaleString('en-IN')}</td></tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="p-2 align-top text-center">{item.config.width} x {item.config.height} mm</td>
+                                            <td className="p-2 align-top text-center">{item.quantity}</td>
+                                            <td className="p-2 align-top text-right">₹{item.rate.toLocaleString('en-IN')} / {item.areaType}</td>
+                                            <td className="p-2 align-top text-right font-bold">₹{Math.round(totalCost).toLocaleString('en-IN')}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Summary and Totals - potentially on a new page */}
+                    <div className="print-summary final-summary-page" style={{breakInside: 'avoid'}}>
+                        <div className="flex justify-end mt-4">
+                            <div className="w-2/5 text-xs">
+                                <table className="w-full">
+                                    <tbody>
+                                        <tr className="border-b border-gray-300">
+                                            <td className="py-1 pr-4">Sub-Total</td>
+                                            <td className="py-1 text-right font-semibold">₹{subTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                        </tr>
+                                        <tr className="border-b border-gray-300">
+                                            <td className="py-1 pr-4">Discount ({settings.financials.discountType === 'percentage' ? `${settings.financials.discount}%` : 'Fixed'})</td>
+                                            <td className="py-1 text-right font-semibold">(-) ₹{discountAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                        </tr>
+                                        <tr className="border-b-2 border-black">
+                                            <td className="py-1 pr-4 font-bold">Total before Tax</td>
+                                            <td className="py-1 text-right font-bold">₹{totalAfterDiscount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                        </tr>
+                                        <tr className="border-b border-gray-300">
+                                            <td className="py-1 pr-4">GST @ {settings.financials.gstPercentage}%</td>
+                                            <td className="py-1 text-right font-semibold">(+) ₹{gstAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                        </tr>
+                                        <tr className="border-t-2 border-black bg-gray-200">
+                                            <td className="p-2 pr-4 font-bold text-sm">Grand Total</td>
+                                            <td className="p-2 text-right font-bold text-sm">₹{grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div className="text-xs mt-2 text-right font-bold">
+                            <p>Amount in Words: {amountToWords(grandTotal)}</p>
+                        </div>
+                        
+                        <EditableSection title="Description" value={settings.description} onChange={(val) => setSettings({...settings, description: val})} />
+                        <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} />
+                    </div>
+
+                    {/* Footer and Signature */}
+                    <div className="print-footer-container"> {/* This is hidden on screen, shown on print */}
+                        <div className="print-footer">
+                            <div className="flex-grow">
+                                <h3 className="font-bold text-sm mb-1">Bank Details</h3>
+                                <p><strong>A/C Name:</strong> {settings.bankDetails.name}</p>
+                                <p><strong>A/C No:</strong> {settings.bankDetails.accountNumber}</p>
+                                <p><strong>IFSC:</strong> {settings.bankDetails.ifsc}</p>
+                                <p><strong>Branch:</strong> {settings.bankDetails.branch}</p>
+                                <p><strong>A/C Type:</strong> {settings.bankDetails.accountType}</p>
+                            </div>
+                            <div className="w-1/3 text-center self-end">
+                                <div className="border-t-2 border-black pt-2">
+                                    Authorised Signature
+                                </div>
+                            </div>
+                            <div className="text-right text-[7pt] self-end">
+                                Page <span className="page-counter"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* --- End of Printable Content --- */}
+            </div>
+        </div>
+    </div>
+  );
+};
