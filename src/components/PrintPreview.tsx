@@ -81,7 +81,7 @@ const PrintShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | '
     return <div className={baseStyle} style={style}>{text}</div>;
 }
 
-const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => ( <div style={{ backgroundColor: color, position: 'absolute', ...style, boxSizing: 'border-box', border: `0.5pt solid ${color}` }} /> );
+const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => ( <div style={{ backgroundColor: color, position: 'absolute', ...style, boxSizing: 'border-box' }} /> );
 
 const PrintGlassGrid: React.FC<{width: number, height: number, rows: number, cols: number, profileSize: number, scale: number, color: string}> = ({ width, height, rows, cols, profileSize, scale, color }) => {
     if ((rows <= 0 && cols <= 0) || profileSize <= 0) return null;
@@ -117,7 +117,6 @@ const PrintableMiteredFrame: React.FC<{
         backgroundColor: color,
         position: 'absolute',
         boxSizing: 'border-box',
-        border: `0.5pt solid ${color}`
     };
 
     const clipTs = Math.max(0, ts);
@@ -194,7 +193,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0, glassGridProfile: Number(series.dimensions.glassGridProfile) || 0,
     };
 
-    const glassStyle = { backgroundColor: '#E2E8F0', boxSizing: 'border-box' as const, border: '0.5pt solid #cccccc' };
+    const glassStyle = { backgroundColor: '#E2E8F0', boxSizing: 'border-box' as const };
 
     const topFix = fixedPanels.find(p => p.position === FixedPanelPosition.TOP);
     const bottomFix = fixedPanels.find(p => p.position === FixedPanelPosition.BOTTOM);
@@ -689,7 +688,11 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                     const baseCost = totalArea * item.rate;
                                     const totalHardwareCost = item.hardwareCost * item.quantity;
                                     const totalCost = baseCost + totalHardwareCost;
+                                    
+                                    const unitAmount = (singleArea * item.rate) + item.hardwareCost;
+
                                     const { panelCounts, hardwareDetails } = getItemDetails(item);
+                                    const handleItem = hardwareDetails.find(hw => hw.name.toLowerCase().includes('handle'));
 
                                     return (
                                         <tr key={item.id} className="border-b border-gray-300 print-item">
@@ -704,20 +707,15 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                         <tr><td className='pr-2 font-semibold'>Series:</td><td>{item.config.series.name}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Size:</td><td>{item.config.width} x {item.config.height} mm</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Rate:</td><td>₹{item.rate.toLocaleString('en-IN')} / {item.areaType}</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Color:</td><td>{item.profileColorName}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Glass:</td><td>{item.config.glassThickness}mm {item.config.glassType}{item.config.glassSpecialType !== 'none' ? ` (${item.config.glassSpecialType})` : ''} {item.config.customGlassName && `- ${item.config.customGlassName}`}</td></tr>
                                                         {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
-                                                        {hardwareDetails.length > 0 && (
-                                                            <>
-                                                                <tr><td colSpan={2} className='pt-1 font-semibold'>Hardware:</td></tr>
-                                                                {hardwareDetails.map((hw, hwIndex) => (
-                                                                    <tr key={hwIndex}>
-                                                                        <td className='pl-2'>{hw.name}</td>
-                                                                        <td>{hw.qty} Nos. @ ₹{hw.rate} = ₹{hw.total.toLocaleString('en-IN')}</td>
-                                                                    </tr>
-                                                                ))}
-                                                            </>
+                                                        {handleItem && (
+                                                            <tr>
+                                                                <td className='pr-2 font-semibold pt-1'>Hardware:</td>
+                                                                <td className='pt-1'>{handleItem.name}</td>
+                                                            </tr>
                                                         )}
                                                     </tbody>
                                                 </table>
