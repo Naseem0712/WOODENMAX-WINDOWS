@@ -81,7 +81,7 @@ const PrintShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | '
     return <div className={baseStyle} style={style}>{text}</div>;
 }
 
-const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => ( <div style={{ backgroundColor: color, position: 'absolute', ...style, boxSizing: 'border-box' }} /> );
+const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => ( <div style={{ backgroundColor: color, position: 'absolute', ...style, boxSizing: 'border-box', border: `0.5pt solid ${color}` }} /> );
 
 const PrintGlassGrid: React.FC<{width: number, height: number, rows: number, cols: number, profileSize: number, scale: number, color: string}> = ({ width, height, rows, cols, profileSize, scale, color }) => {
     if ((rows <= 0 && cols <= 0) || profileSize <= 0) return null;
@@ -96,72 +96,6 @@ const PrintGlassGrid: React.FC<{width: number, height: number, rows: number, col
     }
     return <>{elements}</>
 }
-
-const getInnerArea = (config: WindowConfig) => {
-    const numWidth = Number(config.width) || 1;
-    const numHeight = Number(config.height) || 1;
-    const frameOffset = (config.windowType !== WindowType.GLASS_PARTITION) ? (Number(config.series.dimensions.outerFrame) || 0) : 0;
-    
-    const topFix = config.fixedPanels.find(p => p.position === FixedPanelPosition.TOP);
-    const bottomFix = config.fixedPanels.find(p => p.position === FixedPanelPosition.BOTTOM);
-    const leftFix = config.fixedPanels.find(p => p.position === FixedPanelPosition.LEFT);
-    const rightFix = config.fixedPanels.find(p => p.position === FixedPanelPosition.RIGHT);
-
-    const holeX1 = leftFix ? leftFix.size : frameOffset;
-    const holeY1 = topFix ? topFix.size : frameOffset;
-    const holeX2 = rightFix ? numWidth - rightFix.size : numWidth - frameOffset;
-    const holeY2 = bottomFix ? numHeight - bottomFix.size : numHeight - frameOffset;
-
-    return { innerAreaWidth: holeX2 - holeX1, innerAreaHeight: holeY2 - holeY1 };
-}
-
-const WindowAnnotations: React.FC<{ config: WindowConfig }> = ({ config }) => {
-    const { innerAreaWidth, innerAreaHeight } = getInnerArea(config);
-    const { series, windowType, shutterConfig, doorPositions, ventilatorGrid, partitionPanels } = config;
-    const dims = { shutterInterlock: Number(series.dimensions.shutterInterlock) || 0 };
-    
-    let annotations: string[] = [];
-
-    switch(windowType) {
-        case WindowType.SLIDING:
-            const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;
-            const numShutters = is4G ? 4 : (shutterConfig === ShutterConfigType.TWO_GLASS ? 2 : 3);
-            const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
-            const shutterDivider = hasMesh ? 2 : numShutters;
-            const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * dims.shutterInterlock) / shutterDivider;
-            annotations.push(`${numShutters}-Panel: ${shutterWidth.toFixed(0)}mm (W)`);
-            break;
-        case WindowType.CASEMENT:
-        case WindowType.VENTILATOR:
-            const doorCount = doorPositions.length + ventilatorGrid.flat().filter(c => c.type === 'door').length;
-            if (doorCount > 0) {
-                 const gridCols = config.verticalDividers.length + 1;
-                 const gridRows = config.horizontalDividers.length + 1;
-                 const panelWidth = innerAreaWidth / gridCols;
-                 const panelHeight = innerAreaHeight / gridRows;
-                 annotations.push(`Door Panel: ${panelWidth.toFixed(0)}x${panelHeight.toFixed(0)}mm`);
-            }
-             if (ventilatorGrid.flat().some(c => c.type === 'louvers')) {
-                annotations.push('Louvers Panel');
-            }
-            break;
-        case WindowType.GLASS_PARTITION:
-            const panelWidth = innerAreaWidth / partitionPanels.count;
-            annotations.push(`Panel Width: ${panelWidth.toFixed(0)}mm`);
-            break;
-        case WindowType.CORNER:
-            // Annotations for corner windows might be more complex, handle if needed
-            break;
-    }
-
-    if (annotations.length === 0) return null;
-
-    return (
-        <div className="text-center text-[7pt] text-gray-800 mt-1">
-            {annotations.join(' | ')}
-        </div>
-    );
-};
 
 const PrintableMiteredFrame: React.FC<{
     width: number;
@@ -183,6 +117,7 @@ const PrintableMiteredFrame: React.FC<{
         backgroundColor: color,
         position: 'absolute',
         boxSizing: 'border-box',
+        border: `0.5pt solid ${color}`
     };
 
     const clipTs = Math.max(0, ts);
@@ -242,7 +177,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         );
     }
 
-    const containerWidthPx = 200; // Reduced from 240
+    const containerWidthPx = 150;
     const numWidth = Number(config.width) || 1;
     const numHeight = Number(config.height) || 1;
     const scale = externalScale || containerWidthPx / numWidth;
@@ -259,7 +194,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0, glassGridProfile: Number(series.dimensions.glassGridProfile) || 0,
     };
 
-    const glassStyle = { backgroundColor: '#E2E8F0', boxSizing: 'border-box' as const };
+    const glassStyle = { backgroundColor: '#E2E8F0', boxSizing: 'border-box' as const, border: '0.5pt solid #cccccc' };
 
     const topFix = fixedPanels.find(p => p.position === FixedPanelPosition.TOP);
     const bottomFix = fixedPanels.find(p => p.position === FixedPanelPosition.BOTTOM);
@@ -552,50 +487,64 @@ const EditableSection: React.FC<{title: string, value: string, onChange: (value:
     );
 };
 
-const getPanelSummary = (config: WindowConfig): { label: string; value: string } | null => {
-    const parts: string[] = [];
-    let label = 'Configuration';
+const getItemDetails = (item: QuotationItem) => {
+    const { config, quantity } = item;
+    const { windowType, shutterConfig, doorPositions, ventilatorGrid } = config;
 
-    switch (config.windowType) {
-        case WindowType.SLIDING: {
-            label = 'Shutters';
-            const { shutterConfig } = config;
-            if (shutterConfig === ShutterConfigType.TWO_GLASS) parts.push('2 Glass');
-            else if (shutterConfig === ShutterConfigType.THREE_GLASS) parts.push('3 Glass');
-            else if (shutterConfig === ShutterConfigType.FOUR_GLASS) parts.push('4 Glass');
-            else if (shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH) parts.push('2 Glass', '1 Mesh');
-            break;
+    const panelCounts: { [key: string]: number } = {};
+
+    if (windowType === WindowType.SLIDING) {
+        if (shutterConfig === ShutterConfigType.TWO_GLASS) panelCounts['Sliding Shutter'] = 2;
+        else if (shutterConfig === ShutterConfigType.THREE_GLASS) panelCounts['Sliding Shutter'] = 3;
+        else if (shutterConfig === ShutterConfigType.FOUR_GLASS) panelCounts['Sliding Shutter'] = 4;
+        else if (shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH) {
+            panelCounts['Sliding Shutter'] = 2;
+            panelCounts['Mesh Shutter'] = 1;
         }
-        case WindowType.CASEMENT: {
-            label = 'Panels';
-            const doorCount = config.doorPositions.length;
-            const gridCells = (config.verticalDividers.length + 1) * (config.horizontalDividers.length + 1);
-            const fixedCount = gridCells - doorCount;
-            if (doorCount > 0) parts.push(`${doorCount} Door${doorCount > 1 ? 's' : ''}`);
-            if (fixedCount > 0) parts.push(`${fixedCount} Fixed`);
-            break;
-        }
-        case WindowType.VENTILATOR: {
-            label = 'Panels';
-            const counts: { [key: string]: number } = {};
-            config.ventilatorGrid.flat().forEach(cell => {
-                counts[cell.type] = (counts[cell.type] || 0) + 1;
-            });
-            Object.entries(counts).forEach(([type, count]) => {
-                if (count > 0) {
-                    const typeName = type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    parts.push(`${count} ${typeName}`);
-                }
-            });
-            break;
-        }
-        default:
-            return null;
+    } else if (windowType === WindowType.CASEMENT) {
+        const gridCells = (config.verticalDividers.length + 1) * (config.horizontalDividers.length + 1);
+        panelCounts['Openable Door'] = doorPositions.length;
+        panelCounts['Fixed Panel'] = gridCells - doorPositions.length;
+    } else if (windowType === WindowType.VENTILATOR) {
+        ventilatorGrid.flat().forEach(cell => {
+            const typeName = cell.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            panelCounts[typeName] = (panelCounts[typeName] || 0) + 1;
+        });
     }
 
-    if (parts.length === 0) return null;
-    return { label, value: parts.join(', ') };
+    const hardwareDetails: { name: string, qty: number, rate: number, total: number }[] = [];
+    for (const hw of item.hardwareItems) {
+        const qtyPerUnit = Number(hw.qtyPerShutter) || 0;
+        let unitsPerWindow = 0;
+        if (hw.unit === 'per_window') {
+            unitsPerWindow = 1;
+        } else if (hw.unit === 'per_shutter_or_door') {
+             if (windowType === WindowType.VENTILATOR) {
+                const doorCells = ventilatorGrid.flat().filter(c => c.type === 'door').length;
+                const louverCells = ventilatorGrid.flat().filter(c => c.type === 'louvers').length;
+                unitsPerWindow = hw.name.toLowerCase().includes('louver') ? louverCells : doorCells;
+            } else {
+                 switch(windowType) {
+                    case WindowType.SLIDING: unitsPerWindow = shutterConfig === '2G' ? 2 : shutterConfig === '4G' ? 4 : 3; break;
+                    case WindowType.CASEMENT: unitsPerWindow = doorPositions.length; break;
+                    case WindowType.GLASS_PARTITION: unitsPerWindow = config.partitionPanels.types.filter(t => t.type !== 'fixed').length; break;
+                }
+            }
+        }
+        const totalQtyForItem = qtyPerUnit * unitsPerWindow * quantity;
+        if (totalQtyForItem > 0) {
+            hardwareDetails.push({
+                name: hw.name,
+                qty: totalQtyForItem,
+                rate: Number(hw.rate) || 0,
+                total: totalQtyForItem * (Number(hw.rate) || 0)
+            });
+        }
+    }
+
+    return { panelCounts, hardwareDetails };
 }
+
 
 export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, items, settings, setSettings }) => {
     
@@ -695,8 +644,6 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
         <div ref={printContainerRef} className="flex-grow overflow-y-auto bg-slate-900 print-preview-container custom-scrollbar">
             <div className="a4-page single-scroll-preview text-black">
                 {/* --- Start of Printable Content --- */}
-
-                {/* Page 1 Header */}
                 <div className="print-header" style={{height: 'auto'}}>
                     <div className="flex justify-between items-start">
                         <div className="flex items-start gap-4">
@@ -722,21 +669,16 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                     </div>
                 </div>
 
-                {/* Main Content (Items + Summary) */}
                 <div className="print-content" style={{display: 'block'}}>
                     <h3 className="text-xl font-bold text-black text-center my-4">{settings.title}</h3>
-                    
-                    {/* Items Table */}
                     <div className="w-full text-[8pt]">
                         <table className="w-full" style={{borderCollapse: 'collapse'}}>
                             <thead className="bg-gray-200">
                                 <tr className="border-b-2 border-t-2 border-black">
                                     <th className="p-1 text-center w-[5%]">#</th>
-                                    <th className="p-1 text-left w-[35%]">Item Description</th>
-                                    <th className="p-1 text-center w-[15%]">Dimensions (WxH)</th>
+                                    <th className="p-1 text-left w-[65%]" colSpan={2}>Item Description</th>
                                     <th className="p-1 text-center w-[10%]">Qty</th>
-                                    <th className="p-1 text-right w-[15%]">Rate</th>
-                                    <th className="p-1 text-right w-[20%]">Total Amount</th>
+                                    <th className="p-1 text-right w-[20%]" colSpan={2}>Total Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -747,34 +689,41 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                     const baseCost = totalArea * item.rate;
                                     const totalHardwareCost = item.hardwareCost * item.quantity;
                                     const totalCost = baseCost + totalHardwareCost;
-                                    const panelSummary = getPanelSummary(item.config);
+                                    const { panelCounts, hardwareDetails } = getItemDetails(item);
+
                                     return (
                                         <tr key={item.id} className="border-b border-gray-300 print-item">
                                             <td className="p-2 align-top text-center">{index + 1}</td>
-                                            <td className="p-2 align-top">
-                                                <p className="font-bold print-window-title">{item.title}</p>
-                                                <div className="flex gap-4">
-                                                    <div className="w-1/3">
-                                                        <PrintableWindow config={item.config} />
-                                                        <WindowAnnotations config={item.config} />
-                                                    </div>
-                                                    <div className="w-2/3 print-item-details">
-                                                        <table className="w-full text-[7pt]">
-                                                            <tbody>
-                                                                <tr><td className="font-semibold pr-2">Profile:</td><td>{item.config.series.name} {item.profileColorName && `(${item.profileColorName})`}</td></tr>
-                                                                <tr><td className="font-semibold pr-2">Glass:</td><td>{item.config.glassThickness}mm {item.config.glassType}{item.config.glassSpecialType !== 'none' ? ` (${item.config.glassSpecialType})` : ''} {item.config.customGlassName && `- ${item.config.customGlassName}`}</td></tr>
-                                                                {panelSummary && <tr><td className="font-semibold pr-2">{panelSummary.label}:</td><td>{panelSummary.value}</td></tr>}
-                                                                <tr><td className="font-semibold pr-2">Total Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
-                                                                <tr><td className="font-semibold pr-2">Hardware Cost:</td><td>₹{Math.round(totalHardwareCost).toLocaleString('en-IN')}</td></tr>
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                </div>
+                                            <td className="p-2 align-top w-[25%]" style={{ width: '150px' }}>
+                                                <PrintableWindow config={item.config} />
                                             </td>
-                                            <td className="p-2 align-top text-center">{item.config.width} x {item.config.height} mm</td>
+                                            <td className="p-2 align-top w-[40%]">
+                                                <p className="font-bold print-window-title">{item.title}</p>
+                                                <table className="w-full text-[7pt] mt-1 details-table">
+                                                    <tbody>
+                                                        <tr><td className='pr-2 font-semibold'>Series:</td><td>{item.config.series.name}</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Size:</td><td>{item.config.width} x {item.config.height} mm</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Rate:</td><td>₹{item.rate.toLocaleString('en-IN')} / {item.areaType}</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Color:</td><td>{item.profileColorName}</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Glass:</td><td>{item.config.glassThickness}mm {item.config.glassType}{item.config.glassSpecialType !== 'none' ? ` (${item.config.glassSpecialType})` : ''} {item.config.customGlassName && `- ${item.config.customGlassName}`}</td></tr>
+                                                        {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
+                                                        {hardwareDetails.length > 0 && (
+                                                            <>
+                                                                <tr><td colSpan={2} className='pt-1 font-semibold'>Hardware:</td></tr>
+                                                                {hardwareDetails.map((hw, hwIndex) => (
+                                                                    <tr key={hwIndex}>
+                                                                        <td className='pl-2'>{hw.name}</td>
+                                                                        <td>{hw.qty} Nos. @ ₹{hw.rate} = ₹{hw.total.toLocaleString('en-IN')}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </td>
                                             <td className="p-2 align-top text-center">{item.quantity}</td>
-                                            <td className="p-2 align-top text-right">₹{item.rate.toLocaleString('en-IN')} / {item.areaType}</td>
-                                            <td className="p-2 align-top text-right font-bold">₹{Math.round(totalCost).toLocaleString('en-IN')}</td>
+                                            <td className="p-2 align-top text-right font-bold" colSpan={2}>₹{Math.round(totalCost).toLocaleString('en-IN')}</td>
                                         </tr>
                                     );
                                 })}
@@ -782,7 +731,6 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         </table>
                     </div>
 
-                    {/* Summary and Totals - potentially on a new page */}
                     <div className="print-summary final-summary-page" style={{breakInside: 'avoid'}}>
                         <div className="flex justify-end mt-4">
                             <div className="w-2/5 text-xs">
@@ -820,8 +768,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} />
                     </div>
 
-                    {/* Footer and Signature */}
-                    <div className="print-footer-container"> {/* This is hidden on screen, shown on print */}
+                    <div className="print-footer-container">
                         <div className="print-footer">
                             <div className="flex-grow">
                                 <h3 className="font-bold text-sm mb-1">Bank Details</h3>
@@ -842,8 +789,6 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         </div>
                     </div>
                 </div>
-
-                {/* --- End of Printable Content --- */}
             </div>
         </div>
     </div>
