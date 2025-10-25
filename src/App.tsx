@@ -67,6 +67,92 @@ const DEFAULT_SLIDING_HARDWARE: HardwareItem[] = [
     { id: uuidv4(), name: 'Bearing', qtyPerShutter: 2, rate: 80, unit: 'per_shutter_or_door' },
 ];
 
+const PREDEFINED_SLIDING_SERIES: ProfileSeries[] = [
+    // 25mm Series
+    {
+        id: 'series-sliding-25mm-2t-default',
+        name: '25mm Sliding Series (2-Track)',
+        type: WindowType.SLIDING,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 40, shutterHandle: 63, shutterTop: 63, shutterBottom: 63, shutterInterlock: 20 },
+        weights: { outerFrame: 0.880, shutterHandle: 0.835, shutterTop: 0.835, shutterBottom: 0.835, shutterInterlock: 0.803 },
+        hardwareItems: DEFAULT_SLIDING_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+    {
+        id: 'series-sliding-25mm-2tc-default',
+        name: '25mm Sliding Series (2-Track w/ Cover)',
+        type: WindowType.SLIDING,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 42.75, shutterHandle: 63, shutterTop: 63, shutterBottom: 63, shutterInterlock: 20 },
+        weights: { outerFrame: 1.780, shutterHandle: 0.835, shutterTop: 0.835, shutterBottom: 0.835, shutterInterlock: 0.803 },
+        hardwareItems: DEFAULT_SLIDING_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+     {
+        id: 'series-sliding-25mm-slim-default',
+        name: '25mm Sliding Series (Slim Interlock)',
+        type: WindowType.SLIDING,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 40, shutterHandle: 63, shutterTop: 63, shutterBottom: 63, shutterInterlock: 20 },
+        weights: { outerFrame: 0.880, shutterHandle: 0.835, shutterTop: 0.835, shutterBottom: 0.835, shutterInterlock: 0.468 },
+        hardwareItems: DEFAULT_SLIDING_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+    {
+        id: 'series-sliding-25mm-3t-default',
+        name: '25mm Sliding Series (3-Track)',
+        type: WindowType.SLIDING,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 40, shutterHandle: 63, shutterTop: 63, shutterBottom: 63, shutterInterlock: 20 },
+        weights: { outerFrame: 1.471, shutterHandle: 0.835, shutterTop: 0.835, shutterBottom: 0.835, shutterInterlock: 0.803 },
+        hardwareItems: DEFAULT_SLIDING_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+    {
+        id: 'series-sliding-25mm-3tc-default',
+        name: '25mm Sliding Series (3-Track w/ Cover)',
+        type: WindowType.SLIDING,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 42.75, shutterHandle: 63, shutterTop: 63, shutterBottom: 63, shutterInterlock: 20 },
+        weights: { outerFrame: 1.676, shutterHandle: 0.835, shutterTop: 0.835, shutterBottom: 0.835, shutterInterlock: 0.803 },
+        hardwareItems: DEFAULT_SLIDING_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+    // 27mm Series
+    {
+        id: 'series-sliding-27mm-2t-default',
+        name: '27mm Sliding Series (2-Track)',
+        type: WindowType.SLIDING,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 42, shutterHandle: 65, shutterTop: 65, shutterBottom: 65, shutterInterlock: 65, shutterMeeting: 2 },
+        weights: { outerFrame: 0.750, shutterHandle: 0.826, shutterTop: 0.826, shutterBottom: 0.826, shutterInterlock: 0.826, shutterMeeting: 0.303 },
+        hardwareItems: DEFAULT_SLIDING_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+    {
+        id: 'series-sliding-27mm-2tc-default',
+        name: '27mm Sliding Series (2-Track w/ Cover)',
+        type: WindowType.SLIDING,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 46, shutterHandle: 65, shutterTop: 65, shutterBottom: 65, shutterInterlock: 65, shutterMeeting: 2 },
+        weights: { outerFrame: 1.205, shutterHandle: 0.826, shutterTop: 0.826, shutterBottom: 0.826, shutterInterlock: 0.826, shutterMeeting: 0.303 },
+        hardwareItems: DEFAULT_SLIDING_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+    {
+        id: 'series-sliding-27mm-3t-default',
+        name: '27mm Sliding Series (3-Track)',
+        type: WindowType.SLIDING,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 42, shutterHandle: 65, shutterTop: 65, shutterBottom: 65, shutterInterlock: 65, shutterMeeting: 2 },
+        weights: { outerFrame: 1.150, shutterHandle: 0.826, shutterTop: 0.826, shutterBottom: 0.826, shutterInterlock: 0.826, shutterMeeting: 0.303 },
+        hardwareItems: DEFAULT_SLIDING_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+    {
+        id: 'series-sliding-27mm-3tc-default',
+        name: '27mm Sliding Series (3-Track w/ Cover)',
+        type: WindowType.SLIDING,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 46, shutterHandle: 65, shutterTop: 65, shutterBottom: 65, shutterInterlock: 65, shutterMeeting: 2 },
+        weights: { outerFrame: 1.666, shutterHandle: 0.826, shutterTop: 0.826, shutterBottom: 0.826, shutterInterlock: 0.826, shutterMeeting: 0.303 },
+        hardwareItems: DEFAULT_SLIDING_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+];
+
 const DEFAULT_SLIDING_SERIES: ProfileSeries = {
     id: 'series-sliding-default',
     name: 'Standard Sliding Series',
@@ -455,8 +541,9 @@ const App: React.FC = () => {
   const [savedSeries, setSavedSeries] = useState<ProfileSeries[]>(() => {
     try {
       const item = window.localStorage.getItem('aluminium-window-profiles');
-      return item ? JSON.parse(item) : [];
-    } catch (error) { console.error("Could not load profiles", error); return []; }
+      const userSaved = item ? JSON.parse(item).filter((s: ProfileSeries) => !s.id.includes('-default')) : [];
+      return [...PREDEFINED_SLIDING_SERIES, ...userSaved];
+    } catch (error) { console.error("Could not load profiles", error); return [...PREDEFINED_SLIDING_SERIES]; }
   });
 
   const [savedColors, setSavedColors] = useState<SavedColor[]>(() => {
@@ -515,7 +602,10 @@ const App: React.FC = () => {
       window.removeEventListener('appinstalled', appInstalledHandler);
     };
   }, []);
-  useEffect(() => { window.localStorage.setItem('aluminium-window-profiles', JSON.stringify(savedSeries)); }, [savedSeries]);
+  useEffect(() => {
+      const userSaved = savedSeries.filter(s => !s.id.includes('-default'));
+      window.localStorage.setItem('aluminium-window-profiles', JSON.stringify(userSaved));
+  }, [savedSeries]);
   useEffect(() => { window.localStorage.setItem('aluminium-window-last-series', JSON.stringify(series)); }, [series]);
   useEffect(() => { window.localStorage.setItem('aluminium-window-colors', JSON.stringify(savedColors)); }, [savedColors]);
   useEffect(() => { window.localStorage.setItem('woodenmax-quotation-settings', JSON.stringify(quotationSettings)); }, [quotationSettings]);
@@ -534,10 +624,13 @@ const App: React.FC = () => {
     }
   }, [windowType, windowConfigState, activeCornerSide, series.type, savedSeries, SERIES_MAP_MEMO]);
   
-  const availableSeries = useMemo(() => [
-    DEFAULT_SLIDING_SERIES, DEFAULT_CASEMENT_SERIES, DEFAULT_VENTILATOR_SERIES, 
-    DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_CORNER_SERIES, ...savedSeries
-  ], [savedSeries]);
+  const availableSeries = useMemo(() => {
+    const allSeries = [
+        DEFAULT_SLIDING_SERIES, DEFAULT_CASEMENT_SERIES, DEFAULT_VENTILATOR_SERIES, 
+        DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_CORNER_SERIES, ...savedSeries
+    ];
+    return allSeries.filter((s, index, self) => index === self.findIndex(t => t.id === s.id));
+  }, [savedSeries]);
   
   const numShutters = useMemo(() => {
     const activeConfig = windowType === WindowType.CORNER
