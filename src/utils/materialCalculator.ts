@@ -69,7 +69,12 @@ function calculateProfileUsage(config: WindowConfig): Map<keyof ProfileDimension
 
     // Outer Frame and Fixed Panels
     if (config.windowType !== WindowType.GLASS_PARTITION && config.windowType !== WindowType.CORNER) {
-        add('outerFrame', w, w, h, h);
+        if (dims.outerFrameVertical && Number(dims.outerFrameVertical) > 0) {
+            add('outerFrame', w, w); // Horizontal pieces
+            add('outerFrameVertical', h, h); // Vertical pieces
+        } else {
+            add('outerFrame', w, w, h, h); // All sides use the same profile
+        }
         if (topFix) add('fixedFrame', innerW);
         if (bottomFix) add('fixedFrame', innerW);
         if (leftFix) add('fixedFrame', innerH);
@@ -224,13 +229,13 @@ export function generateBillOfMaterials(items: QuotationItem[]): BOM {
         };
 
         for (const [profileKey, pieces] of data.profiles.entries()) {
-            const standardLength = Number(data.series.lengths?.[profileKey]) || DEFAULT_STANDARD_LENGTH_MM;
+            const standardLength = Number(data.series.lengths?.[profileKey as keyof ProfileDimensions]) || DEFAULT_STANDARD_LENGTH_MM;
             const requiredBars = packPieces(pieces, standardLength);
             const totalLength = pieces.reduce((sum, p) => sum + p, 0);
-            const weightPerMeter = Number(data.series.weights?.[profileKey]) || 0;
+            const weightPerMeter = Number(data.series.weights?.[profileKey as keyof ProfileDimensions]) || 0;
 
             bomSeries.profiles.push({
-                profileKey,
+                profileKey: profileKey as keyof ProfileDimensions,
                 pieces,
                 standardLength,
                 requiredBars,

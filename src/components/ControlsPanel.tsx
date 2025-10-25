@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo } from 'react';
-import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig } from '../types';
+import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig, ProfileDimensions } from '../types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType } from '../types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -12,6 +11,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { CollapsibleCard } from './ui/CollapsibleCard';
 import { RefreshIcon } from './icons/RefreshIcon';
+import { SearchableSelect } from './ui/SearchableSelect';
 
 
 interface ControlsPanelProps {
@@ -148,7 +148,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
     setConfig('series', { ...series, dimensions: { ...series.dimensions, [key]: value } });
   };
 
-  const handleProfileDetailChange = (field: 'weights' | 'lengths', key: keyof ProfileSeries['dimensions'], value: number | '') => {
+  const handleProfileDetailChange = (field: 'weights' | 'lengths', key: keyof ProfileDimensions, value: number | '') => {
       setConfig('series', { ...series, [field]: { ...(series[field] || {}), [key]: value } });
   };
 
@@ -165,7 +165,12 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
   const handleDeleteColor = (id: string) => { setSavedColors(savedColors.filter(c => c.id !== id)); }
 
   const isDefaultSeries = series.id.includes('-default');
-  const filteredAvailableSeries = availableSeries.filter(s => s.type === activeWindowType);
+  
+  const seriesOptions = useMemo(() => {
+    return availableSeries
+      .filter(s => s.type === activeWindowType)
+      .map(s => ({ value: s.id, label: s.name }));
+  }, [availableSeries, activeWindowType]);
 
   const getVentilatorCellLabel = (type: VentilatorCellType) => {
     switch(type) {
@@ -420,10 +425,13 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
 
       <CollapsibleCard title="Profile Series Dimensions" isOpen={openCard === 'Profile Series Dimensions'} onToggle={() => handleToggleCard('Profile Series Dimensions')}>
         <div className="space-y-2">
-          <Select label="Active Profile" value={series.id} onChange={(e) => onSeriesSelect(e.target.value)}>
-            {filteredAvailableSeries.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-             {!filteredAvailableSeries.some(s => s.id === series.id) && <option value={series.id} disabled>Custom (Unsaved)</option>}
-          </Select>
+           <SearchableSelect
+              label="Active Profile"
+              options={seriesOptions}
+              value={series.id}
+              onChange={onSeriesSelect}
+              placeholder="Select or search for a profile..."
+           />
           {!isSavingSeries ? (
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="secondary" onClick={handleInitiateSave}>Save Current As...</Button>
@@ -440,7 +448,10 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
           )}
         </div>
         <hr className="border-slate-700 my-4" />
-        {activeWindowType === WindowType.SLIDING && ( <> <DimensionInput label="Outer Frame" value_mm={series.dimensions.outerFrame} onChange_mm={val => handleDimensionChange('outerFrame', val)} weightValue={series.weights?.outerFrame} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrame', v)} lengthValue={series.lengths?.outerFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrame', v)} /> { (fixedPanels.length > 0) && <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} />} <DimensionInput label="Shutter Handle" value_mm={series.dimensions.shutterHandle} onChange_mm={val => handleDimensionChange('shutterHandle', val)} weightValue={series.weights?.shutterHandle} onWeightChange={v => handleProfileDetailChange('weights', 'shutterHandle', v)} lengthValue={series.lengths?.shutterHandle} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterHandle', v)} /> <DimensionInput label="Shutter Interlock" value_mm={series.dimensions.shutterInterlock} onChange_mm={val => handleDimensionChange('shutterInterlock', val)} weightValue={series.weights?.shutterInterlock} onWeightChange={v => handleProfileDetailChange('weights', 'shutterInterlock', v)} lengthValue={series.lengths?.shutterInterlock} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterInterlock', v)} /> { displayConfig.shutterConfig === ShutterConfigType.FOUR_GLASS && <DimensionInput label="Shutter Meeting" value_mm={series.dimensions.shutterMeeting} onChange_mm={val => handleDimensionChange('shutterMeeting', val)} weightValue={series.weights?.shutterMeeting} onWeightChange={v => handleProfileDetailChange('weights', 'shutterMeeting', v)} lengthValue={series.lengths?.shutterMeeting} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterMeeting', v)} />} <DimensionInput label="Shutter Top/Bottom" value_mm={series.dimensions.shutterTop} onChange_mm={val => handleDimensionChange('shutterTop', val)} weightValue={series.weights?.shutterTop} onWeightChange={v => handleProfileDetailChange('weights', 'shutterTop', v)} lengthValue={series.lengths?.shutterTop} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterTop', v)} /> </> )}
+        {activeWindowType === WindowType.SLIDING && ( <> 
+        <DimensionInput label="Outer Frame (Top/Bottom)" value_mm={series.dimensions.outerFrame} onChange_mm={val => handleDimensionChange('outerFrame', val)} weightValue={series.weights?.outerFrame} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrame', v)} lengthValue={series.lengths?.outerFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrame', v)} /> 
+        <DimensionInput label="Outer Frame (Vertical)" value_mm={series.dimensions.outerFrameVertical} onChange_mm={val => handleDimensionChange('outerFrameVertical', val)} weightValue={series.weights?.outerFrameVertical} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrameVertical', v)} lengthValue={series.lengths?.outerFrameVertical} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrameVertical', v)} />
+        { (fixedPanels.length > 0) && <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} />} <DimensionInput label="Shutter Handle" value_mm={series.dimensions.shutterHandle} onChange_mm={val => handleDimensionChange('shutterHandle', val)} weightValue={series.weights?.shutterHandle} onWeightChange={v => handleProfileDetailChange('weights', 'shutterHandle', v)} lengthValue={series.lengths?.shutterHandle} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterHandle', v)} /> <DimensionInput label="Shutter Interlock" value_mm={series.dimensions.shutterInterlock} onChange_mm={val => handleDimensionChange('shutterInterlock', val)} weightValue={series.weights?.shutterInterlock} onWeightChange={v => handleProfileDetailChange('weights', 'shutterInterlock', v)} lengthValue={series.lengths?.shutterInterlock} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterInterlock', v)} /> { displayConfig.shutterConfig === ShutterConfigType.FOUR_GLASS && <DimensionInput label="Shutter Meeting" value_mm={series.dimensions.shutterMeeting} onChange_mm={val => handleDimensionChange('shutterMeeting', val)} weightValue={series.weights?.shutterMeeting} onWeightChange={v => handleProfileDetailChange('weights', 'shutterMeeting', v)} lengthValue={series.lengths?.shutterMeeting} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterMeeting', v)} />} <DimensionInput label="Shutter Top/Bottom" value_mm={series.dimensions.shutterTop} onChange_mm={val => handleDimensionChange('shutterTop', val)} weightValue={series.weights?.shutterTop} onWeightChange={v => handleProfileDetailChange('weights', 'shutterTop', v)} lengthValue={series.lengths?.shutterTop} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterTop', v)} /> </> )}
         {(activeWindowType === WindowType.CASEMENT || activeWindowType === WindowType.VENTILATOR) && ( <> <DimensionInput label="Outer Frame" value_mm={series.dimensions.outerFrame} onChange_mm={val => handleDimensionChange('outerFrame', val)} weightValue={series.weights?.outerFrame} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrame', v)} lengthValue={series.lengths?.outerFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrame', v)} /> <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} /> <DimensionInput label="Shutter/Door Frame" value_mm={series.dimensions.casementShutter} onChange_mm={val => handleDimensionChange('casementShutter', val)} weightValue={series.weights?.casementShutter} onWeightChange={v => handleProfileDetailChange('weights', 'casementShutter', v)} lengthValue={series.lengths?.casementShutter} onLengthChange={v => handleProfileDetailChange('lengths', 'casementShutter', v)} /> <DimensionInput label="Mullion Profile" value_mm={series.dimensions.mullion} onChange_mm={val => handleDimensionChange('mullion', val)} weightValue={series.weights?.mullion} onWeightChange={v => handleProfileDetailChange('weights', 'mullion', v)} lengthValue={series.lengths?.mullion} onLengthChange={v => handleProfileDetailChange('lengths', 'mullion', v)} /> </> )}
         {activeWindowType === WindowType.VENTILATOR && ( <DimensionInput label="Louver Blade" value_mm={series.dimensions.louverBlade} onChange_mm={val => handleDimensionChange('louverBlade', val)} weightValue={series.weights?.louverBlade} onWeightChange={v => handleProfileDetailChange('weights', 'louverBlade', v)} lengthValue={series.lengths?.louverBlade} onLengthChange={v => handleProfileDetailChange('lengths', 'louverBlade', v)} /> )}
         {windowType === WindowType.GLASS_PARTITION && ( <> <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} /> <DimensionInput label="Hinged Panel Frame" value_mm={series.dimensions.casementShutter} onChange_mm={val => handleDimensionChange('casementShutter', val)} weightValue={series.weights?.casementShutter} onWeightChange={v => handleProfileDetailChange('weights', 'casementShutter', v)} lengthValue={series.lengths?.casementShutter} onLengthChange={v => handleProfileDetailChange('lengths', 'casementShutter', v)} /> <DimensionInput label="Top Track Height" value_mm={series.dimensions.topTrack} onChange_mm={val => handleDimensionChange('topTrack', val)} weightValue={series.weights?.topTrack} onWeightChange={v => handleProfileDetailChange('weights', 'topTrack', v)} lengthValue={series.lengths?.topTrack} onLengthChange={v => handleProfileDetailChange('lengths', 'topTrack', v)} /> <DimensionInput label="Bottom Track Height" value_mm={series.dimensions.bottomTrack} onChange_mm={val => handleDimensionChange('bottomTrack', val)} weightValue={series.weights?.bottomTrack} onWeightChange={v => handleProfileDetailChange('weights', 'bottomTrack', v)} lengthValue={series.lengths?.bottomTrack} onLengthChange={v => handleProfileDetailChange('lengths', 'bottomTrack', v)} /> <DimensionInput label="Glass Grid Profile" value_mm={series.dimensions.glassGridProfile} onChange_mm={val => handleDimensionChange('glassGridProfile', val)} weightValue={series.weights?.glassGridProfile} onWeightChange={v => handleProfileDetailChange('weights', 'glassGridProfile', v)} lengthValue={series.lengths?.glassGridProfile} onLengthChange={v => handleProfileDetailChange('lengths', 'glassGridProfile', v)} /> </> )}

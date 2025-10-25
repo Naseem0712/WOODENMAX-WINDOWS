@@ -32,6 +32,7 @@ export interface GlassOptions {
 export interface ProfileDimensions {
   // Shared
   outerFrame: number | '';
+  outerFrameVertical?: number | '';
   fixedFrame: number | '';
 
   // Sliding
