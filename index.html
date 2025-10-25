@@ -81,28 +81,6 @@
       break-before: page;
     }
 
-    /* Unified styles for on-screen preview, PDF export, and native print */
-    .print-preview-active .print-item > .flex,
-    .pdf-export-mode .print-item > .flex,
-    @media print .print-item > .flex {
-        display: block !important;
-    }
-
-    .print-preview-active .print-item .w-1\/3,
-    .print-preview-active .print-item .w-2\/3,
-    .pdf-export-mode .print-item .w-1\/3,
-    .pdf-export-mode .print-item .w-2\/3,
-    @media print .print-item .w-1\/3,
-    @media print .print-item .w-2\/3 {
-        width: 100% !important;
-    }
-
-    .print-preview-active .print-item .w-1\/3,
-    .pdf-export-mode .print-item .w-1\/3,
-    @media print .print-item .w-1\/3 {
-        margin-bottom: 8px;
-    }
-
     .print-preview-active textarea.print-editable {
         border-color: #94a3b8 !important; /* Lighter border for editing */
         background-color: #f8fafc !important; /* Light background for editing */

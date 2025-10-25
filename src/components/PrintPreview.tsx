@@ -59,14 +59,29 @@ const PrintDimensionLabel: React.FC<{ value: number; unit?: string, className?: 
     </span>
 );
 
-const PrintShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | 'door' | 'louvers' | 'exhaust_fan' }> = ({ type }) => {
+const PrintShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | 'door' | 'louvers' | 'exhaust_fan', width?: number, height?: number }> = ({ type, width, height }) => {
     if (!type) return null;
-    const baseStyle = "absolute inset-0 flex items-center justify-center text-black font-bold tracking-widest text-[8pt] pointer-events-none opacity-80 z-10";
+    
+    const containerSize = Math.min(width || 100, height || 100);
+    const baseFontSizePt = 8;
+    const scaleFactor = Math.min(1, containerSize / 50); 
+    const fontSize = baseFontSizePt * scaleFactor;
+    const finalFontSize = Math.max(fontSize, 4); 
+
     const text = type.replace('_', ' ').toUpperCase();
-    return <div className={baseStyle}>{text}</div>;
+    
+    const style: React.CSSProperties = {
+        fontSize: `${finalFontSize}pt`,
+        lineHeight: 1,
+        wordBreak: 'break-word',
+    };
+
+    const baseStyle = "absolute inset-0 flex items-center justify-center text-black font-bold tracking-normal pointer-events-none opacity-80 z-10 p-1 text-center";
+
+    return <div className={baseStyle} style={style}>{text}</div>;
 }
 
-const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => ( <div style={{ backgroundColor: color, border: '0.5px solid #555', position: 'absolute', ...style, boxSizing: 'border-box' }} /> );
+const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => ( <div style={{ backgroundColor: color, position: 'absolute', ...style, boxSizing: 'border-box' }} /> );
 
 const PrintGlassGrid: React.FC<{width: number, height: number, rows: number, cols: number, profileSize: number, scale: number, color: string}> = ({ width, height, rows, cols, profileSize, scale, color }) => {
     if ((rows <= 0 && cols <= 0) || profileSize <= 0) return null;
@@ -166,7 +181,6 @@ const PrintableMiteredFrame: React.FC<{
 
     const baseStyle: React.CSSProperties = {
         backgroundColor: color,
-        border: '0.5px solid #555',
         position: 'absolute',
         boxSizing: 'border-box',
     };
@@ -198,7 +212,6 @@ const PrintableHandle: React.FC<{ config: WindowConfig['slidingHandles'][0], sca
     const style: React.CSSProperties = {
         position: 'absolute',
         backgroundColor: '#333', // Dark grey for print
-        border: '0.5px solid #000',
         width: (isVertical ? handleWidth : handleHeight) * scale,
         height: (isVertical ? handleHeight : handleWidth) * scale,
     };
@@ -206,11 +219,33 @@ const PrintableHandle: React.FC<{ config: WindowConfig['slidingHandles'][0], sca
 };
 
 
-const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
+const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }> = ({ config, externalScale }) => {
+    if (config.windowType === WindowType.CORNER && config.leftConfig && config.rightConfig) {
+        const leftW = Number(config.leftWidth) || 0;
+        const rightW = Number(config.rightWidth) || 0;
+        const postW = Number(config.cornerPostWidth) || 0;
+        const numHeight = Number(config.height) || 1;
+        const totalW = leftW + rightW + postW;
+        
+        const containerWidthPx = 200;
+        const scale = externalScale || containerWidthPx / totalW;
+
+        const cornerConfigLeft: WindowConfig = { ...config, ...config.leftConfig, width: leftW, height: numHeight, windowType: config.leftConfig.windowType, fixedPanels: [] };
+        const cornerConfigRight: WindowConfig = { ...config, ...config.rightConfig, width: rightW, height: numHeight, windowType: config.rightConfig.windowType, fixedPanels: [] };
+
+        return (
+            <div className="flex items-start" style={{ width: totalW * scale, height: numHeight * scale, margin: 'auto' }}>
+                <PrintableWindow config={cornerConfigLeft} externalScale={scale} />
+                <div style={{ width: postW * scale, height: numHeight * scale, backgroundColor: config.profileColor }} />
+                <PrintableWindow config={cornerConfigRight} externalScale={scale} />
+            </div>
+        );
+    }
+
     const containerWidthPx = 200; // Reduced from 240
     const numWidth = Number(config.width) || 1;
     const numHeight = Number(config.height) || 1;
-    const scale = containerWidthPx / numWidth;
+    const scale = externalScale || containerWidthPx / numWidth;
 
     const { series, fixedPanels, profileColor, windowType } = config;
     const dims = {
@@ -224,7 +259,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
         topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0, glassGridProfile: Number(series.dimensions.glassGridProfile) || 0,
     };
 
-    const glassStyle = { backgroundColor: '#E2E8F0', border: '0.5px solid #999', boxSizing: 'border-box' as const };
+    const glassStyle = { backgroundColor: '#E2E8F0', boxSizing: 'border-box' as const };
 
     const topFix = fixedPanels.find(p => p.position === FixedPanelPosition.TOP);
     const bottomFix = fixedPanels.find(p => p.position === FixedPanelPosition.BOTTOM);
@@ -241,20 +276,28 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
     const labelElements: React.ReactNode[] = [];
     const handleElements: React.ReactNode[] = [];
 
-    const GlassPanel: React.FC<{style: React.CSSProperties, children?: React.ReactNode, glassWidth: number, glassHeight: number}> = ({ style, children, glassWidth, glassHeight }) => ( 
-      <div className="absolute" style={{...glassStyle, ...style}}>
-        <PrintGlassGrid width={glassWidth} height={glassHeight} rows={config.glassGrid.rows} cols={config.glassGrid.cols} profileSize={dims.glassGridProfile} scale={scale} color={profileColor} />
-        {children}
-      </div> 
-    );
+    const GlassPanel: React.FC<{style: React.CSSProperties, children?: React.ReactNode, glassWidthPx: number, glassHeightPx: number}> = ({ style, children, glassWidthPx, glassHeightPx }) => {
+      const childrenWithProps = React.Children.map(children, child => {
+        if (React.isValidElement(child) && child.type === PrintShutterIndicator) {
+            return React.cloneElement(child as React.ReactElement<any>, { width: glassWidthPx, height: glassHeightPx });
+        }
+        return child;
+      });
+      return (
+        <div className="absolute" style={{...glassStyle, ...style}}>
+            <PrintGlassGrid width={glassWidthPx / scale} height={glassHeightPx / scale} rows={config.glassGrid.rows} cols={config.glassGrid.cols} profileSize={dims.glassGridProfile} scale={scale} color={profileColor} />
+            {childrenWithProps}
+        </div> 
+      );
+    }
     
     // Outer frame
-    if (windowType !== WindowType.GLASS_PARTITION) {
+    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
         profileElements.push(<PrintableMiteredFrame key="outer-frame" width={numWidth} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
     }
     
-    const frameOffset = (windowType !== WindowType.GLASS_PARTITION) ? dims.outerFrame : 0;
+    const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) ? dims.outerFrame : 0;
     const holeX1 = leftFix ? leftFixSize : frameOffset;
     const holeY1 = topFix ? topFixSize : frameOffset;
     const holeX2 = rightFix ? numWidth - rightFixSize : numWidth - frameOffset;
@@ -272,17 +315,29 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
 
     if (topFix) {
         profileElements.push(<PrintProfilePiece key="divider-top" color={profileColor} style={{ top: (holeY1 - dims.fixedFrame) * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
-        glassElements.push(<GlassPanel key="glass-top" style={{ top: frameOffset * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: (holeY1 - frameOffset - dims.fixedFrame) * scale }} glassWidth={hDividerWidth} glassHeight={holeY1 - frameOffset - dims.fixedFrame}><PrintShutterIndicator type="fixed"/></GlassPanel>);
+        const glassW = hDividerWidth;
+        const glassH = holeY1 - frameOffset - dims.fixedFrame;
+        glassElements.push(<GlassPanel key="glass-top" style={{ top: frameOffset * scale, left: hDividerX * scale, width: glassW * scale, height: glassH * scale }} glassWidthPx={glassW*scale} glassHeightPx={glassH*scale}><PrintShutterIndicator type="fixed"/></GlassPanel>);
         labelElements.push(<PrintDimensionLabel key="label-top" value={topFix.size} className="left-1/2 -translate-x-1/2" style={{top: topFix.size * scale / 2}}/>)
     }
     if (bottomFix) {
         profileElements.push(<PrintProfilePiece key="divider-bottom" color={profileColor} style={{ top: holeY2 * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
-        glassElements.push(<GlassPanel key="glass-bottom" style={{ top: (holeY2 + dims.fixedFrame) * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: (numHeight - holeY2 - frameOffset - dims.fixedFrame) * scale }} glassWidth={hDividerWidth} glassHeight={numHeight - holeY2 - frameOffset - dims.fixedFrame}><PrintShutterIndicator type="fixed"/></GlassPanel>);
+        const glassW = hDividerWidth;
+        const glassH = numHeight - holeY2 - frameOffset - dims.fixedFrame;
+        glassElements.push(<GlassPanel key="glass-bottom" style={{ top: (holeY2 + dims.fixedFrame) * scale, left: hDividerX * scale, width: glassW * scale, height: glassH * scale }} glassWidthPx={glassW*scale} glassHeightPx={glassH*scale}><PrintShutterIndicator type="fixed"/></GlassPanel>);
     }
     const vGlassY = topFix ? holeY1 : frameOffset;
     const vGlassHeight = (bottomFix ? holeY2 : numHeight - frameOffset) - vGlassY;
-    if (leftFix) glassElements.push(<GlassPanel key="glass-left" style={{ top: vGlassY * scale, left: frameOffset * scale, width: (holeX1 - frameOffset - dims.fixedFrame) * scale, height: vGlassHeight * scale }} glassWidth={holeX1 - frameOffset - dims.fixedFrame} glassHeight={vGlassHeight}><PrintShutterIndicator type="fixed"/></GlassPanel>);
-    if (rightFix) glassElements.push(<GlassPanel key="glass-right" style={{ top: vGlassY * scale, left: (holeX2 + dims.fixedFrame) * scale, width: (numWidth - holeX2 - frameOffset - dims.fixedFrame) * scale, height: vGlassHeight * scale }} glassWidth={numWidth - holeX2 - frameOffset - dims.fixedFrame} glassHeight={vGlassHeight}><PrintShutterIndicator type="fixed"/></GlassPanel>);
+    if (leftFix) {
+        const glassW = holeX1 - frameOffset - dims.fixedFrame;
+        const glassH = vGlassHeight;
+        glassElements.push(<GlassPanel key="glass-left" style={{ top: vGlassY * scale, left: frameOffset * scale, width: glassW * scale, height: glassH * scale }} glassWidthPx={glassW*scale} glassHeightPx={glassH*scale}><PrintShutterIndicator type="fixed"/></GlassPanel>);
+    }
+    if (rightFix) {
+        const glassW = numWidth - holeX2 - frameOffset - dims.fixedFrame;
+        const glassH = vGlassHeight;
+        glassElements.push(<GlassPanel key="glass-right" style={{ top: vGlassY * scale, left: (holeX2 + dims.fixedFrame) * scale, width: glassW * scale, height: glassH * scale }} glassWidthPx={glassW*scale} glassHeightPx={glassH*scale}><PrintShutterIndicator type="fixed"/></GlassPanel>);
+    }
     
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
@@ -302,7 +357,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
                     scale={scale}
                     color={profileColor}
                 />
-                <GlassPanel style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale }} glassWidth={glassWidth} glassHeight={glassHeight}>
+                <GlassPanel style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale }} glassWidthPx={glassWidth*scale} glassHeightPx={glassHeight*scale}>
                     <PrintShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
                 </GlassPanel>
             </div>
@@ -310,7 +365,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
     };
 
     return (
-        <div className="relative border border-black" style={{ width: numWidth * scale, height: numHeight * scale, margin: 'auto' }}>
+        <div className="relative" style={{ width: numWidth * scale, height: numHeight * scale, margin: 'auto' }}>
             {glassElements}
             {profileElements}
             {innerAreaWidth > 0 && innerAreaHeight > 0 && (
@@ -379,12 +434,12 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
                                 }
                                 
                                 const cellType = cell?.type;
-                                let content = <GlassPanel key={`cell-${r}-${c}`} style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}} glassWidth={cellW} glassHeight={cellH}><PrintShutterIndicator type="fixed" /></GlassPanel>;
+                                let content = <GlassPanel key={`cell-${r}-${c}`} style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}} glassWidthPx={cellW*scale} glassHeightPx={cellH*scale}><PrintShutterIndicator type="fixed"/></GlassPanel>;
 
                                 if ((windowType === WindowType.CASEMENT && doorInfo) || cellType === 'door') {
                                     content = (<div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>
                                         <PrintableMiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
-                                        <GlassPanel style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellW - 2 * dims.casementShutter)*scale, height: (cellH - 2 * dims.casementShutter)*scale }} glassWidth={cellW - 2*dims.casementShutter} glassHeight={cellH - 2*dims.casementShutter}><PrintShutterIndicator type="door"/></GlassPanel>
+                                        <GlassPanel style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellW - 2 * dims.casementShutter)*scale, height: (cellH - 2 * dims.casementShutter)*scale }} glassWidthPx={(cellW - 2*dims.casementShutter)*scale} glassHeightPx={(cellH - 2*dims.casementShutter)*scale}><PrintShutterIndicator type="door"/></GlassPanel>
                                       </div>);
                                 } else if (cellType === 'louvers') {
                                     const louvers: React.ReactNode[] = [];
@@ -392,9 +447,9 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
                                         const numLouvers = Math.floor(cellH / dims.louverBlade);
                                         for (let i=0; i < numLouvers; i++) louvers.push(<PrintProfilePiece key={`louver-${i}`} color={profileColor} style={{left: 0, top: (i * dims.louverBlade)*scale, width: cellW*scale, height: dims.louverBlade*scale }}/>)
                                     }
-                                    content = <div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>{louvers}<PrintShutterIndicator type="louvers"/></div>;
+                                    content = <div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>{louvers}<PrintShutterIndicator type="louvers" width={cellW*scale} height={cellH*scale}/></div>;
                                 } else if (cellType === 'exhaust_fan') {
-                                    content = <GlassPanel key={`cell-${r}-${c}`} style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}} glassWidth={cellW} glassHeight={cellH}><PrintShutterIndicator type="exhaust_fan"/></GlassPanel>;
+                                    content = <GlassPanel key={`cell-${r}-${c}`} style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}} glassWidthPx={cellW*scale} glassHeightPx={cellH*scale}><PrintShutterIndicator type="exhaust_fan"/></GlassPanel>;
                                 }
                                 elements.push(content);
                             }
@@ -447,8 +502,8 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
                                       width: (currentPanelWidth - (isFramed ? 2 * frameSize : 0)) * scale, 
                                       height: (panelAreaHeight - (isFramed ? 2 * frameSize : 0)) * scale
                                     }} 
-                                    glassWidth={currentPanelWidth - (isFramed ? 2 * frameSize : 0)} 
-                                    glassHeight={panelAreaHeight - (isFramed ? 2 * frameSize : 0)}
+                                    glassWidthPx={(currentPanelWidth - (isFramed ? 2 * frameSize : 0))*scale}
+                                    glassHeightPx={(panelAreaHeight - (isFramed ? 2 * frameSize : 0))*scale}
                                   >
                                      <PrintShutterIndicator type={type} />
                                   </GlassPanel>
@@ -460,8 +515,12 @@ const PrintableWindow: React.FC<{ config: WindowConfig }> = ({ config }) => {
                     {handleElements}
                 </div>
             )}
-            <PrintDimensionLabel value={numWidth} className="top-0 -translate-y-full left-1/2 -translate-x-1/2 -mt-1" />
-            <PrintDimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 left-0 -translate-x-full -ml-2 rotate-[-90deg]" />
+            {config.windowType !== WindowType.CORNER && (
+                <>
+                    <PrintDimensionLabel value={numWidth} className="top-0 -translate-y-full left-1/2 -translate-x-1/2 -mt-1" />
+                    <PrintDimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 left-0 -translate-x-full -ml-2 rotate-[-90deg]" />
+                </>
+            )}
             {labelElements}
         </div>
     );
