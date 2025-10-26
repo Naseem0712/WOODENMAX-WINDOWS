@@ -713,24 +713,47 @@ const getInitialConfig = (): ConfigState => {
     const saved = window.localStorage.getItem('woodenmax-current-config');
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed.partitionPanels && typeof parsed.partitionPanels.hasTopChannel === 'undefined') {
-          parsed.partitionPanels.hasTopChannel = true;
+
+      // Create a new config, starting with defaults, then overriding with saved values.
+      // Explicitly merge nested objects to prevent them from being completely replaced
+      // if the saved version is missing some properties.
+      const finalConfig = {
+          ...initialConfig,
+          ...parsed,
+          partitionPanels: { ...initialConfig.partitionPanels, ...(parsed.partitionPanels || {}) },
+          elevationGrid: { ...initialConfig.elevationGrid, ...(parsed.elevationGrid || {}) },
+          laminatedGlassConfig: { ...initialConfig.laminatedGlassConfig, ...(parsed.laminatedGlassConfig || {}) },
+          dguGlassConfig: { ...initialConfig.dguGlassConfig, ...(parsed.dguGlassConfig || {}) },
+          leftConfig: { ...defaultCornerSideConfig, ...(parsed.leftConfig || {}) },
+          rightConfig: { ...defaultCornerSideConfig, ...(parsed.rightConfig || {}) },
+      };
+
+      // Ensure critical arrays inside nested objects are present
+      finalConfig.partitionPanels.types = finalConfig.partitionPanels.types || [];
+      finalConfig.elevationGrid.doorPositions = finalConfig.elevationGrid.doorPositions || [];
+      finalConfig.leftConfig.slidingHandles = finalConfig.leftConfig.slidingHandles || [];
+      finalConfig.leftConfig.doorPositions = finalConfig.leftConfig.doorPositions || [];
+      finalConfig.leftConfig.ventilatorGrid = finalConfig.leftConfig.ventilatorGrid || [];
+      finalConfig.rightConfig.slidingHandles = finalConfig.rightConfig.slidingHandles || [];
+      finalConfig.rightConfig.doorPositions = finalConfig.rightConfig.doorPositions || [];
+      finalConfig.rightConfig.ventilatorGrid = finalConfig.rightConfig.ventilatorGrid || [];
+      
+      // Specific migrations for older state shapes
+      if (typeof finalConfig.partitionPanels.hasTopChannel === 'undefined') {
+          finalConfig.partitionPanels.hasTopChannel = true;
       }
-      if (parsed.partitionPanels && parsed.partitionPanels.types) {
-          parsed.partitionPanels.types.forEach((t: any) => {
-              if (typeof t.framing === 'undefined') t.framing = 'none';
+      if (finalConfig.partitionPanels.types) {
+          finalConfig.partitionPanels.types.forEach((t: any) => {
+              if (t && typeof t.framing === 'undefined') t.framing = 'none';
           });
       }
-      if (!parsed.laminatedGlassConfig) {
-        parsed.laminatedGlassConfig = initialConfig.laminatedGlassConfig;
-      }
-      if (!parsed.dguGlassConfig) {
-        parsed.dguGlassConfig = initialConfig.dguGlassConfig;
-      }
-      return { ...initialConfig, ...parsed };
+
+      return finalConfig;
     }
   } catch (error) {
     console.error("Could not load current config from localStorage", error);
+    // If parsing fails, clearing the bad data might be a good idea
+    // window.localStorage.removeItem('woodenmax-current-config');
   }
   return initialConfig;
 };
