@@ -188,7 +188,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     }
     const scale = externalScale || Math.min(containerWidthPx / effectiveWidth, containerHeightPx / numHeight);
 
-    const { series, fixedPanels, profileColor, windowType } = config;
+    const { series, fixedPanels, profileColor, windowType, glassTexture } = config;
     const dims = {
         outerFrame: Number(series.dimensions.outerFrame) || 0,
         outerFrameVertical: Number(series.dimensions.outerFrameVertical) || 0,
@@ -218,6 +218,17 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     const handleElements: React.ReactNode[] = [];
 
     const GlassPanel: React.FC<{style: React.CSSProperties, children?: React.ReactNode, glassWidthPx: number, glassHeightPx: number}> = ({ style, children, glassWidthPx, glassHeightPx }) => {
+      const panelStyle: React.CSSProperties = { ...glassStyle, ...style };
+
+      const isMesh = style.backgroundImage && style.backgroundImage.includes('linear-gradient');
+    
+      if (glassTexture && !isMesh) {
+          panelStyle.backgroundImage = `url(${glassTexture})`;
+          panelStyle.backgroundSize = 'cover';
+          panelStyle.backgroundPosition = 'center';
+          delete panelStyle.backgroundColor;
+      }
+      
       const childrenWithProps = React.Children.map(children, child => {
         if (React.isValidElement(child) && child.type === PrintShutterIndicator) {
             return React.cloneElement(child as React.ReactElement<any>, { width: glassWidthPx, height: glassHeightPx });
@@ -225,7 +236,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         return child;
       });
       return (
-        <div className="absolute" style={{...glassStyle, ...style}}>
+        <div className="absolute" style={panelStyle}>
             <PrintGlassGrid width={glassWidthPx / scale} height={glassHeightPx / scale} rows={config.glassGrid.rows} cols={config.glassGrid.cols} profileSize={dims.glassGridProfile} scale={scale} color={profileColor} />
             {childrenWithProps}
         </div> 
@@ -591,7 +602,7 @@ const getGlassDescription = (config: WindowConfig): string => {
     
     // Fallback for simple glass
     let desc = `${config.glassThickness}mm ${formatType(config.glassType)}`;
-    if (config.glassSpecialType !== 'none') {
+    if (config.glassSpecialType !== 'none' && config.glassSpecialType) {
         desc += ` (${formatType(config.glassSpecialType)})`;
     }
     if (config.customGlassName) {
@@ -818,52 +829,36 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                     const { panelCounts, relevantHardware } = getItemDetails(item);
                                     const glassDescription = getGlassDescription(item.config);
 
-                                    const isGlazing = item.config.windowType === WindowType.ELEVATION_GLAZING;
-
-                                    const descriptionContent = (
-                                        <>
-                                            <p className="font-bold print-window-title">{item.title}</p>
-                                            <table className="w-full text-[7pt] mt-1 details-table">
-                                                <tbody>
-                                                    <tr><td className='pr-2 font-semibold'>Series:</td><td>{item.config.series.name}</td></tr>
-                                                    <tr><td className='pr-2 font-semibold'>Size:</td><td>{item.config.windowType === 'elevation_glazing' && item.config.elevationGrid ? `${item.config.elevationGrid.colPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)} x ${item.config.elevationGrid.rowPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)}` : `${item.config.width} x ${item.config.height}`} mm</td></tr>
-                                                    <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
-                                                    <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
-                                                    <tr><td className='pr-2 font-semibold'>Color:</td><td>{item.profileColorName}</td></tr>
-                                                    <tr><td className='pr-2 font-semibold'>Glass:</td><td>{glassDescription}</td></tr>
-                                                    {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
-                                                    {relevantHardware.length > 0 && (
-                                                        <tr>
-                                                            <td className='pr-2 font-semibold pt-1 align-top'>Hardware:</td>
-                                                            <td className='pt-1'>
-                                                                {relevantHardware.map((hw, i) => (
-                                                                    <span key={i} className="block">{hw.name}</span>
-                                                                ))}
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </>
-                                    );
-
                                     return (
                                         <tr key={item.id} className="border-b border-gray-300 print-item">
                                             <td className="p-2 align-top text-center">{index + 1}</td>
-                                            {isGlazing ? (
-                                                <td className="p-2 align-top" colSpan={2}>
-                                                    {descriptionContent}
-                                                </td>
-                                            ) : (
-                                                <>
-                                                    <td className="p-2 align-top w-[25%]" style={{ width: '150px' }}>
-                                                        <PrintableWindow config={item.config} />
-                                                    </td>
-                                                    <td className="p-2 align-top w-[40%]">
-                                                        {descriptionContent}
-                                                    </td>
-                                                </>
-                                            )}
+                                            <td className="p-2 align-top w-[25%]" style={{ width: '150px' }}>
+                                                <PrintableWindow config={item.config} />
+                                            </td>
+                                            <td className="p-2 align-top w-[40%]">
+                                                <p className="font-bold print-window-title">{item.title}</p>
+                                                <table className="w-full text-[7pt] mt-1 details-table">
+                                                    <tbody>
+                                                        <tr><td className='pr-2 font-semibold'>Series:</td><td>{item.config.series.name}</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Size:</td><td>{item.config.windowType === 'elevation_glazing' && item.config.elevationGrid ? `${item.config.elevationGrid.colPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)} x ${item.config.elevationGrid.rowPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)}` : `${item.config.width} x ${item.config.height}`} mm</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Color:</td><td>{item.profileColorName}</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Glass:</td><td>{glassDescription}</td></tr>
+                                                        {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
+                                                        {relevantHardware.length > 0 && (
+                                                            <tr>
+                                                                <td className='pr-2 font-semibold pt-1 align-top'>Hardware:</td>
+                                                                <td className='pt-1'>
+                                                                    {relevantHardware.map((hw, i) => (
+                                                                        <span key={i} className="block">{hw.name}</span>
+                                                                    ))}
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </td>
                                             <td className="p-2 align-top text-center">{item.quantity}</td>
                                             <td className="p-2 align-top text-right font-bold" colSpan={2}>₹{Math.round(totalCost).toLocaleString('en-IN')}</td>
                                         </tr>
@@ -934,6 +929,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         </div>
                     </div>
                 </div>
+                {/* --- End of Printable Content --- */}
             </div>
         </div>
     </div>

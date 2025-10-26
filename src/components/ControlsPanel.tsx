@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType } from '../types';
 import { Button } from './ui/Button';
@@ -12,6 +12,7 @@ import { XMarkIcon } from './icons/XMarkIcon';
 import { CollapsibleCard } from './ui/CollapsibleCard';
 import { RefreshIcon } from './icons/RefreshIcon';
 import { SearchableSelect } from './ui/SearchableSelect';
+import { UploadIcon } from './icons/UploadIcon';
 
 
 interface ControlsPanelProps {
@@ -92,8 +93,20 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
   const [isAddingColor, setIsAddingColor] = useState(false);
   const [newColor, setNewColor] = useState({ name: '', hex: '#ffffff' });
   const [selectedPanelId, setSelectedPanelId] = useState<string>('');
+  const imageUploadRef = useRef<HTMLInputElement>(null);
   
   const isCorner = windowType === WindowType.CORNER;
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setConfig('glassTexture', reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    }
+  };
 
   const handleToggleCard = (title: string) => {
     setOpenCard(prev => prev === title ? null : title);
@@ -483,6 +496,30 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
             <Input label="Glass Name / Brand (Optional)" type="text" value={config.customGlassName} onChange={e => setConfig('customGlassName', e.target.value)} placeholder="e.g. Saint-Gobain" />
             </div>
         )}
+        <div className="pt-4 mt-4 border-t border-slate-700">
+            <label className="block text-sm font-medium text-slate-300 mb-2">Glass Texture</label>
+            {config.glassTexture ? (
+                <div className="flex items-center gap-2">
+                    <img src={config.glassTexture} alt="Glass texture preview" className="w-16 h-16 object-cover rounded-md border border-slate-600" />
+                    <div className="flex-grow">
+                        <Button variant="secondary" className="w-full mb-1" onClick={() => imageUploadRef.current?.click()}>Change Image</Button>
+                        <Button variant="danger" className="w-full" onClick={() => setConfig('glassTexture', '')}>Remove Texture</Button>
+                    </div>
+                </div>
+            ) : (
+                <Button variant="secondary" className="w-full" onClick={() => imageUploadRef.current?.click()}>
+                    <UploadIcon className="w-4 h-4 mr-2" /> Upload Image (JPG/PNG)
+                </Button>
+            )}
+            <input 
+                type="file" 
+                ref={imageUploadRef}
+                className="hidden" 
+                accept="image/jpeg, image/png"
+                onChange={handleImageUpload} 
+            />
+            <p className="text-xs text-slate-400 mt-2">Replaces the glass tint. For best results, use a seamless texture or an image with the desired aspect ratio.</p>
+        </div>
         <div className="pt-4 mt-4 border-t border-slate-700">
              <label className="block text-sm font-medium text-slate-300 mb-2">Glass Grid</label>
              <div className="grid grid-cols-2 gap-4">

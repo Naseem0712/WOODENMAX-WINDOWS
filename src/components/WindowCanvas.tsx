@@ -145,13 +145,24 @@ const SlidingShutter: React.FC<{
     scale: number;
     isMesh: boolean;
     glassType: GlassType;
+    glassTexture?: string;
     glassStyles: Record<GlassType, React.CSSProperties>;
     isFixed?: boolean;
     isSliding?: boolean;
-}> = React.memo(({ width, height, topProfile, rightProfile, bottomProfile, leftProfile, color, scale, isMesh, glassType, glassStyles, isFixed = false, isSliding = false }) => {
+}> = React.memo(({ width, height, topProfile, rightProfile, bottomProfile, leftProfile, color, scale, isMesh, glassType, glassTexture, glassStyles, isFixed = false, isSliding = false }) => {
     
     const glassWidth = width - leftProfile - rightProfile;
     const glassHeight = height - topProfile - bottomProfile;
+
+    const glassStyle: React.CSSProperties = { ...(!isMesh && glassStyles[glassType]) };
+
+    if (glassTexture && !isMesh) {
+        glassStyle.backgroundImage = `url(${glassTexture})`;
+        glassStyle.backgroundSize = 'cover';
+        glassStyle.backgroundPosition = 'center';
+        delete glassStyle.backgroundColor;
+        delete glassStyle.opacity;
+    }
 
     return (
         <div className="absolute" style={{ width: width * scale, height: height * scale }}>
@@ -165,7 +176,7 @@ const SlidingShutter: React.FC<{
                 scale={scale}
                 color={color}
              />
-            <div className={`absolute`} style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale, ...(!isMesh && glassStyles[glassType]) }}>
+            <div className={`absolute`} style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale, ...glassStyle }}>
                 {isMesh && <div className="w-full h-full" style={{backgroundColor: '#808080', opacity: 0.5, backgroundImage: `linear-gradient(45deg, #000 25%, transparent 25%), linear-gradient(-45deg, #000 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #000 75%), linear-gradient(-45deg, transparent 75%, #000 75%)`, backgroundSize: '4px 4px' }} />}
                 <ShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
             </div>
@@ -184,7 +195,7 @@ const createWindowElements = (
       onToggleElevationDoor: (row: number, col: number) => void,
     }
 ) => {
-    const { width, height, series, fixedPanels, glassType, profileColor, windowType } = config;
+    const { width, height, series, fixedPanels, glassType, glassTexture, profileColor, windowType } = config;
     const numHeight = Number(height) || 0;
 
     const geometry = (() => {
@@ -211,12 +222,23 @@ const createWindowElements = (
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
-    const GlassPanel: React.FC<{style: React.CSSProperties, children?: React.ReactNode, glassWidth: number, glassHeight: number}> = ({ style, children, glassWidth, glassHeight }) => ( 
-      <div className="absolute" style={{...glassStyles[glassType], ...style, boxShadow: 'inset 0 0 1px 1px rgba(0,0,0,0.1)'}}>
-        <GlassGrid width={glassWidth} height={glassHeight} rows={config.glassGrid.rows} cols={config.glassGrid.cols} profileSize={dims.glassGridProfile} scale={scale} color={profileColor} />
-        {children}
-      </div> 
-    );
+    const GlassPanel: React.FC<{style: React.CSSProperties, children?: React.ReactNode, glassWidth: number, glassHeight: number}> = ({ style, children, glassWidth, glassHeight }) => {
+        const panelStyle: React.CSSProperties = { ...glassStyles[glassType], ...style, boxShadow: 'inset 0 0 1px 1px rgba(0,0,0,0.1)' };
+        if (glassTexture) {
+            panelStyle.backgroundImage = `url(${glassTexture})`;
+            panelStyle.backgroundSize = 'cover';
+            panelStyle.backgroundPosition = 'center';
+            delete panelStyle.backgroundColor;
+            delete panelStyle.opacity;
+        }
+
+        return ( 
+          <div className="absolute" style={panelStyle}>
+            <GlassGrid width={glassWidth} height={glassHeight} rows={config.glassGrid.rows} cols={config.glassGrid.cols} profileSize={dims.glassGridProfile} scale={scale} color={profileColor} />
+            {children}
+          </div> 
+        );
+    };
   
     if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
@@ -263,98 +285,81 @@ const createWindowElements = (
                     const vMullion = Number(verticalMullionSize) || 0;
                     const hTransom = Number(horizontalTransomSize) || 0;
                     const pressurePlate = Number(pressurePlateSize) || 0;
+
                     const validColPattern = colPattern.map(Number).filter(v => v > 0);
                     const validRowPattern = rowPattern.map(Number).filter(v => v > 0);
-
-                    // 1. Background Glass
-                    innerContent.push(<GlassPanel key="glazing-bg" style={{ left: 0, top: 0, width: innerAreaWidth * scale, height: innerAreaHeight * scale }} glassWidth={innerAreaWidth} glassHeight={innerAreaHeight} />);
                     
-                    // 2. Calculate Cell Coordinates
-                    const colCoords: { x: number, width: number }[] = [];
-                    let currentX = 0;
-                    let colIndex = 0;
-                    if (validColPattern.length > 0) {
-                        while (currentX < innerAreaWidth) {
-                            const patternWidth = validColPattern[colIndex % validColPattern.length];
-                            const remainingWidth = innerAreaWidth - currentX;
-                            const colWidth = Math.min(patternWidth, remainingWidth);
-                            colCoords.push({ x: currentX, width: colWidth });
-                            currentX += colWidth;
-                            colIndex++;
-                        }
-                    } else { colCoords.push({ x: 0, width: innerAreaWidth }); }
+                    const totalGridWidth = validColPattern.reduce((a, b) => a + b, 0);
+                    const totalGridHeight = validRowPattern.reduce((a, b) => a + b, 0);
 
-                    const rowCoords: { y: number, height: number }[] = [];
-                    let currentY = 0;
-                    let rowIndex = 0;
-                    if (validRowPattern.length > 0) {
-                        while (currentY < innerAreaHeight) {
-                            const patternHeight = validRowPattern[rowIndex % validRowPattern.length];
-                            const remainingHeight = innerAreaHeight - currentY;
-                            const rowHeight = Math.min(patternHeight, remainingHeight);
-                            rowCoords.push({ y: currentY, height: rowHeight });
-                            currentY += rowHeight;
-                            rowIndex++;
-                        }
-                    } else { rowCoords.push({ y: 0, height: innerAreaHeight }); }
-
-                    // 3. Draw Profiles (Mullions/Transoms and Pressure Plates)
                     const profilesAndPlates: React.ReactNode[] = [];
-                    
-                    // Edge Profiles
-                    profilesAndPlates.push(<ProfilePiece key="top-transom" color={profileColor} style={{ left: 0, top: 0, width: innerAreaWidth * scale, height: hTransom * scale }} />);
-                    profilesAndPlates.push(<ProfilePiece key="bottom-transom" color={profileColor} style={{ left: 0, bottom: 0, width: innerAreaWidth * scale, height: hTransom * scale }} />);
-                    profilesAndPlates.push(<ProfilePiece key="left-mullion" color={profileColor} style={{ left: 0, top: 0, width: vMullion * scale, height: innerAreaHeight * scale }} />);
-                    profilesAndPlates.push(<ProfilePiece key="right-mullion" color={profileColor} style={{ right: 0, top: 0, width: vMullion * scale, height: innerAreaHeight * scale }} />);
 
-                    // Internal Vertical Mullions
-                    let accumulatedX = 0;
-                    for (let c = 0; c < colCoords.length - 1; c++) {
-                        accumulatedX += colCoords[c].width;
-                        profilesAndPlates.push(<ProfilePiece key={`vmullion-${c}`} color={profileColor} style={{ left: (accumulatedX - vMullion / 2) * scale, top: 0, width: vMullion * scale, height: innerAreaHeight * scale }} />);
-                    }
-                    
-                    // Internal Horizontal Transoms
-                    let accumulatedY = 0;
-                    for (let r = 0; r < rowCoords.length - 1; r++) {
-                        accumulatedY += rowCoords[r].height;
-                        profilesAndPlates.push(<ProfilePiece key={`hmullion-${r}`} color={profileColor} style={{ left: 0, top: (accumulatedY - hTransom / 2) * scale, width: innerAreaWidth * scale, height: hTransom * scale }} />);
-                    }
-                    
-                    // Pressure Plates (on top of all profiles)
-                    if (pressurePlate > 0) {
-                        // Edge Plates
-                        profilesAndPlates.push(<ProfilePiece key="top-plate" color="#6B7280" style={{ zIndex: 1, left: 0, top: (hTransom - pressurePlate)/2*scale, width: innerAreaWidth*scale, height: pressurePlate*scale }} />);
-                        profilesAndPlates.push(<ProfilePiece key="bottom-plate" color="#6B7280" style={{ zIndex: 1, left: 0, bottom: (hTransom - pressurePlate)/2*scale, width: innerAreaWidth*scale, height: pressurePlate*scale }} />);
-                        profilesAndPlates.push(<ProfilePiece key="left-plate" color="#6B7280" style={{ zIndex: 1, top: 0, left: (vMullion - pressurePlate)/2*scale, height: innerAreaHeight*scale, width: pressurePlate*scale }} />);
-                        profilesAndPlates.push(<ProfilePiece key="right-plate" color="#6B7280" style={{ zIndex: 1, top: 0, right: (vMullion - pressurePlate)/2*scale, height: innerAreaHeight*scale, width: pressurePlate*scale }} />);
-
-                        // Internal Plates
-                        accumulatedX = 0;
-                        for (let c = 0; c < colCoords.length - 1; c++) {
-                            accumulatedX += colCoords[c].width;
-                            profilesAndPlates.push(<ProfilePiece key={`vplate-${c}`} color="#6B7280" style={{ zIndex: 1, left: (accumulatedX - pressurePlate / 2) * scale, top: 0, width: pressurePlate * scale, height: innerAreaHeight * scale }} />);
+                    // 1. Render glass panels first, cell by cell
+                    let currentY_cell = 0;
+                    for (let r = 0; r < validRowPattern.length; r++) {
+                        let currentX_cell = 0;
+                        for (let c = 0; c < validColPattern.length; c++) {
+                            const cellWidth = validColPattern[c];
+                            const cellHeight = validRowPattern[r];
+                            innerContent.push(
+                                <GlassPanel 
+                                    key={`cell-glass-${r}-${c}`} 
+                                    style={{ left: currentX_cell * scale, top: currentY_cell * scale, width: cellWidth * scale, height: cellHeight * scale }} 
+                                    glassWidth={cellWidth} 
+                                    glassHeight={cellHeight} 
+                                />
+                            );
+                            currentX_cell += cellWidth;
                         }
-                        accumulatedY = 0;
-                        for (let r = 0; r < rowCoords.length - 1; r++) {
-                            accumulatedY += rowCoords[r].height;
-                            profilesAndPlates.push(<ProfilePiece key={`hplate-${r}`} color="#6B7280" style={{ zIndex: 1, left: 0, top: (accumulatedY - pressurePlate / 2) * scale, width: innerAreaWidth * scale, height: pressurePlate * scale }} />);
+                        currentY_cell += validRowPattern[r];
+                    }
+
+                    // 2. Then render profiles at the seams
+                    // Transoms (Horizontal)
+                    let currentY_profile = 0;
+                    for (let r = 0; r < validRowPattern.length - 1; r++) {
+                        currentY_profile += validRowPattern[r];
+                        profilesAndPlates.push(<ProfilePiece key={`htransom-${r}`} color={profileColor} style={{ left: 0, top: (currentY_profile - hTransom / 2) * scale, width: totalGridWidth * scale, height: hTransom * scale, zIndex: 1 }} />);
+                    }
+                    // Mullions (Vertical)
+                    let currentX_profile = 0;
+                    for (let c = 0; c < validColPattern.length - 1; c++) {
+                        currentX_profile += validColPattern[c];
+                        profilesAndPlates.push(<ProfilePiece key={`vmullion-${c}`} color={profileColor} style={{ top: 0, left: (currentX_profile - vMullion / 2) * scale, width: vMullion * scale, height: totalGridHeight * scale, zIndex: 1 }} />);
+                    }
+
+                    // 3. Pressure Plates on top
+                    if (pressurePlate > 0) {
+                        // Horizontal plates
+                        currentY_profile = 0;
+                        for (let r = 0; r < validRowPattern.length - 1; r++) {
+                            currentY_profile += validRowPattern[r];
+                            profilesAndPlates.push(<ProfilePiece key={`hplate-${r}`} color="#6B7280" style={{ zIndex: 2, left: 0, top: (currentY_profile - pressurePlate / 2) * scale, width: totalGridWidth * scale, height: pressurePlate * scale }} />);
+                        }
+                        // Vertical plates
+                        currentX_profile = 0;
+                        for (let c = 0; c < validColPattern.length - 1; c++) {
+                            currentX_profile += validColPattern[c];
+                            profilesAndPlates.push(<ProfilePiece key={`vplate-${c}`} color="#6B7280" style={{ zIndex: 2, top: 0, left: (currentX_profile - pressurePlate / 2) * scale, width: pressurePlate * scale, height: totalGridHeight * scale }} />);
                         }
                     }
                     innerContent.push(<div key="profiles-wrapper" className="absolute inset-0">{profilesAndPlates}</div>);
 
+
                     // 4. Render Doors and Clickable Overlays
-                    for (let r = 0; r < rowCoords.length; r++) {
-                        for (let c = 0; c < colCoords.length; c++) {
-                            const cell = colCoords[c];
-                            const row = rowCoords[r];
+                    currentY_cell = 0;
+                    for (let r = 0; r < validRowPattern.length; r++) {
+                        let currentX_cell = 0;
+                        for (let c = 0; c < validColPattern.length; c++) {
+                            const cellWidth = validColPattern[c];
+                            const cellHeight = validRowPattern[r];
                             const isDoor = doorPositions.some(p => p.row === r && p.col === c);
 
                             innerContent.push(
                                 <button key={`cell-btn-${r}-${c}`} 
                                         onClick={() => callbacks.onToggleElevationDoor(r, c)} 
                                         className="absolute hover:bg-white/20 z-20"
-                                        style={{ left: cell.x*scale, top: row.y*scale, width: cell.width*scale, height: row.height*scale }}
+                                        style={{ left: currentX_cell * scale, top: currentY_cell * scale, width: cellWidth * scale, height: cellHeight * scale }}
                                 />
                             );
 
@@ -362,19 +367,21 @@ const createWindowElements = (
                                 const doorInfo = doorPositions.find(p => p.row === r && p.col === c)!;
                                 
                                 innerContent.push(
-                                  <div key={`cell-door-${r}-${c}`} className="absolute" style={{left: cell.x*scale, top: row.y*scale, width: cell.width*scale, height: row.height*scale, zIndex: 15}}>
-                                    <MiteredFrame width={cell.width} height={row.height} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
-                                    <GlassPanel style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cell.width - 2 * dims.casementShutter)*scale, height: (row.height - 2 * dims.casementShutter)*scale }} glassWidth={cell.width - 2 * dims.casementShutter} glassHeight={row.height - 2 * dims.casementShutter}>
+                                  <div key={`cell-door-${r}-${c}`} className="absolute" style={{left: currentX_cell*scale, top: currentY_cell*scale, width: cellWidth*scale, height: cellHeight*scale, zIndex: 15}}>
+                                    <MiteredFrame width={cellWidth} height={cellHeight} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
+                                    <GlassPanel style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellWidth - 2 * dims.casementShutter)*scale, height: (cellHeight - 2 * dims.casementShutter)*scale }} glassWidth={cellWidth - 2 * dims.casementShutter} glassHeight={cellHeight - 2 * dims.casementShutter}>
                                       <ShutterIndicator type="hinged" />
                                     </GlassPanel>
                                   </div>
                                 );
 
                                  if (doorInfo.handle) {
-                                    handleElements.push(<div key={`handle-elev-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (cell.x + cell.width * doorInfo.handle.x / 100) * scale, top: (row.y + row.height * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} /></div>);
+                                    handleElements.push(<div key={`handle-elev-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (currentX_cell + cellWidth * doorInfo.handle.x / 100) * scale, top: (currentY_cell + cellHeight * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} /></div>);
                                 }
                             }
+                            currentX_cell += cellWidth;
                         }
+                        currentY_cell += validRowPattern[r];
                     }
                 }
                 break;
@@ -399,7 +406,7 @@ const createWindowElements = (
                         }
                     });
                     
-                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} color={profileColor} scale={scale} isMesh={false} glassType={glassType} glassStyles={glassStyles} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
+                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} color={profileColor} scale={scale} isMesh={false} glassType={glassType} glassTexture={glassTexture} glassStyles={glassStyles} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
                 } else {
                     const shutterDivider = hasMesh ? 2 : numShutters;
                     const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * dims.shutterInterlock) / shutterDivider;
@@ -412,7 +419,7 @@ const createWindowElements = (
                               handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>);
                         }
                         
-                        return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : dims.shutterInterlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock} color={profileColor} scale={scale} isMesh={isMeshShutter} glassType={glassType} glassStyles={glassStyles} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div> );
+                        return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : dims.shutterInterlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock} color={profileColor} scale={scale} isMesh={isMeshShutter} glassType={glassType} glassTexture={glassTexture} glassStyles={glassStyles} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div> );
                     }));
                 }
                 break;
@@ -571,11 +578,17 @@ const RenderedWindow: React.FC<{
     scale: number;
     showLabels?: boolean;
 }> = ({ config, elements, scale, showLabels = true }) => {
-    const { width, height } = config;
-    const numHeight = Number(height) || 0;
+    const { width, height, windowType } = config;
+    let numWidth = Number(width) || 0;
+    let numHeight = Number(height) || 0;
+    if(windowType === WindowType.ELEVATION_GLAZING && config.elevationGrid) {
+        numWidth = config.elevationGrid.colPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0);
+        numHeight = config.elevationGrid.rowPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0);
+    }
+
 
     return (
-        <div className="relative shadow-lg" style={{ width: (Number(width) || 0) * scale, height: numHeight * scale }}>
+        <div className="relative shadow-lg" style={{ width: numWidth * scale, height: numHeight * scale }}>
           {elements.glassElements}
           {elements.profileElements}
           
@@ -587,7 +600,7 @@ const RenderedWindow: React.FC<{
           )}
           
           {showLabels && <>
-            <DimensionLabel value={Number(width) || 0} className="-top-8 left-1/2 -translate-x-1/2" />
+            <DimensionLabel value={numWidth} className="-top-8 left-1/2 -translate-x-1/2" />
             <DimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 -left-16 rotate-[-90deg]" />
             
             {elements.geometry.topFix && <DimensionLabel value={elements.geometry.topFix.size} className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 text-cyan-200" style={{top: elements.geometry.topFix.size * scale / 2}}/>}
@@ -606,8 +619,9 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   
   const numWidth = windowType === WindowType.CORNER 
     ? (Number(config.leftWidth) || 0) + (Number(config.rightWidth) || 0) + (Number(config.cornerPostWidth) || 0)
-    : Number(width) || 0;
-  const numHeight = Number(height) || 0;
+    : (windowType === WindowType.ELEVATION_GLAZING && config.elevationGrid ? config.elevationGrid.colPattern.map(Number).filter(v => v > 0).reduce((s,v) => s+v, 0) : Number(width)) || 0;
+  const numHeight = (windowType === WindowType.ELEVATION_GLAZING && config.elevationGrid ? config.elevationGrid.rowPattern.map(Number).filter(v => v > 0).reduce((s,v) => s+v, 0) : Number(height)) || 0;
+
 
   const dims = useMemo(() => ({
     outerFrame: Number(series.dimensions.outerFrame) || 0, outerFrameVertical: Number(series.dimensions.outerFrameVertical) || 0, fixedFrame: Number(series.dimensions.fixedFrame) || 0, shutterHandle: Number(series.dimensions.shutterHandle) || 0, shutterInterlock: Number(series.dimensions.shutterInterlock) || 0, shutterTop: Number(series.dimensions.shutterTop) || 0, shutterBottom: Number(series.dimensions.shutterBottom) || 0, shutterMeeting: Number(series.dimensions.shutterMeeting) || 0, casementShutter: Number(series.dimensions.casementShutter) || 0, mullion: Number(series.dimensions.mullion) || 0, louverBlade: Number(series.dimensions.louverBlade) || 0, topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0, glassGridProfile: Number(series.dimensions.glassGridProfile) || 0,

@@ -167,6 +167,7 @@ export interface WindowConfig {
   series: ProfileSeries;
   fixedPanels: FixedPanel[];
   glassType: GlassType;
+  glassTexture?: string;
   glassThickness: number | '';
   customGlassName: string;
   profileColor: string;

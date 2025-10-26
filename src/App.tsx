@@ -386,6 +386,7 @@ const initialConfig: ConfigState = {
     height: 15000,
     fixedPanels: [],
     glassType: GlassType.CLEAR,
+    glassTexture: '',
     glassThickness: 8,
     customGlassName: '',
     glassSpecialType: 'none',
@@ -721,6 +722,7 @@ const getInitialConfig = (): ConfigState => {
       const finalConfig = {
           ...initialConfig,
           ...parsed,
+          glassTexture: parsed.glassTexture || '',
           partitionPanels: { ...initialConfig.partitionPanels, ...(parsed.partitionPanels || {}) },
           elevationGrid: { ...initialConfig.elevationGrid, ...(parsed.elevationGrid || {}) },
           laminatedGlassConfig: { ...initialConfig.laminatedGlassConfig, ...(parsed.laminatedGlassConfig || {}) },
