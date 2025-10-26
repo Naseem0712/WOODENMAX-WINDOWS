@@ -795,10 +795,10 @@ const App: React.FC = () => {
       try {
         const item = window.localStorage.getItem('aluminium-window-colors');
         return item ? JSON.parse(item) : [
-            { id: uuidv4(), name: 'Matt Black', hex: '#374151' },
-            { id: uuidv4(), name: 'Dark Grey', hex: '#4B5563' },
-            { id: uuidv4(), name: 'White', hex: '#F9FAFB' },
-            { id: uuidv4(), name: 'Champion Gold', hex: '#D6A158' },
+            { id: uuidv4(), name: 'Matt Black', value: '#374151', type: 'color' },
+            { id: uuidv4(), name: 'Dark Grey', value: '#4B5563', type: 'color' },
+            { id: uuidv4(), name: 'White', value: '#F9FAFB', type: 'color' },
+            { id: uuidv4(), name: 'Champion Gold', value: '#D6A158', type: 'color' },
         ];
       } catch (error) { return []; }
   });
@@ -1134,7 +1134,7 @@ const App: React.FC = () => {
   }, [series.hardwareItems, windowConfig, windowType]);
 
   const handleSaveToQuotation = useCallback(() => {
-    const colorName = savedColors.find(c => c.hex === windowConfig.profileColor)?.name;
+    const colorName = savedColors.find(c => c.value === windowConfig.profileColor)?.name;
     const newItem: QuotationItem = {
         id: uuidv4(),
         title: windowTitle || 'Untitled Window',
@@ -1151,7 +1151,7 @@ const App: React.FC = () => {
   }, [windowTitle, windowConfig, quantity, areaType, rate, hardwareCostPerWindow, series.hardwareItems, savedColors, quotationItems.length]);
 
   const handleBatchSave = useCallback((items: BatchAddItem[]) => {
-    const colorName = savedColors.find(c => c.hex === windowConfig.profileColor)?.name;
+    const colorName = savedColors.find(c => c.value === windowConfig.profileColor)?.name;
     const newQuotationItems: QuotationItem[] = items
       .filter(item => Number(item.width) > 0 && Number(item.height) > 0)
       .map(item => {

@@ -56,7 +56,7 @@ interface ControlsPanelProps {
 }
 
 function getContrastYIQ(hexcolor: string){
-    if (!hexcolor) return 'black';
+    if (!hexcolor || !hexcolor.startsWith('#')) return 'white';
     hexcolor = hexcolor.replace("#", "");
     if (hexcolor.length !== 6) return 'black';
     const r = parseInt(hexcolor.substr(0,2),16);
@@ -90,19 +90,31 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
   const [openCard, setOpenCard] = useState<string | null>('Design Type');
   const [isSavingSeries, setIsSavingSeries] = useState(false);
   const [newSeriesName, setNewSeriesName] = useState('');
-  const [isAddingColor, setIsAddingColor] = useState(false);
-  const [newColor, setNewColor] = useState({ name: '', hex: '#ffffff' });
+  const [isAddingPreset, setIsAddingPreset] = useState(false);
+  const [newPreset, setNewPreset] = useState<{name: string, value: string, type: 'color' | 'texture'}>({ name: '', value: '#ffffff', type: 'color' });
   const [selectedPanelId, setSelectedPanelId] = useState<string>('');
-  const imageUploadRef = useRef<HTMLInputElement>(null);
+  const glassTextureUploadRef = useRef<HTMLInputElement>(null);
+  const profileTextureUploadRef = useRef<HTMLInputElement>(null);
   
   const isCorner = windowType === WindowType.CORNER;
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleGlassTextureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onloadend = () => {
             setConfig('glassTexture', reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    }
+  };
+  
+  const handleProfileTextureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setConfig('profileColor', reader.result as string);
         };
         reader.readAsDataURL(file);
     }
@@ -183,7 +195,17 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
   
   const handleInitiateSave = () => { setNewSeriesName(series.name.includes('Standard') ? '' : series.name); setIsSavingSeries(true); };
   const handleConfirmSave = () => { if (newSeriesName.trim()) { onSeriesSave(newSeriesName.trim()); setIsSavingSeries(false); setNewSeriesName(''); } };
-  const handleAddColor = () => { if (newColor.name.trim() && newColor.hex) { setSavedColors([...savedColors, { ...newColor, id: uuidv4() }]); setNewColor({ name: '', hex: '#ffffff' }); setIsAddingColor(false); } };
+  
+  const handleInitiateAddPreset = () => {
+    const isTexture = !config.profileColor.startsWith('#');
+    setNewPreset({
+        name: '',
+        value: config.profileColor,
+        type: isTexture ? 'texture' : 'color'
+    });
+    setIsAddingPreset(true);
+  };
+  const handleAddPreset = () => { if (newPreset.name.trim() && newPreset.value) { setSavedColors([...savedColors, { ...newPreset, id: uuidv4() }]); setNewPreset({ name: '', value: '#ffffff', type: 'color' }); setIsAddingPreset(false); } };
   const handleDeleteColor = (id: string) => { setSavedColors(savedColors.filter(c => c.id !== id)); }
 
   const isDefaultSeries = series.id.includes('-default');
@@ -502,21 +524,21 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
                 <div className="flex items-center gap-2">
                     <img src={config.glassTexture} alt="Glass texture preview" className="w-16 h-16 object-cover rounded-md border border-slate-600" />
                     <div className="flex-grow">
-                        <Button variant="secondary" className="w-full mb-1" onClick={() => imageUploadRef.current?.click()}>Change Image</Button>
+                        <Button variant="secondary" className="w-full mb-1" onClick={() => glassTextureUploadRef.current?.click()}>Change Image</Button>
                         <Button variant="danger" className="w-full" onClick={() => setConfig('glassTexture', '')}>Remove Texture</Button>
                     </div>
                 </div>
             ) : (
-                <Button variant="secondary" className="w-full" onClick={() => imageUploadRef.current?.click()}>
+                <Button variant="secondary" className="w-full" onClick={() => glassTextureUploadRef.current?.click()}>
                     <UploadIcon className="w-4 h-4 mr-2" /> Upload Image (JPG/PNG)
                 </Button>
             )}
             <input 
                 type="file" 
-                ref={imageUploadRef}
+                ref={glassTextureUploadRef}
                 className="hidden" 
                 accept="image/jpeg, image/png"
-                onChange={handleImageUpload} 
+                onChange={handleGlassTextureUpload} 
             />
             <p className="text-xs text-slate-400 mt-2">Replaces the glass tint. For best results, use a seamless texture or an image with the desired aspect ratio.</p>
         </div>
@@ -537,18 +559,30 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         <div className="pt-4 mt-4 border-t border-slate-700">
             <label className="block text-sm font-medium text-slate-300 mb-2">Profile Color</label>
             <div className="grid grid-cols-2 gap-2 mb-2">
-                {savedColors.map(color => (
-                    <button key={color.id} onClick={() => setConfig('profileColor', color.hex)} className={`w-full h-10 rounded-md text-sm font-medium border flex items-center justify-center relative group ${config.profileColor === color.hex ? 'ring-2 ring-offset-2 ring-offset-slate-800 ring-indigo-500' : 'border-slate-600'}`} style={{backgroundColor: color.hex, color: getContrastYIQ(color.hex)}}>
-                        {color.name}
-                        <button onClick={(e) => { e.stopPropagation(); handleDeleteColor(color.id)}} className="absolute top-0 right-0 m-1 p-0.5 bg-red-600 rounded-full text-white opacity-0 group-hover:opacity-100 focus:opacity-100"><TrashIcon className="w-3 h-3"/></button>
+                {savedColors.map(item => (
+                    <button 
+                        key={item.id} 
+                        onClick={() => setConfig('profileColor', item.value)} 
+                        className={`w-full h-10 rounded-md text-sm font-medium border flex items-center justify-center relative group overflow-hidden ${config.profileColor === item.value ? 'ring-2 ring-offset-2 ring-offset-slate-800 ring-indigo-500' : 'border-slate-600'}`}
+                        style={item.type === 'color' ? { backgroundColor: item.value, color: getContrastYIQ(item.value) } : { backgroundImage: `url(${item.value})`, backgroundSize: 'cover' }}
+                    >
+                        <span className="truncate px-2 py-1 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.5)', color: 'white' }}>{item.name}</span>
+                        <button onClick={(e) => { e.stopPropagation(); handleDeleteColor(item.id)}} className="absolute top-0 right-0 m-1 p-0.5 bg-red-600 rounded-full text-white opacity-0 group-hover:opacity-100 focus:opacity-100"><TrashIcon className="w-3 h-3"/></button>
                     </button>
                 ))}
             </div>
-            {!isAddingColor ? ( <Button variant="secondary" className="w-full" onClick={() => setIsAddingColor(true)}><PlusIcon className="w-4 h-4 mr-2"/> Add New Color</Button> ) : (
+             <input type="file" ref={profileTextureUploadRef} className="hidden" accept="image/jpeg, image/png" onChange={handleProfileTextureUpload} />
+            {!isAddingPreset ? ( 
+                <div className='grid grid-cols-2 gap-2'>
+                    <Button variant="secondary" className="w-full" onClick={() => profileTextureUploadRef.current?.click()}><UploadIcon className="w-4 h-4 mr-2"/> Upload Texture</Button>
+                    <Button variant="secondary" className="w-full" onClick={handleInitiateAddPreset}><PlusIcon className="w-4 h-4 mr-2"/> Add New Preset</Button>
+                </div>
+            ) : (
                 <div className="p-2 bg-slate-700 rounded-md space-y-2">
-                    <Input label="Color Name" value={newColor.name} onChange={e => setNewColor({...newColor, name: e.target.value})} placeholder="e.g., Anodized Bronze" />
-                    <Input label="Color Hex" type="color" value={newColor.hex} onChange={e => setNewColor({...newColor, hex: e.target.value})} className="w-full h-10 p-1"/>
-                    <div className="grid grid-cols-2 gap-2"> <Button onClick={handleAddColor} disabled={!newColor.name.trim()}>Save Color</Button> <Button variant="secondary" onClick={() => setIsAddingColor(false)}>Cancel</Button> </div>
+                    <Input label="Preset Name" value={newPreset.name} onChange={e => setNewPreset({...newPreset, name: e.target.value})} placeholder="e.g., Wooden Teak" />
+                    {newPreset.type === 'color' && <Input label="Color Hex" type="color" value={newPreset.value} onChange={e => setNewPreset({...newPreset, value: e.target.value})} className="w-full h-10 p-1"/>}
+                    {newPreset.type === 'texture' && <img src={newPreset.value} alt="texture preview" className="w-full h-10 object-cover rounded" />}
+                    <div className="grid grid-cols-2 gap-2"> <Button onClick={handleAddPreset} disabled={!newPreset.name.trim()}>Save Preset</Button> <Button variant="secondary" onClick={() => setIsAddingPreset(false)}>Cancel</Button> </div>
                 </div>
             )}
         </div>

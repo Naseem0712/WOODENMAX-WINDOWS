@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import type { WindowConfig, HandleConfig, CornerSideConfig } from '../types';
-import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType } from '../types';
+import type { WindowConfig, HandleConfig, CornerSideConfig } from './types';
+import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType } from './types';
 import { PlusIcon } from './icons/PlusIcon';
 import { MinusIcon } from './icons/MinusIcon';
 import { ArrowsPointingInIcon } from './icons/ArrowsPointingInIcon';
@@ -66,7 +66,18 @@ const Handle: React.FC<{ config: HandleConfig, scale: number, color: string }> =
 };
 
 
-const ProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = React.memo(({ style, color }) => ( <div style={{ backgroundColor: color, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)', position: 'absolute', ...style }} /> ));
+const ProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = React.memo(({ style, color }) => {
+    const isTexture = color && !color.startsWith('#');
+    const isHorizontal = (style.width as number) > (style.height as number);
+
+    const backgroundStyle = isTexture ? {
+        backgroundImage: `url(${color})`,
+        backgroundSize: isHorizontal ? 'auto 100%' : '100% auto',
+        backgroundRepeat: 'repeat',
+    } : { backgroundColor: color };
+    
+    return <div style={{ boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)', position: 'absolute', ...style, ...backgroundStyle }} />;
+});
 
 const GlassGrid: React.FC<{width: number, height: number, rows: number, cols: number, profileSize: number, scale: number, color: string}> = React.memo(({ width, height, rows, cols, profileSize, scale, color }) => {
     if (rows <= 0 && cols <= 0) return null;
@@ -100,10 +111,15 @@ const MiteredFrame: React.FC<{
     const ls = (leftSize ?? profileSize) * scale;
     const rs = (rightSize ?? profileSize) * scale;
 
+    const isTexture = color && !color.startsWith('#');
+    const backgroundStyle = isTexture ? { backgroundImage: `url(${color})`, backgroundRepeat: 'repeat' } : { backgroundColor: color };
+    const horizontalBgStyle = { backgroundSize: 'auto 100%' };
+    const verticalBgStyle = { backgroundSize: '100% auto' };
+
     const baseStyle: React.CSSProperties = {
-        backgroundColor: color,
         boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)',
         position: 'absolute',
+        ...backgroundStyle
     };
 
     const clipTs = Math.max(0, ts);
@@ -113,10 +129,10 @@ const MiteredFrame: React.FC<{
 
     return (
         <div className="absolute" style={{ width: width * scale, height: height * scale }}>
-            <div style={{...baseStyle, top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
-            <div style={{...baseStyle, bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
-            <div style={{...baseStyle, top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
-            <div style={{...baseStyle, top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
+            <div style={{...baseStyle, ...(isTexture && horizontalBgStyle), top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
+            <div style={{...baseStyle, ...(isTexture && horizontalBgStyle), bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
+            <div style={{...baseStyle, ...(isTexture && verticalBgStyle), top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
+            <div style={{...baseStyle, ...(isTexture && verticalBgStyle), top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
         </div>
     );
 });
@@ -145,13 +161,24 @@ const SlidingShutter: React.FC<{
     scale: number;
     isMesh: boolean;
     glassType: GlassType;
+    glassTexture?: string;
     glassStyles: Record<GlassType, React.CSSProperties>;
     isFixed?: boolean;
     isSliding?: boolean;
-}> = React.memo(({ width, height, topProfile, rightProfile, bottomProfile, leftProfile, color, scale, isMesh, glassType, glassStyles, isFixed = false, isSliding = false }) => {
+}> = React.memo(({ width, height, topProfile, rightProfile, bottomProfile, leftProfile, color, scale, isMesh, glassType, glassTexture, glassStyles, isFixed = false, isSliding = false }) => {
     
     const glassWidth = width - leftProfile - rightProfile;
     const glassHeight = height - topProfile - bottomProfile;
+
+    const glassStyle: React.CSSProperties = { ...(!isMesh && glassStyles[glassType]) };
+
+    if (glassTexture && !isMesh) {
+        glassStyle.backgroundImage = `url(${glassTexture})`;
+        glassStyle.backgroundSize = 'cover';
+        glassStyle.backgroundPosition = 'center';
+        delete glassStyle.backgroundColor;
+        delete glassStyle.opacity;
+    }
 
     return (
         <div className="absolute" style={{ width: width * scale, height: height * scale }}>
@@ -165,7 +192,7 @@ const SlidingShutter: React.FC<{
                 scale={scale}
                 color={color}
              />
-            <div className={`absolute`} style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale, ...(!isMesh && glassStyles[glassType]) }}>
+            <div className={`absolute`} style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale, ...glassStyle }}>
                 {isMesh && <div className="w-full h-full" style={{backgroundColor: '#808080', opacity: 0.5, backgroundImage: `linear-gradient(45deg, #000 25%, transparent 25%), linear-gradient(-45deg, #000 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #000 75%), linear-gradient(-45deg, transparent 75%, #000 75%)`, backgroundSize: '4px 4px' }} />}
                 <ShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
             </div>
@@ -184,7 +211,7 @@ const createWindowElements = (
       onToggleElevationDoor: (row: number, col: number) => void,
     }
 ) => {
-    const { width, height, series, fixedPanels, glassType, profileColor, windowType } = config;
+    const { width, height, series, fixedPanels, glassType, glassTexture, profileColor, windowType } = config;
     const numHeight = Number(height) || 0;
 
     const geometry = (() => {
@@ -211,12 +238,23 @@ const createWindowElements = (
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
-    const GlassPanel: React.FC<{style: React.CSSProperties, children?: React.ReactNode, glassWidth: number, glassHeight: number}> = ({ style, children, glassWidth, glassHeight }) => ( 
-      <div className="absolute" style={{...glassStyles[glassType], ...style, boxShadow: 'inset 0 0 1px 1px rgba(0,0,0,0.1)'}}>
-        <GlassGrid width={glassWidth} height={glassHeight} rows={config.glassGrid.rows} cols={config.glassGrid.cols} profileSize={dims.glassGridProfile} scale={scale} color={profileColor} />
-        {children}
-      </div> 
-    );
+    const GlassPanel: React.FC<{style: React.CSSProperties, children?: React.ReactNode, glassWidth: number, glassHeight: number}> = ({ style, children, glassWidth, glassHeight }) => {
+        const panelStyle: React.CSSProperties = { ...glassStyles[glassType], ...style, boxShadow: 'inset 0 0 1px 1px rgba(0,0,0,0.1)' };
+        if (glassTexture) {
+            panelStyle.backgroundImage = `url(${glassTexture})`;
+            panelStyle.backgroundSize = 'cover';
+            panelStyle.backgroundPosition = 'center';
+            delete panelStyle.backgroundColor;
+            delete panelStyle.opacity;
+        }
+
+        return ( 
+          <div className="absolute" style={panelStyle}>
+            <GlassGrid width={glassWidth} height={glassHeight} rows={config.glassGrid.rows} cols={config.glassGrid.cols} profileSize={dims.glassGridProfile} scale={scale} color={profileColor} />
+            {children}
+          </div> 
+        );
+    };
   
     if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
@@ -384,7 +422,7 @@ const createWindowElements = (
                         }
                     });
                     
-                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} color={profileColor} scale={scale} isMesh={false} glassType={glassType} glassStyles={glassStyles} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
+                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} color={profileColor} scale={scale} isMesh={false} glassType={glassType} glassTexture={config.glassTexture} glassStyles={glassStyles} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
                 } else {
                     const shutterDivider = hasMesh ? 2 : numShutters;
                     const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * dims.shutterInterlock) / shutterDivider;
@@ -397,7 +435,7 @@ const createWindowElements = (
                               handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>);
                         }
                         
-                        return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : dims.shutterInterlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock} color={profileColor} scale={scale} isMesh={isMeshShutter} glassType={glassType} glassStyles={glassStyles} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div> );
+                        return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : dims.shutterInterlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock} color={profileColor} scale={scale} isMesh={isMeshShutter} glassType={glassType} glassTexture={config.glassTexture} glassStyles={glassStyles} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div> );
                     }));
                 }
                 break;

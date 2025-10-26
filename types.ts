@@ -1,3 +1,4 @@
+
 export enum WindowType {
   SLIDING = 'sliding',
   CASEMENT = 'casement',
@@ -10,7 +11,8 @@ export enum WindowType {
 export interface SavedColor {
   id: string;
   name: string;
-  hex: string;
+  value: string; // Can be hex code or base64 data URI
+  type: 'color' | 'texture';
 }
 
 export interface HardwareItem {
@@ -167,6 +169,7 @@ export interface WindowConfig {
   series: ProfileSeries;
   fixedPanels: FixedPanel[];
   glassType: GlassType;
+  glassTexture?: string;
   glassThickness: number | '';
   customGlassName: string;
   profileColor: string;

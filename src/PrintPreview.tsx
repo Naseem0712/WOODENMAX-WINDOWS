@@ -81,7 +81,18 @@ const PrintShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | '
     return <div className={baseStyle} style={style}>{text}</div>;
 }
 
-const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => ( <div style={{ backgroundColor: color, position: 'absolute', ...style, boxSizing: 'border-box' }} /> );
+const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => {
+    const isTexture = color && !color.startsWith('#');
+    const isHorizontal = (style.width as number) > (style.height as number);
+
+    const backgroundStyle = isTexture ? {
+        backgroundImage: `url(${color})`,
+        backgroundSize: isHorizontal ? 'auto 100%' : '100% auto',
+        backgroundRepeat: 'repeat',
+    } : { backgroundColor: color };
+
+    return <div style={{ position: 'absolute', boxSizing: 'border-box', ...style, ...backgroundStyle }} />;
+};
 
 const PrintGlassGrid: React.FC<{width: number, height: number, rows: number, cols: number, profileSize: number, scale: number, color: string}> = ({ width, height, rows, cols, profileSize, scale, color }) => {
     if ((rows <= 0 && cols <= 0) || profileSize <= 0) return null;
@@ -113,10 +124,15 @@ const PrintableMiteredFrame: React.FC<{
     const ls = (leftSize ?? profileSize) * scale;
     const rs = (rightSize ?? profileSize) * scale;
 
+    const isTexture = color && !color.startsWith('#');
+    const backgroundStyle = isTexture ? { backgroundImage: `url(${color})`, backgroundRepeat: 'repeat' } : { backgroundColor: color };
+    const horizontalBgStyle = { backgroundSize: 'auto 100%' };
+    const verticalBgStyle = { backgroundSize: '100% auto' };
+
     const baseStyle: React.CSSProperties = {
-        backgroundColor: color,
         position: 'absolute',
         boxSizing: 'border-box',
+        ...backgroundStyle
     };
 
     const clipTs = Math.max(0, ts);
@@ -127,13 +143,13 @@ const PrintableMiteredFrame: React.FC<{
     return (
         <div className="absolute" style={{ width: width * scale, height: height * scale }}>
             {/* Top */}
-            <div style={{...baseStyle, top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
+            <div style={{...baseStyle, ...(isTexture && horizontalBgStyle), top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
             {/* Bottom */}
-            <div style={{...baseStyle, bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
+            <div style={{...baseStyle, ...(isTexture && horizontalBgStyle), bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
             {/* Left */}
-            <div style={{...baseStyle, top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
+            <div style={{...baseStyle, ...(isTexture && verticalBgStyle), top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
             {/* Right */}
-            <div style={{...baseStyle, top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
+            <div style={{...baseStyle, ...(isTexture && verticalBgStyle), top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
         </div>
     );
 };
@@ -187,8 +203,9 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         numHeight = config.elevationGrid.rowPattern.map(Number).filter(v => v > 0).reduce((s, v) => s + v, 0) || 1;
     }
     const scale = externalScale || Math.min(containerWidthPx / effectiveWidth, containerHeightPx / numHeight);
-
-    const { series, fixedPanels, profileColor, windowType } = config;
+    
+// FIX: Correctly destructure config to include glassTexture.
+    const { series, fixedPanels, profileColor, windowType, glassTexture } = config;
     const dims = {
         outerFrame: Number(series.dimensions.outerFrame) || 0,
         outerFrameVertical: Number(series.dimensions.outerFrameVertical) || 0,
@@ -218,6 +235,17 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     const handleElements: React.ReactNode[] = [];
 
     const GlassPanel: React.FC<{style: React.CSSProperties, children?: React.ReactNode, glassWidthPx: number, glassHeightPx: number}> = ({ style, children, glassWidthPx, glassHeightPx }) => {
+      const panelStyle: React.CSSProperties = { ...glassStyle, ...style };
+
+      const isMesh = style.backgroundImage && style.backgroundImage.includes('linear-gradient');
+    
+      if (glassTexture && !isMesh) {
+          panelStyle.backgroundImage = `url(${glassTexture})`;
+          panelStyle.backgroundSize = 'cover';
+          panelStyle.backgroundPosition = 'center';
+          delete panelStyle.backgroundColor;
+      }
+      
       const childrenWithProps = React.Children.map(children, child => {
         if (React.isValidElement(child) && child.type === PrintShutterIndicator) {
             return React.cloneElement(child as React.ReactElement<any>, { width: glassWidthPx, height: glassHeightPx });
@@ -225,7 +253,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         return child;
       });
       return (
-        <div className="absolute" style={{...glassStyle, ...style}}>
+        <div className="absolute" style={panelStyle}>
             <PrintGlassGrid width={glassWidthPx / scale} height={glassHeightPx / scale} rows={config.glassGrid.rows} cols={config.glassGrid.cols} profileSize={dims.glassGridProfile} scale={scale} color={profileColor} />
             {childrenWithProps}
         </div> 
@@ -591,7 +619,7 @@ const getGlassDescription = (config: WindowConfig): string => {
     
     // Fallback for simple glass
     let desc = `${config.glassThickness}mm ${formatType(config.glassType)}`;
-    if (config.glassSpecialType !== 'none') {
+    if (config.glassSpecialType !== 'none' && config.glassSpecialType) {
         desc += ` (${formatType(config.glassSpecialType)})`;
     }
     if (config.customGlassName) {
@@ -815,16 +843,24 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                     
                                     const unitAmount = (singleArea * item.rate) + item.hardwareCost;
 
-                                    const { panelCounts, relevantHardware } = getItemDetails(item);
+                                    {/* FIX: Correctly call getItemDetails to destructure its return value. */}
+                                    const { panelCounts, hardwareDetails, relevantHardware } = getItemDetails(item);
                                     const glassDescription = getGlassDescription(item.config);
 
                                     return (
                                         <tr key={item.id} className="border-b border-gray-300 print-item">
                                             <td className="p-2 align-top text-center">{index + 1}</td>
-                                            <td className="p-2 align-top w-[25%]" style={{ width: '150px' }}>
-                                                <PrintableWindow config={item.config} />
-                                            </td>
-                                            <td className="p-2 align-top w-[40%]">
+                                            
+                                            {item.config.windowType !== WindowType.ELEVATION_GLAZING ? (
+                                                <td className="p-2 align-top w-[25%]" style={{ width: '150px' }}>
+                                                    <PrintableWindow config={item.config} />
+                                                </td>
+                                            ) : null}
+                                            
+                                            <td 
+                                                className="p-2 align-top"
+                                                colSpan={item.config.windowType === WindowType.ELEVATION_GLAZING ? 2 : 1}
+                                            >
                                                 <p className="font-bold print-window-title">{item.title}</p>
                                                 <table className="w-full text-[7pt] mt-1 details-table">
                                                     <tbody>
@@ -918,6 +954,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         </div>
                     </div>
                 </div>
+                {/* --- End of Printable Content --- */}
             </div>
         </div>
     </div>

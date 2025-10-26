@@ -10,7 +10,8 @@ export enum WindowType {
 export interface SavedColor {
   id: string;
   name: string;
-  hex: string;
+  value: string; // Can be hex code or base64 data URI
+  type: 'color' | 'texture';
 }
 
 export interface HardwareItem {
