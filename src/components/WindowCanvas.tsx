@@ -719,7 +719,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
         const opt = {
             margin: 0,
             html2canvas: {
-                scale: 3250 / (windowElement.offsetWidth || 1),
+                scale: 4, // Use a fixed high scale for good resolution while preserving aspect ratio
                 backgroundColor: null,
                 logging: false,
                 useCORS: true,
@@ -727,22 +727,29 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
         };
 
         html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((productCanvas: HTMLCanvasElement) => {
-            // Create a new canvas with padding
-            const padding = 30; // 30px padding on each side
+            const padding = 100; // Generous padding for a nice border
+            const maxDim = Math.max(productCanvas.width, productCanvas.height);
+            const newCanvasSize = maxDim + padding * 2;
+            
             const newCanvas = document.createElement('canvas');
-            newCanvas.width = productCanvas.width + padding * 2;
-            newCanvas.height = productCanvas.height + padding * 2;
+            newCanvas.width = newCanvasSize;
+            newCanvas.height = newCanvasSize;
             
             const ctx = newCanvas.getContext('2d');
             if (ctx) {
-                // Fill with white background as requested
+                // Fill with white background
                 ctx.fillStyle = 'white';
                 ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
-                // Draw the product image onto the new canvas with an offset
-                ctx.drawImage(productCanvas, padding, padding);
+
+                // Calculate center position
+                const x = (newCanvas.width - productCanvas.width) / 2;
+                const y = (newCanvas.height - productCanvas.height) / 2;
+
+                // Draw the product image centered onto the new canvas
+                ctx.drawImage(productCanvas, x, y);
             }
 
-            // Export the new canvas with padding
+            // Export the new canvas
             const link = document.createElement('a');
             link.download = `woodenmax-design-${Date.now()}.png`;
             link.href = newCanvas.toDataURL('image/png');
