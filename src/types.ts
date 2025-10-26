@@ -162,6 +162,24 @@ export interface DguGlassConfig {
   isToughened: boolean;
 }
 
+// FIX: Added new types for the advanced Georgian bars configuration.
+export interface GlassGridPattern {
+    count: number;
+    offset: number; // mm
+    gap: number; // mm
+}
+
+export interface GlassGridConfig {
+    applyToAll: boolean;
+    barThickness: number;
+    // panelId is 'default' or a specific panel ID like 'sliding-0', 'casement-0-1', 'fixed-top'
+    patterns: Record<string, {
+        horizontal: GlassGridPattern;
+        vertical: GlassGridPattern;
+    }>;
+}
+
+
 export interface WindowConfig {
   width: number | '';
   height: number | '';
@@ -172,7 +190,10 @@ export interface WindowConfig {
   glassThickness: number | '';
   customGlassName: string;
   profileColor: string;
-  glassGrid: { rows: number, cols: number };
+  // FIX: Updated glassGrid to use the new detailed config type.
+  glassGrid: GlassGridConfig;
+  // FIX: Added legacyGlassGrid for handling migration from the old simple grid type.
+  legacyGlassGrid?: { rows: number, cols: number };
   
   // Type discriminator
   windowType: WindowType;

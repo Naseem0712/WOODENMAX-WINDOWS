@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback } from 'react';
-import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig } from './types';
+// FIX: Import the new GlassGridConfig type.
+import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
@@ -15,6 +16,7 @@ import { ListBulletIcon } from './components/icons/ListBulletIcon';
 import { DocumentTextIcon } from './components/icons/DocumentTextIcon';
 import { BatchAddModal, type BatchAddItem } from './components/BatchAddModal';
 import { ContentModal } from './components/ContentModal';
+import { GeorgianBarsPanel } from './components/GeorgianBarsPanel';
 
 interface BeforeInstallPromptEvent extends Event {
     readonly platforms: Array<string>;
@@ -54,6 +56,7 @@ type ConfigAction =
   | { type: 'RESET_DESIGN' };
 
 
+// FIX: Added 'glassGridProfile' to satisfy the ProfileDimensions type.
 const BASE_DIMENSIONS = {
     outerFrame: 0, outerFrameVertical: 0, fixedFrame: 0, shutterHandle: 0, shutterInterlock: 0,
     shutterTop: 0, shutterBottom: 0, shutterMeeting: 0, casementShutter: 0,
@@ -278,7 +281,7 @@ const DEFAULT_SLIDING_SERIES: ProfileSeries = {
     dimensions: {
         ...BASE_DIMENSIONS,
         outerFrame: 60, fixedFrame: 25, shutterHandle: 45, shutterInterlock: 25,
-        shutterTop: 55, shutterBottom: 55, shutterMeeting: 50, glassGridProfile: 15,
+        shutterTop: 55, shutterBottom: 55, shutterMeeting: 50,
     },
     hardwareItems: DEFAULT_SLIDING_HARDWARE,
     glassOptions: DEFAULT_GLASS_OPTIONS,
@@ -296,7 +299,7 @@ const DEFAULT_CASEMENT_SERIES: ProfileSeries = {
     id: 'series-casement-default',
     name: 'Standard Casement Series',
     type: WindowType.CASEMENT,
-    dimensions: { ...BASE_DIMENSIONS, outerFrame: 60, fixedFrame: 25, casementShutter: 70, mullion: 80, glassGridProfile: 15 },
+    dimensions: { ...BASE_DIMENSIONS, outerFrame: 60, fixedFrame: 25, casementShutter: 70, mullion: 80 },
     hardwareItems: DEFAULT_CASEMENT_HARDWARE,
     glassOptions: DEFAULT_GLASS_OPTIONS,
 };
@@ -312,7 +315,7 @@ const DEFAULT_VENTILATOR_SERIES: ProfileSeries = {
     id: 'series-ventilator-default',
     name: 'Standard Ventilator Series',
     type: WindowType.VENTILATOR,
-    dimensions: { ...BASE_DIMENSIONS, outerFrame: 50, fixedFrame: 20, casementShutter: 45, mullion: 50, louverBlade: 25, glassGridProfile: 15 },
+    dimensions: { ...BASE_DIMENSIONS, outerFrame: 50, fixedFrame: 20, casementShutter: 45, mullion: 50, louverBlade: 25 },
     hardwareItems: DEFAULT_VENTILATOR_HARDWARE,
     glassOptions: DEFAULT_GLASS_OPTIONS,
 };
@@ -328,7 +331,7 @@ const DEFAULT_GLASS_PARTITION_SERIES: ProfileSeries = {
   id: 'series-partition-default',
   name: 'Standard Glass Partition',
   type: WindowType.GLASS_PARTITION,
-  dimensions: { ...BASE_DIMENSIONS, topTrack: 50, bottomTrack: 20, fixedFrame: 25, casementShutter: 35, glassGridProfile: 15 },
+  dimensions: { ...BASE_DIMENSIONS, topTrack: 50, bottomTrack: 20, fixedFrame: 25, casementShutter: 35 },
   hardwareItems: DEFAULT_PARTITION_HARDWARE,
   glassOptions: {
     thicknesses: [8, 10, 12],
@@ -354,7 +357,7 @@ const DEFAULT_CORNER_SERIES: ProfileSeries = {
     id: 'series-corner-default',
     name: 'Standard Corner Series',
     type: WindowType.CORNER,
-    dimensions: { ...BASE_DIMENSIONS, outerFrame: 60, fixedFrame: 25, casementShutter: 70, mullion: 80, glassGridProfile: 15 },
+    dimensions: { ...BASE_DIMENSIONS, outerFrame: 60, fixedFrame: 25, casementShutter: 70, mullion: 80 },
     hardwareItems: [], // Hardware derived from sub-type
     glassOptions: DEFAULT_GLASS_OPTIONS,
 };
@@ -381,9 +384,21 @@ const defaultCornerSideConfig: CornerSideConfig = {
     ventilatorGrid: [],
 };
 
+const defaultGlassGridPattern = { count: 0, offset: 100, gap: 200 };
+const defaultGlassGrid: GlassGridConfig = {
+    applyToAll: true,
+    barThickness: 15,
+    patterns: {
+        'default': {
+            horizontal: { ...defaultGlassGridPattern },
+            vertical: { ...defaultGlassGridPattern }
+        }
+    }
+};
+
 const initialConfig: ConfigState = {
-    width: 15000,
-    height: 15000,
+    width: 1500,
+    height: 1200,
     fixedPanels: [],
     glassType: GlassType.CLEAR,
     glassTexture: '',
@@ -391,7 +406,7 @@ const initialConfig: ConfigState = {
     customGlassName: '',
     glassSpecialType: 'none',
     profileColor: '#374151',
-    glassGrid: { rows: 0, cols: 0 },
+    glassGrid: defaultGlassGrid,
     windowType: WindowType.SLIDING,
     laminatedGlassConfig: {
         glass1Thickness: 6,
@@ -414,9 +429,9 @@ const initialConfig: ConfigState = {
     shutterConfig: ShutterConfigType.TWO_GLASS,
     fixedShutters: [],
     slidingHandles: [],
-    verticalDividers: [0.5],
+    verticalDividers: [],
     horizontalDividers: [],
-    doorPositions: [{ row: 0, col: 0 }, { row: 0, col: 1 }],
+    doorPositions: [],
     ventilatorGrid: [],
     partitionPanels: { count: 2, types: [{ type: 'fixed' }, { type: 'sliding' }], hasTopChannel: true },
     elevationGrid: {
@@ -716,12 +731,25 @@ const getInitialConfig = (): ConfigState => {
     if (saved) {
       const parsed = JSON.parse(saved);
 
+      // --- Migration for Glass Grid ---
+      if (parsed.glassGrid && typeof parsed.glassGrid.rows !== 'undefined') {
+          const newGlassGrid: GlassGridConfig = JSON.parse(JSON.stringify(defaultGlassGrid));
+          newGlassGrid.patterns['default'].vertical.count = parsed.glassGrid.cols || 0;
+          newGlassGrid.patterns['default'].horizontal.count = parsed.glassGrid.rows || 0;
+          // If bar thickness was in series, move it
+          if (parsed.series?.dimensions?.glassGridProfile) {
+              newGlassGrid.barThickness = parsed.series.dimensions.glassGridProfile;
+          }
+          parsed.glassGrid = newGlassGrid;
+          delete parsed.legacyGlassGrid; // or delete parsed.glassGrid if it was named that
+      }
+
+
       // Create a new config, starting with defaults, then overriding with saved values.
-      // Explicitly merge nested objects to prevent them from being completely replaced
-      // if the saved version is missing some properties.
-      const finalConfig = {
+      const finalConfig: ConfigState = {
           ...initialConfig,
           ...parsed,
+          glassGrid: { ...initialConfig.glassGrid, ...(parsed.glassGrid || {}) },
           glassTexture: parsed.glassTexture || '',
           partitionPanels: { ...initialConfig.partitionPanels, ...(parsed.partitionPanels || {}) },
           elevationGrid: { ...initialConfig.elevationGrid, ...(parsed.elevationGrid || {}) },
@@ -755,8 +783,6 @@ const getInitialConfig = (): ConfigState => {
     }
   } catch (error) {
     console.error("Could not load current config from localStorage", error);
-    // If parsing fails, clearing the bad data might be a good idea
-    // window.localStorage.removeItem('woodenmax-current-config');
   }
   return initialConfig;
 };
@@ -1246,6 +1272,11 @@ const App: React.FC = () => {
     handleCloseMobilePanels();
   };
 
+  const isGeorgianBarsActive = useMemo(() => {
+    const defaultPattern = windowConfig.glassGrid.patterns['default'];
+    return (defaultPattern.horizontal.count > 0 || defaultPattern.vertical.count > 0);
+  }, [windowConfig.glassGrid]);
+
   return (
     <>
       <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} />
@@ -1274,6 +1305,7 @@ const App: React.FC = () => {
                 {!isDesktopPanelOpen && ( <button onClick={() => setIsDesktopPanelOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex" aria-label="Expand panel"> <ChevronLeftIcon className="w-5 h-5 rotate-180" /> </button> )}
               <div className="flex-grow relative">
                  <WindowCanvas config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} onToggleElevationDoor={handleToggleElevationDoor} />
+                  {isGeorgianBarsActive && <GeorgianBarsPanel config={windowConfig} setConfig={setConfig} />}
               </div>
               <div className="flex-shrink-0 no-print hidden lg:block">
                   <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onBatchAdd={handleBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={handleViewQuotation} />

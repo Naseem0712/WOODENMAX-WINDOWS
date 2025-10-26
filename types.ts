@@ -1,4 +1,3 @@
-
 export enum WindowType {
   SLIDING = 'sliding',
   CASEMENT = 'casement',
@@ -54,7 +53,6 @@ export interface ProfileDimensions {
   // Glass Partition
   topTrack: number | '';
   bottomTrack: number | '';
-  glassGridProfile: number | '';
 }
 
 export type ProfileDetails = {
@@ -103,7 +101,7 @@ export enum GlassType {
   TINTED_BLUE = 'tinted-blue',
   CLEAR_SAPPHIRE = 'clear-sapphire',
   BROWN_TINTED = 'brown-tinted',
-  BLACK_TINTED = 'black-tinted',
+  BLACK_TINTED = 'black-tented',
 }
 
 export enum AreaType {
@@ -163,6 +161,23 @@ export interface DguGlassConfig {
   isToughened: boolean;
 }
 
+export interface GlassGridPattern {
+    count: number;
+    offset: number; // mm
+    gap: number; // mm
+}
+
+export interface GlassGridConfig {
+    applyToAll: boolean;
+    barThickness: number;
+    // panelId is 'default' or a specific panel ID like 'sliding-0', 'casement-0-1', 'fixed-top'
+    patterns: Record<string, {
+        horizontal: GlassGridPattern;
+        vertical: GlassGridPattern;
+    }>;
+}
+
+
 export interface WindowConfig {
   width: number | '';
   height: number | '';
@@ -173,7 +188,8 @@ export interface WindowConfig {
   glassThickness: number | '';
   customGlassName: string;
   profileColor: string;
-  glassGrid: { rows: number, cols: number };
+  glassGrid: GlassGridConfig;
+  legacyGlassGrid?: { rows: number, cols: number }; // For migration
   
   // Type discriminator
   windowType: WindowType;
@@ -267,7 +283,7 @@ export interface QuotationSettings {
 
 // Bill of Materials Types
 export interface BOMProfile {
-  profileKey: keyof ProfileDimensions;
+  profileKey: keyof ProfileDimensions | 'glassGridProfile';
   totalLength: number;
   standardLength: number;
   weightPerMeter?: number;
