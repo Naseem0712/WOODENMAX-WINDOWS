@@ -101,36 +101,65 @@ const PrintGlassGrid: React.FC<{
     height: number;
     scale: number;
 }> = ({ config, panelId, width, height, scale }) => {
-    // FIX: Add optional chaining to prevent crash if glassGrid is missing
-    const { glassGrid } = config;
-    if (!glassGrid || typeof glassGrid.barThickness === 'undefined') {
-      return null;
-    }
-    const { barThickness, applyToAll, patterns } = glassGrid;
-    if (barThickness <= 0) return null;
-
-    const pattern = (applyToAll || !patterns[panelId]) ? patterns['default'] : patterns[panelId];
-    if (!pattern || (pattern.horizontal.count === 0 && pattern.vertical.count === 0)) return null;
-
-    const elements: React.ReactNode[] = [];
-    const barThicknessScaled = barThickness * scale;
+    const { glassGrid, legacyGlassGrid, series } = config;
     const profileColor = config.profileColor;
 
-    // Horizontal bars
-    for (let i = 0; i < pattern.horizontal.count; i++) {
-        const top = (pattern.horizontal.offset + i * pattern.horizontal.gap) * scale - barThicknessScaled / 2;
-        if (top > height * scale || top < -barThicknessScaled) continue;
-        elements.push(<PrintProfilePiece key={`h-grid-${i}`} color={profileColor} style={{ top, left: 0, width: width * scale, height: barThicknessScaled }} />);
+    // New "patterns" format
+    if (glassGrid && glassGrid.patterns) {
+        const { barThickness, applyToAll, patterns } = glassGrid;
+        if (barThickness <= 0) return null;
+
+        const pattern = (applyToAll || !patterns[panelId]) ? patterns['default'] : patterns[panelId];
+        if (!pattern || (pattern.horizontal.count === 0 && pattern.vertical.count === 0)) return null;
+
+        const elements: React.ReactNode[] = [];
+        const barThicknessScaled = barThickness * scale;
+
+        // Horizontal bars
+        for (let i = 0; i < pattern.horizontal.count; i++) {
+            const top = (pattern.horizontal.offset + i * pattern.horizontal.gap) * scale - barThicknessScaled / 2;
+            if (top > height * scale || top < -barThicknessScaled) continue;
+            elements.push(<PrintProfilePiece key={`h-grid-${i}`} color={profileColor} style={{ top, left: 0, width: width * scale, height: barThicknessScaled }} />);
+        }
+
+        // Vertical bars
+        for (let i = 0; i < pattern.vertical.count; i++) {
+            const left = (pattern.vertical.offset + i * pattern.vertical.gap) * scale - barThicknessScaled / 2;
+            if (left > width * scale || left < -barThicknessScaled) continue;
+            elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={profileColor} style={{ left, top: 0, width: barThicknessScaled, height: height * scale }} />);
+        }
+
+        return <>{elements}</>;
+    }
+    
+    // Legacy "rows/cols" format
+    const oldGridData = legacyGlassGrid || (glassGrid as any);
+    if (oldGridData && typeof oldGridData.rows !== 'undefined') {
+        const rows = Number(oldGridData.rows) || 0;
+        const cols = Number(oldGridData.cols) || 0;
+        const barThickness = Number(series.dimensions.glassGridProfile) || 15;
+
+        if (barThickness <= 0 || (rows === 0 && cols === 0)) return null;
+
+        const elements: React.ReactNode[] = [];
+        const barThicknessScaled = barThickness * scale;
+
+        if (rows > 0) {
+            const vGap = (height * scale) / (rows + 1);
+            for (let i = 1; i <= rows; i++) {
+                elements.push(<PrintProfilePiece key={`h-grid-${i}`} color={profileColor} style={{ top: i * vGap - barThicknessScaled / 2, left: 0, width: width * scale, height: barThicknessScaled }} />);
+            }
+        }
+        if (cols > 0) {
+            const hGap = (width * scale) / (cols + 1);
+            for (let i = 1; i <= cols; i++) {
+                elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={profileColor} style={{ left: i * hGap - barThicknessScaled / 2, top: 0, width: barThicknessScaled, height: height * scale }} />);
+            }
+        }
+        return <>{elements}</>;
     }
 
-    // Vertical bars
-    for (let i = 0; i < pattern.vertical.count; i++) {
-        const left = (pattern.vertical.offset + i * pattern.vertical.gap) * scale - barThicknessScaled / 2;
-        if (left > width * scale || left < -barThicknessScaled) continue;
-        elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={profileColor} style={{ left, top: 0, width: barThicknessScaled, height: height * scale }} />);
-    }
-
-    return <>{elements}</>;
+    return null;
 };
 
 
@@ -240,7 +269,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         shutterMeeting: Number(series.dimensions.shutterMeeting) || 0, casementShutter: Number(series.dimensions.casementShutter) || 0,
         mullion: Number(series.dimensions.mullion) || 0, louverBlade: Number(series.dimensions.louverBlade) || 0,
         topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0, 
-        glassGridProfile: Number(config.glassGrid.barThickness) || 0,
+        glassGridProfile: Number(config.glassGrid?.barThickness) || Number(series.dimensions.glassGridProfile) || 0,
     };
 
     const glassStyle = { backgroundColor: '#E2E8F0', boxSizing: 'border-box' as const, border: '0.5px solid #999' };
@@ -280,7 +309,6 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
       });
       return (
         <div className="absolute" style={panelStyle}>
-            {/* FIX: Use refactored PrintGlassGrid component which expects config and panelId. */}
             <PrintGlassGrid config={config} panelId={panelId} width={glassWidthPx / scale} height={glassHeightPx / scale} scale={scale} />
             {childrenWithProps}
         </div> 
