@@ -131,6 +131,7 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
           <div className="absolute inset-y-0 right-0 flex items-center">
               <select
                   aria-label="Units"
+                  name={`${id}-unit`}
                   value={unit}
                   onChange={handleUnitChange}
                   className="h-full rounded-r-md border-transparent bg-transparent py-0 pl-2 pr-7 text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm"
@@ -151,8 +152,8 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
                     inputMode="decimal"
                     placeholder="Weight"
                     id={`${id}-weight`}
-                    aria-label={`Weight for ${label}`}
                     name={`${id}-weight`}
+                    aria-label={`Weight for ${label}`}
                     value={weightValue}
                     onChange={e => onWeightChange(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full pl-3 pr-12 py-1 bg-slate-700 border border-slate-600 rounded-md text-white text-xs focus:ring-1 focus:ring-indigo-500"
@@ -166,8 +167,8 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
                     inputMode="decimal"
                     placeholder="Length"
                     id={`${id}-length`}
-                    aria-label={`Length for ${label}`}
                     name={`${id}-length`}
+                    aria-label={`Length for ${label}`}
                     value={lengthValue}
                     onChange={e => onLengthChange(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full pl-3 pr-5 py-1 bg-slate-700 border border-slate-600 rounded-md text-white text-xs focus:ring-1 focus:ring-indigo-500"

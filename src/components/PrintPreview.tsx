@@ -652,13 +652,14 @@ const EditableSection: React.FC<{title: string, value: string, onChange: (value:
             <h3 id={id} className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">{title}</h3>
             <textarea 
                 ref={textareaRef}
+                id={id}
+                name={id}
                 value={value}
                 onChange={e => onChange(e.target.value)}
                 className="w-full text-xs whitespace-pre-wrap bg-transparent border-gray-300 rounded-md p-1 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 print-editable"
                 rows={1}
                 style={{overflow: 'hidden'}}
                 aria-labelledby={id}
-                name={id}
             />
         </div>
     );
