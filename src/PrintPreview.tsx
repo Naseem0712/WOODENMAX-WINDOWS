@@ -176,7 +176,8 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         );
     }
 
-    const containerWidthPx = 150;
+    const containerWidthPx = 150; // max width in pixels
+    const containerHeightPx = 200; // max height in pixels
     const numWidth = Number(config.width) || 1;
     let numHeight = Number(config.height) || 1;
     
@@ -185,7 +186,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         effectiveWidth = config.elevationGrid.colPattern.map(Number).filter(v => v > 0).reduce((s, v) => s + v, 0) || 1;
         numHeight = config.elevationGrid.rowPattern.map(Number).filter(v => v > 0).reduce((s, v) => s + v, 0) || 1;
     }
-    const scale = externalScale || Math.min(containerWidthPx / effectiveWidth, 200 / numHeight);
+    const scale = externalScale || Math.min(containerWidthPx / effectiveWidth, containerHeightPx / numHeight);
 
     const { series, fixedPanels, profileColor, windowType } = config;
     const dims = {
@@ -541,7 +542,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
             )}
             {config.windowType !== WindowType.CORNER && (
                 <>
-                    <PrintDimensionLabel value={numWidth} className="top-0 -translate-y-full left-1/2 -translate-x-1/2 -mt-1" />
+                    <PrintDimensionLabel value={effectiveWidth} className="top-0 -translate-y-full left-1/2 -translate-x-1/2 -mt-1" />
                     <PrintDimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 left-0 -translate-x-full -ml-2 rotate-[-90deg]" />
                 </>
             )}
@@ -828,7 +829,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                 <table className="w-full text-[7pt] mt-1 details-table">
                                                     <tbody>
                                                         <tr><td className='pr-2 font-semibold'>Series:</td><td>{item.config.series.name}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Size:</td><td>{item.config.width} x {item.config.height} mm</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Size:</td><td>{item.config.windowType === 'elevation_glazing' && item.config.elevationGrid ? `${item.config.elevationGrid.colPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)} x ${item.config.elevationGrid.rowPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)}` : `${item.config.width} x ${item.config.height}`} mm</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Color:</td><td>{item.profileColorName}</td></tr>
