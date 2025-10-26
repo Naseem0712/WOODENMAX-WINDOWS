@@ -356,55 +356,57 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                     {windowType === WindowType.ELEVATION_GLAZING && (() => {
                         if (!config.elevationGrid) return null;
 
-                        const { rowPattern, colPattern, doorPositions } = config.elevationGrid;
-                        const vMullion = Number(dims.mullion) || 0;
-                        const hTransom = Number(dims.mullion) || 0;
+                        const { rowPattern, colPattern, doorPositions, verticalMullionSize, horizontalTransomSize } = config.elevationGrid;
+                        const vMullion = Number(verticalMullionSize) || 0;
+                        const hTransom = Number(horizontalTransomSize) || 0;
 
                         const validColPattern = colPattern.map(Number).filter(v => v > 0);
                         const validRowPattern = rowPattern.map(Number).filter(v => v > 0);
 
                         const elements: React.ReactNode[] = [];
-                        const horizontalLabels: React.ReactNode[] = [];
-                        const verticalLabels: React.ReactNode[] = [];
-
+                        
+                        const uniqueColWidthsLabeled = new Set<number>();
                         let currentX_label = 0;
-                        const uniqueColWidths = new Set<number>();
                         validColPattern.forEach((colWidth) => {
-                            if (!uniqueColWidths.has(colWidth)) {
-                                horizontalLabels.push(
-                                    <PrintDimensionLabel key={`h-label-${colWidth}`} value={colWidth} className="-top-4 text-[5pt]" style={{ left: (currentX_label + colWidth / 2) * scale, transform: 'translateX(-50%)' }}/>
-                                );
-                                uniqueColWidths.add(colWidth);
+                            if (!uniqueColWidthsLabeled.has(colWidth)) {
+                                labelElements.push( <PrintDimensionLabel key={`h-label-${colWidth}`} value={colWidth} className="-top-4 text-[5pt]" style={{ left: (currentX_label + colWidth / 2) * scale, transform: 'translateX(-50%)' }} /> );
+                                uniqueColWidthsLabeled.add(colWidth);
                             }
                             currentX_label += colWidth;
                         });
 
+                        const uniqueRowHeightsLabeled = new Set<number>();
                         let currentY_label = 0;
-                        const uniqueRowHeights = new Set<number>();
                         validRowPattern.forEach((rowHeight) => {
-                             if (!uniqueRowHeights.has(rowHeight)) {
-                                verticalLabels.push(
-                                    <PrintDimensionLabel key={`v-label-${rowHeight}`} value={rowHeight} className="-left-1 text-[5pt] rotate-[-90deg]" style={{ top: (currentY_label + rowHeight / 2) * scale, transform: 'translateY(-50%) translateX(-100%)', transformOrigin: 'left center' }}/>
-                                );
-                                uniqueRowHeights.add(rowHeight);
+                             if (!uniqueRowHeightsLabeled.has(rowHeight)) {
+                                labelElements.push( <PrintDimensionLabel key={`v-label-${rowHeight}`} value={rowHeight} className="-left-1 text-[5pt] rotate-[-90deg]" style={{ top: (currentY_label + rowHeight / 2) * scale, transform: 'translateY(-50%) translateX(-100%)', transformOrigin: 'left center' }} /> );
+                                uniqueRowHeightsLabeled.add(rowHeight);
                             }
                             currentY_label += rowHeight;
                         });
 
-                        elements.push(<GlassPanel key="glazing-bg" style={{ left: 0, top: 0, width: innerAreaWidth * scale, height: innerAreaHeight * scale }} glassWidthPx={innerAreaWidth * scale} glassHeightPx={innerAreaHeight * scale} />);
+                        let currentY_cell = 0;
+                        validRowPattern.forEach((rowHeight, r) => {
+                            let currentX_cell = 0;
+                            validColPattern.forEach((colWidth, c) => {
+                                elements.push( <GlassPanel key={`cell-glass-${r}-${c}`} style={{left: currentX_cell * scale, top: currentY_cell * scale, width: colWidth*scale, height: rowHeight*scale}} glassWidthPx={colWidth*scale} glassHeightPx={rowHeight*scale}/>);
+                                currentX_cell += colWidth;
+                            });
+                            currentY_cell += rowHeight;
+                        });
 
                         let accumulatedX = 0;
                         for (let c = 0; c < validColPattern.length - 1; c++) {
                             accumulatedX += validColPattern[c];
-                            elements.push(<PrintProfilePiece key={`vmullion-${c}`} color={profileColor} style={{ left: (accumulatedX - vMullion / 2) * scale, top: 0, width: vMullion * scale, height: innerAreaHeight * scale }} />);
+                            elements.push(<PrintProfilePiece key={`vmullion-${c}`} color={profileColor} style={{ left: (accumulatedX - vMullion / 2) * scale, top: 0, width: vMullion * scale, height: numHeight * scale }} />);
                         }
                         let accumulatedY = 0;
                         for (let r = 0; r < validRowPattern.length - 1; r++) {
                             accumulatedY += validRowPattern[r];
-                            elements.push(<PrintProfilePiece key={`hmullion-${r}`} color={profileColor} style={{ left: 0, top: (accumulatedY - hTransom / 2) * scale, width: innerAreaWidth * scale, height: hTransom * scale }} />);
+                            elements.push(<PrintProfilePiece key={`hmullion-${r}`} color={profileColor} style={{ left: 0, top: (accumulatedY - hTransom / 2) * scale, width: effectiveWidth * scale, height: hTransom * scale }} />);
                         }
                         
-                        let currentY_cell = 0;
+                        currentY_cell = 0;
                         validRowPattern.forEach((rowHeight, r) => {
                             let currentX_cell = 0;
                             validColPattern.forEach((colWidth, c) => {
@@ -425,13 +427,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                             currentY_cell += rowHeight;
                         });
 
-                        return (
-                            <>
-                                <div className="absolute inset-0">{horizontalLabels}</div>
-                                <div className="absolute inset-0">{verticalLabels}</div>
-                                {elements}
-                            </>
-                        );
+                        return <>{elements}</>;
                     })()}
 
                     {(windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) && (() => {
@@ -626,7 +622,7 @@ const getItemDetails = (item: QuotationItem) => {
             const typeName = cell.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
             panelCounts[typeName] = (panelCounts[typeName] || 0) + 1;
         });
-    } else if (windowType === WindowType.ELEVATION_GLAZING) {
+    } else if (windowType === WindowType.ELEVATION_GLAZING && config.elevationGrid) {
         panelCounts['Operable Door'] = config.elevationGrid.doorPositions.length;
     }
 

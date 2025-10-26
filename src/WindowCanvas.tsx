@@ -272,58 +272,61 @@ const createWindowElements = (
 
                     const profilesAndPlates: React.ReactNode[] = [];
 
-                    // Render glass panels first
-                    let currentY = 0;
+                    // Render glass panels first, cell by cell
+                    let currentY_cell = 0;
                     for (let r = 0; r < validRowPattern.length; r++) {
-                        let currentX = 0;
+                        let currentX_cell = 0;
                         for (let c = 0; c < validColPattern.length; c++) {
                             const cellWidth = validColPattern[c];
                             const cellHeight = validRowPattern[r];
                             innerContent.push(
                                 <GlassPanel 
                                     key={`cell-glass-${r}-${c}`} 
-                                    style={{ left: currentX * scale, top: currentY * scale, width: cellWidth * scale, height: cellHeight * scale }} 
+                                    style={{ left: currentX_cell * scale, top: currentY_cell * scale, width: cellWidth * scale, height: cellHeight * scale }} 
                                     glassWidth={cellWidth} 
                                     glassHeight={cellHeight} 
                                 />
                             );
-                            currentX += cellWidth;
+                            currentX_cell += cellWidth;
                         }
-                        currentY += validRowPattern[r];
+                        currentY_cell += validRowPattern[r];
                     }
 
-                    // Render mullions and transoms
-                    currentY = 0;
-                    for (let r = 0; r < validRowPattern.length -1; r++) {
-                        currentY += validRowPattern[r];
-                        profilesAndPlates.push(<ProfilePiece key={`htransom-${r}`} color={profileColor} style={{ left: 0, top: (currentY - hTransom / 2) * scale, width: totalGridWidth * scale, height: hTransom * scale, zIndex: 1 }} />);
+                    // Then render profiles at the seams
+                    // Transoms
+                    let currentY_profile = 0;
+                    for (let r = 0; r < validRowPattern.length - 1; r++) {
+                        currentY_profile += validRowPattern[r];
+                        profilesAndPlates.push(<ProfilePiece key={`htransom-${r}`} color={profileColor} style={{ left: 0, top: (currentY_profile - hTransom / 2) * scale, width: totalGridWidth * scale, height: hTransom * scale, zIndex: 1 }} />);
                     }
-                    let currentX = 0;
-                     for (let c = 0; c < validColPattern.length -1; c++) {
-                        currentX += validColPattern[c];
-                        profilesAndPlates.push(<ProfilePiece key={`vmullion-${c}`} color={profileColor} style={{ top: 0, left: (currentX - vMullion / 2) * scale, width: vMullion * scale, height: totalGridHeight * scale, zIndex: 1 }} />);
+                    // Mullions
+                    let currentX_profile = 0;
+                    for (let c = 0; c < validColPattern.length - 1; c++) {
+                        currentX_profile += validColPattern[c];
+                        profilesAndPlates.push(<ProfilePiece key={`vmullion-${c}`} color={profileColor} style={{ top: 0, left: (currentX_profile - vMullion / 2) * scale, width: vMullion * scale, height: totalGridHeight * scale, zIndex: 1 }} />);
                     }
-                    
-                    // Render pressure plates
+
+                    // Pressure Plates
                     if (pressurePlate > 0) {
-                         currentY = 0;
-                         for (let r = 0; r < validRowPattern.length -1; r++) {
-                            currentY += validRowPattern[r];
-                            profilesAndPlates.push(<ProfilePiece key={`hplate-${r}`} color="#6B7280" style={{ zIndex: 2, left: 0, top: (currentY - pressurePlate / 2) * scale, width: totalGridWidth * scale, height: pressurePlate * scale }} />);
+                        // Horizontal plates
+                        currentY_profile = 0;
+                        for (let r = 0; r < validRowPattern.length - 1; r++) {
+                            currentY_profile += validRowPattern[r];
+                            profilesAndPlates.push(<ProfilePiece key={`hplate-${r}`} color="#6B7280" style={{ zIndex: 2, left: 0, top: (currentY_profile - pressurePlate / 2) * scale, width: totalGridWidth * scale, height: pressurePlate * scale }} />);
                         }
-                        currentX = 0;
-                        for (let c = 0; c < validColPattern.length -1; c++) {
-                            currentX += validColPattern[c];
-                            profilesAndPlates.push(<ProfilePiece key={`vplate-${c}`} color="#6B7280" style={{ zIndex: 2, top: 0, left: (currentX - pressurePlate / 2) * scale, width: pressurePlate * scale, height: totalGridHeight * scale }} />);
+                        // Vertical plates
+                        currentX_profile = 0;
+                        for (let c = 0; c < validColPattern.length - 1; c++) {
+                            currentX_profile += validColPattern[c];
+                            profilesAndPlates.push(<ProfilePiece key={`vplate-${c}`} color="#6B7280" style={{ zIndex: 2, top: 0, left: (currentX_profile - pressurePlate / 2) * scale, width: pressurePlate * scale, height: totalGridHeight * scale }} />);
                         }
                     }
-
                     innerContent.push(<div key="profiles-wrapper" className="absolute inset-0">{profilesAndPlates}</div>);
-                    
-                    // Render doors and clickable overlays
-                    currentY = 0;
+
+                    // Render Doors and Clickable Overlays
+                    currentY_cell = 0;
                     for (let r = 0; r < validRowPattern.length; r++) {
-                         let currentX = 0;
+                         let currentX_cell = 0;
                          for (let c = 0; c < validColPattern.length; c++) {
                             const cellWidth = validColPattern[c];
                             const cellHeight = validRowPattern[r];
@@ -333,7 +336,7 @@ const createWindowElements = (
                                 <button key={`cell-btn-${r}-${c}`} 
                                         onClick={() => callbacks.onToggleElevationDoor(r, c)} 
                                         className="absolute hover:bg-white/20 z-20"
-                                        style={{ left: currentX * scale, top: currentY * scale, width: cellWidth * scale, height: cellHeight * scale }}
+                                        style={{ left: currentX_cell * scale, top: currentY_cell * scale, width: cellWidth * scale, height: cellHeight * scale }}
                                 />
                             );
 
@@ -341,7 +344,7 @@ const createWindowElements = (
                                 const doorInfo = doorPositions.find(p => p.row === r && p.col === c)!;
                                 
                                 innerContent.push(
-                                  <div key={`cell-door-${r}-${c}`} className="absolute" style={{left: currentX*scale, top: currentY*scale, width: cellWidth*scale, height: cellHeight*scale, zIndex: 15}}>
+                                  <div key={`cell-door-${r}-${c}`} className="absolute" style={{left: currentX_cell*scale, top: currentY_cell*scale, width: cellWidth*scale, height: cellHeight*scale, zIndex: 15}}>
                                     <MiteredFrame width={cellWidth} height={cellHeight} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
                                     <GlassPanel style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellWidth - 2 * dims.casementShutter)*scale, height: (cellHeight - 2 * dims.casementShutter)*scale }} glassWidth={cellWidth - 2 * dims.casementShutter} glassHeight={cellHeight - 2 * dims.casementShutter}>
                                       <ShutterIndicator type="hinged" />
@@ -350,12 +353,12 @@ const createWindowElements = (
                                 );
 
                                  if (doorInfo.handle) {
-                                    handleElements.push(<div key={`handle-elev-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (currentX + cellWidth * doorInfo.handle.x / 100) * scale, top: (currentY + cellHeight * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} /></div>);
+                                    handleElements.push(<div key={`handle-elev-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (currentX_cell + cellWidth * doorInfo.handle.x / 100) * scale, top: (currentY_cell + cellHeight * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} /></div>);
                                 }
                             }
-                             currentX += cellWidth;
+                             currentX_cell += cellWidth;
                         }
-                        currentY += validRowPattern[r];
+                        currentY_cell += validRowPattern[r];
                     }
                 }
                 break;
