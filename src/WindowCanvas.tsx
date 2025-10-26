@@ -266,7 +266,7 @@ const createWindowElements = (
 
                     const validColPattern = colPattern.map(Number).filter(v => v > 0);
                     const validRowPattern = rowPattern.map(Number).filter(v => v > 0);
-
+                    
                     const totalGridWidth = validColPattern.reduce((a, b) => a + b, 0);
                     const totalGridHeight = validRowPattern.reduce((a, b) => a + b, 0);
 
