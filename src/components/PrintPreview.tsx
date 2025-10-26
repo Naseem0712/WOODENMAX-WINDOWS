@@ -176,15 +176,17 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         );
     }
 
-    const containerWidthPx = 150;
+    const containerWidthPx = 150; // max width in pixels
+    const containerHeightPx = 200; // max height in pixels
     const numWidth = Number(config.width) || 1;
-    const numHeight = Number(config.height) || 1;
+    let numHeight = Number(config.height) || 1;
     
     let effectiveWidth = numWidth;
     if (config.windowType === WindowType.ELEVATION_GLAZING && config.elevationGrid) {
         effectiveWidth = config.elevationGrid.colPattern.map(Number).filter(v => v > 0).reduce((s, v) => s + v, 0) || 1;
+        numHeight = config.elevationGrid.rowPattern.map(Number).filter(v => v > 0).reduce((s, v) => s + v, 0) || 1;
     }
-    const scale = externalScale || containerWidthPx / effectiveWidth;
+    const scale = externalScale || Math.min(containerWidthPx / effectiveWidth, containerHeightPx / numHeight);
 
     const { series, fixedPanels, profileColor, windowType } = config;
     const dims = {
@@ -355,46 +357,57 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                     {windowType === WindowType.ELEVATION_GLAZING && (() => {
                         if (!config.elevationGrid) return null;
 
-                        const { rowPattern, colPattern, doorPositions } = config.elevationGrid;
-                        const vMullion = Number(dims.mullion) || 0;
-                        const hTransom = Number(dims.mullion) || 0;
+                        const { rowPattern, colPattern, doorPositions, verticalMullionSize, horizontalTransomSize } = config.elevationGrid;
+                        const vMullion = Number(verticalMullionSize) || 0;
+                        const hTransom = Number(horizontalTransomSize) || 0;
 
                         const validColPattern = colPattern.map(Number).filter(v => v > 0);
                         const validRowPattern = rowPattern.map(Number).filter(v => v > 0);
 
                         const elements: React.ReactNode[] = [];
-                        const horizontalLabels: React.ReactNode[] = [];
-                        const verticalLabels: React.ReactNode[] = [];
-
+                        
+                        const uniqueColWidthsLabeled = new Set<number>();
                         let currentX_label = 0;
-                        validColPattern.forEach((colWidth, i) => {
-                            horizontalLabels.push(
-                                <PrintDimensionLabel key={`h-label-${i}`} value={colWidth} className="-top-4 text-[5pt]" style={{ left: (currentX_label + colWidth / 2) * scale, transform: 'translateX(-50%)' }}/>
-                            );
+                        validColPattern.forEach((colWidth) => {
+                            if (!uniqueColWidthsLabeled.has(colWidth)) {
+                                labelElements.push( <PrintDimensionLabel key={`h-label-${colWidth}`} value={colWidth} className="-top-4 text-[5pt]" style={{ left: (currentX_label + colWidth / 2) * scale, transform: 'translateX(-50%)' }} /> );
+                                uniqueColWidthsLabeled.add(colWidth);
+                            }
                             currentX_label += colWidth;
                         });
+
+                        const uniqueRowHeightsLabeled = new Set<number>();
                         let currentY_label = 0;
-                        validRowPattern.forEach((rowHeight, i) => {
-                            verticalLabels.push(
-                                <PrintDimensionLabel key={`v-label-${i}`} value={rowHeight} className="-left-1 text-[5pt] rotate-[-90deg]" style={{ top: (currentY_label + rowHeight / 2) * scale, transform: 'translateY(-50%) translateX(-100%)', transformOrigin: 'left center' }}/>
-                            );
+                        validRowPattern.forEach((rowHeight) => {
+                             if (!uniqueRowHeightsLabeled.has(rowHeight)) {
+                                labelElements.push( <PrintDimensionLabel key={`v-label-${rowHeight}`} value={rowHeight} className="-left-1 text-[5pt] rotate-[-90deg]" style={{ top: (currentY_label + rowHeight / 2) * scale, transform: 'translateY(-50%) translateX(-100%)', transformOrigin: 'left center' }} /> );
+                                uniqueRowHeightsLabeled.add(rowHeight);
+                            }
                             currentY_label += rowHeight;
                         });
 
-                        elements.push(<GlassPanel key="glazing-bg" style={{ left: 0, top: 0, width: innerAreaWidth * scale, height: innerAreaHeight * scale }} glassWidthPx={innerAreaWidth * scale} glassHeightPx={innerAreaHeight * scale} />);
+                        let currentY_cell = 0;
+                        validRowPattern.forEach((rowHeight, r) => {
+                            let currentX_cell = 0;
+                            validColPattern.forEach((colWidth, c) => {
+                                elements.push( <GlassPanel key={`cell-glass-${r}-${c}`} style={{left: currentX_cell * scale, top: currentY_cell * scale, width: colWidth*scale, height: rowHeight*scale}} glassWidthPx={colWidth*scale} glassHeightPx={rowHeight*scale}/>);
+                                currentX_cell += colWidth;
+                            });
+                            currentY_cell += rowHeight;
+                        });
 
                         let accumulatedX = 0;
                         for (let c = 0; c < validColPattern.length - 1; c++) {
                             accumulatedX += validColPattern[c];
-                            elements.push(<PrintProfilePiece key={`vmullion-${c}`} color={profileColor} style={{ left: (accumulatedX - vMullion / 2) * scale, top: 0, width: vMullion * scale, height: innerAreaHeight * scale }} />);
+                            elements.push(<PrintProfilePiece key={`vmullion-${c}`} color={profileColor} style={{ left: (accumulatedX - vMullion / 2) * scale, top: 0, width: vMullion * scale, height: numHeight * scale }} />);
                         }
                         let accumulatedY = 0;
                         for (let r = 0; r < validRowPattern.length - 1; r++) {
                             accumulatedY += validRowPattern[r];
-                            elements.push(<PrintProfilePiece key={`hmullion-${r}`} color={profileColor} style={{ left: 0, top: (accumulatedY - hTransom / 2) * scale, width: innerAreaWidth * scale, height: hTransom * scale }} />);
+                            elements.push(<PrintProfilePiece key={`hmullion-${r}`} color={profileColor} style={{ left: 0, top: (accumulatedY - hTransom / 2) * scale, width: effectiveWidth * scale, height: hTransom * scale }} />);
                         }
                         
-                        let currentY_cell = 0;
+                        currentY_cell = 0;
                         validRowPattern.forEach((rowHeight, r) => {
                             let currentX_cell = 0;
                             validColPattern.forEach((colWidth, c) => {
@@ -415,13 +428,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                             currentY_cell += rowHeight;
                         });
 
-                        return (
-                            <>
-                                <div className="absolute inset-0">{horizontalLabels}</div>
-                                <div className="absolute inset-0">{verticalLabels}</div>
-                                {elements}
-                            </>
-                        );
+                        return <>{elements}</>;
                     })()}
 
                     {(windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) && (() => {
@@ -533,9 +540,9 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                     {handleElements}
                 </div>
             )}
-            {config.windowType !== WindowType.CORNER && (
+            {config.windowType !== WindowType.CORNER && config.windowType !== WindowType.ELEVATION_GLAZING && (
                 <>
-                    <PrintDimensionLabel value={numWidth} className="top-0 -translate-y-full left-1/2 -translate-x-1/2 -mt-1" />
+                    <PrintDimensionLabel value={effectiveWidth} className="top-0 -translate-y-full left-1/2 -translate-x-1/2 -mt-1" />
                     <PrintDimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 left-0 -translate-x-full -ml-2 rotate-[-90deg]" />
                 </>
             )}
@@ -616,7 +623,7 @@ const getItemDetails = (item: QuotationItem) => {
             const typeName = cell.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
             panelCounts[typeName] = (panelCounts[typeName] || 0) + 1;
         });
-    } else if (windowType === WindowType.ELEVATION_GLAZING) {
+    } else if (windowType === WindowType.ELEVATION_GLAZING && config.elevationGrid) {
         panelCounts['Operable Door'] = config.elevationGrid.doorPositions.length;
     }
 
@@ -811,36 +818,52 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                     const { panelCounts, relevantHardware } = getItemDetails(item);
                                     const glassDescription = getGlassDescription(item.config);
 
+                                    const isGlazing = item.config.windowType === WindowType.ELEVATION_GLAZING;
+
+                                    const descriptionContent = (
+                                        <>
+                                            <p className="font-bold print-window-title">{item.title}</p>
+                                            <table className="w-full text-[7pt] mt-1 details-table">
+                                                <tbody>
+                                                    <tr><td className='pr-2 font-semibold'>Series:</td><td>{item.config.series.name}</td></tr>
+                                                    <tr><td className='pr-2 font-semibold'>Size:</td><td>{item.config.windowType === 'elevation_glazing' && item.config.elevationGrid ? `${item.config.elevationGrid.colPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)} x ${item.config.elevationGrid.rowPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)}` : `${item.config.width} x ${item.config.height}`} mm</td></tr>
+                                                    <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
+                                                    <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
+                                                    <tr><td className='pr-2 font-semibold'>Color:</td><td>{item.profileColorName}</td></tr>
+                                                    <tr><td className='pr-2 font-semibold'>Glass:</td><td>{glassDescription}</td></tr>
+                                                    {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
+                                                    {relevantHardware.length > 0 && (
+                                                        <tr>
+                                                            <td className='pr-2 font-semibold pt-1 align-top'>Hardware:</td>
+                                                            <td className='pt-1'>
+                                                                {relevantHardware.map((hw, i) => (
+                                                                    <span key={i} className="block">{hw.name}</span>
+                                                                ))}
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </>
+                                    );
+
                                     return (
                                         <tr key={item.id} className="border-b border-gray-300 print-item">
                                             <td className="p-2 align-top text-center">{index + 1}</td>
-                                            <td className="p-2 align-top w-[25%]" style={{ width: '150px' }}>
-                                                <PrintableWindow config={item.config} />
-                                            </td>
-                                            <td className="p-2 align-top w-[40%]">
-                                                <p className="font-bold print-window-title">{item.title}</p>
-                                                <table className="w-full text-[7pt] mt-1 details-table">
-                                                    <tbody>
-                                                        <tr><td className='pr-2 font-semibold'>Series:</td><td>{item.config.series.name}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Size:</td><td>{item.config.width} x {item.config.height} mm</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Color:</td><td>{item.profileColorName}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Glass:</td><td>{glassDescription}</td></tr>
-                                                        {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
-                                                        {relevantHardware.length > 0 && (
-                                                            <tr>
-                                                                <td className='pr-2 font-semibold pt-1 align-top'>Hardware:</td>
-                                                                <td className='pt-1'>
-                                                                    {relevantHardware.map((hw, i) => (
-                                                                        <span key={i} className="block">{hw.name}</span>
-                                                                    ))}
-                                                                </td>
-                                                            </tr>
-                                                        )}
-                                                    </tbody>
-                                                </table>
-                                            </td>
+                                            {isGlazing ? (
+                                                <td className="p-2 align-top" colSpan={2}>
+                                                    {descriptionContent}
+                                                </td>
+                                            ) : (
+                                                <>
+                                                    <td className="p-2 align-top w-[25%]" style={{ width: '150px' }}>
+                                                        <PrintableWindow config={item.config} />
+                                                    </td>
+                                                    <td className="p-2 align-top w-[40%]">
+                                                        {descriptionContent}
+                                                    </td>
+                                                </>
+                                            )}
                                             <td className="p-2 align-top text-center">{item.quantity}</td>
                                             <td className="p-2 align-top text-right font-bold" colSpan={2}>₹{Math.round(totalCost).toLocaleString('en-IN')}</td>
                                         </tr>
