@@ -540,7 +540,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                     {handleElements}
                 </div>
             )}
-            {config.windowType !== WindowType.CORNER && config.windowType !== WindowType.ELEVATION_GLAZING && (
+            {config.windowType !== WindowType.CORNER && (
                 <>
                     <PrintDimensionLabel value={effectiveWidth} className="top-0 -translate-y-full left-1/2 -translate-x-1/2 -mt-1" />
                     <PrintDimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 left-0 -translate-x-full -ml-2 rotate-[-90deg]" />
