@@ -265,6 +265,14 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
           </div>
           <DimensionInput label="Pressure/Cover Plate Size" value_mm={config.elevationGrid.pressurePlateSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'pressurePlateSize', value: v })} />
           <div className="mt-4 pt-4 border-t border-slate-700">
+             <DimensionInput 
+                label="Floor to Floor Height (Optional)" 
+                value_mm={config.elevationGrid.floorHeight} 
+                onChange_mm={v => onElevationGridChange('update_prop', { prop: 'floorHeight', value: v })} 
+                placeholder="For vertical profile calc."
+            />
+          </div>
+          <div className="mt-4 pt-4 border-t border-slate-700">
               <h4 className="text-base font-semibold text-slate-200 mb-2">Vertical Pattern (Columns)</h4>
               <div className="space-y-2">
                   {config.elevationGrid.colPattern.map((width, index) => (

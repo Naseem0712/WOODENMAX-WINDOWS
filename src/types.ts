@@ -209,6 +209,7 @@ export interface WindowConfig {
     horizontalTransomSize: number | '';
     pressurePlateSize: number | '';
     doorPositions: { row: number; col: number; handle?: HandleConfig }[];
+    floorHeight?: number | '';
   };
   
   // Corner specific

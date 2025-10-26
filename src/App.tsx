@@ -47,7 +47,7 @@ type ConfigAction =
   | { type: 'ADD_ELEVATION_PATTERN'; payload: { patternType: 'row' | 'col' } }
   | { type: 'REMOVE_ELEVATION_PATTERN'; payload: { patternType: 'row' | 'col'; index: number } }
   | { type: 'UPDATE_ELEVATION_PATTERN'; payload: { patternType: 'row' | 'col'; index: number; value: number | '' } }
-  | { type: 'UPDATE_ELEVATION_GRID_PROP'; payload: { prop: 'verticalMullionSize' | 'horizontalTransomSize' | 'pressurePlateSize'; value: number | '' } }
+  | { type: 'UPDATE_ELEVATION_GRID_PROP'; payload: { prop: 'verticalMullionSize' | 'horizontalTransomSize' | 'pressurePlateSize' | 'floorHeight'; value: number | '' } }
   | { type: 'TOGGLE_ELEVATION_GLAZING_DOOR', payload: { row: number, col: number } }
   | { type: 'UPDATE_LAMINATED_CONFIG'; payload: Partial<LaminatedGlassConfig> }
   | { type: 'UPDATE_DGU_CONFIG'; payload: Partial<DguGlassConfig> }
@@ -425,6 +425,7 @@ const initialConfig: ConfigState = {
         horizontalTransomSize: 50,
         pressurePlateSize: 60,
         doorPositions: [],
+        floorHeight: '',
     },
     leftWidth: 1200,
     rightWidth: 1200,
