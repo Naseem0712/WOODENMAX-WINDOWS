@@ -207,8 +207,10 @@ export interface WindowConfig {
   elevationGrid: {
     rowPattern: (number | '')[];
     colPattern: (number | '')[];
-    mullionSize: number | '';
+    verticalMullionSize: number | '';
+    horizontalTransomSize: number | '';
     pressurePlateSize: number | '';
+    doorPositions: { row: number; col: number; handle?: HandleConfig }[];
   };
   
   // Corner specific

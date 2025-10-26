@@ -47,7 +47,8 @@ type ConfigAction =
   | { type: 'ADD_ELEVATION_PATTERN'; payload: { patternType: 'row' | 'col' } }
   | { type: 'REMOVE_ELEVATION_PATTERN'; payload: { patternType: 'row' | 'col'; index: number } }
   | { type: 'UPDATE_ELEVATION_PATTERN'; payload: { patternType: 'row' | 'col'; index: number; value: number | '' } }
-  | { type: 'UPDATE_ELEVATION_GRID_PROP'; payload: { prop: 'mullionSize' | 'pressurePlateSize'; value: number | '' } }
+  | { type: 'UPDATE_ELEVATION_GRID_PROP'; payload: { prop: 'verticalMullionSize' | 'horizontalTransomSize' | 'pressurePlateSize'; value: number | '' } }
+  | { type: 'TOGGLE_ELEVATION_GLAZING_DOOR', payload: { row: number, col: number } }
   | { type: 'UPDATE_LAMINATED_CONFIG'; payload: Partial<LaminatedGlassConfig> }
   | { type: 'UPDATE_DGU_CONFIG'; payload: Partial<DguGlassConfig> }
   | { type: 'RESET_DESIGN' };
@@ -340,8 +341,8 @@ const DEFAULT_ELEVATION_GLAZING_SERIES: ProfileSeries = {
   id: 'series-glazing-default',
   name: 'Standard Structural Glazing',
   type: WindowType.ELEVATION_GLAZING,
-  dimensions: { ...BASE_DIMENSIONS, outerFrame: 75, mullion: 50 },
-  hardwareItems: [],
+  dimensions: { ...BASE_DIMENSIONS, outerFrame: 75, mullion: 50, casementShutter: 65 },
+  hardwareItems: DEFAULT_CASEMENT_HARDWARE,
   glassOptions: {
     thicknesses: [8, 10, 12, 15],
     customThicknessAllowed: true,
@@ -420,8 +421,10 @@ const initialConfig: ConfigState = {
     elevationGrid: {
         rowPattern: [609.6, 1524, 609.6, 609.6], // 2ft, 5ft, 2ft, 2ft
         colPattern: [1000, 1200, 1500], // 1m, 1.2m, 1.5m
-        mullionSize: 50,
+        verticalMullionSize: 50,
+        horizontalTransomSize: 50,
         pressurePlateSize: 60,
+        doorPositions: [],
     },
     leftWidth: 1200,
     rightWidth: 1200,
@@ -534,9 +537,25 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
         }
         case 'UPDATE_HANDLE': {
             const { panelId, newConfig, side } = action.payload;
-            const [configKey, config] = getSideConfig(side);
             const parts = panelId.split('-');
             const type = parts[0];
+
+            if (type === 'elevation') {
+                 if (!state.elevationGrid) return state;
+                 const row = parseInt(parts[1], 10);
+                 const col = parseInt(parts[2], 10);
+                 const newDoorPositions = state.elevationGrid.doorPositions.map(p => {
+                     if (p.row === row && p.col === col) {
+                         if (newConfig) return { ...p, handle: newConfig };
+                         const { handle, ...rest } = p;
+                         return rest;
+                     }
+                     return p;
+                 });
+                 return { ...state, elevationGrid: { ...state.elevationGrid, doorPositions: newDoorPositions } };
+            }
+
+            const [configKey, config] = getSideConfig(side);
             let newSideConfig = { ...config };
 
             switch (type) {
@@ -572,7 +591,7 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
                     newSideConfig.ventilatorGrid = newGrid;
                     break;
                 }
-                case 'partition': { // This will not be used in corner mode
+                case 'partition': { 
                     const index = parseInt(parts[1], 10);
                     const newTypes = [...state.partitionPanels.types];
                     if (newConfig) {
@@ -664,6 +683,15 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             const { prop, value } = action.payload;
             if (!state.elevationGrid) return state;
             return { ...state, elevationGrid: { ...state.elevationGrid, [prop]: value } };
+        }
+        case 'TOGGLE_ELEVATION_GLAZING_DOOR': {
+             if (!state.elevationGrid) return state;
+            const { row, col } = action.payload;
+            const exists = state.elevationGrid.doorPositions.some(p => p.row === row && p.col === col);
+            const newDoorPositions = exists
+                ? state.elevationGrid.doorPositions.filter(p => p.row !== row || p.col !== col)
+                : [...state.elevationGrid.doorPositions, { row, col }];
+            return { ...state, elevationGrid: { ...state.elevationGrid, doorPositions: newDoorPositions } };
         }
         case 'UPDATE_LAMINATED_CONFIG':
             return { ...state, laminatedGlassConfig: { ...state.laminatedGlassConfig, ...action.payload } };
@@ -1021,6 +1049,10 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleToggleElevationDoor = useCallback((row: number, col: number) => {
+    dispatch({ type: 'TOGGLE_ELEVATION_GLAZING_DOOR', payload: { row, col } });
+  }, []);
+
   const handleLaminatedConfigChange = useCallback((payload: Partial<LaminatedGlassConfig>) => {
     dispatch({ type: 'UPDATE_LAMINATED_CONFIG', payload });
   }, []);
@@ -1055,6 +1087,8 @@ const App: React.FC = () => {
                     } else { // Hinge, lock, handle, etc., are for doors
                         panelCount = doorCells;
                     }
+                } else if (config.windowType === WindowType.ELEVATION_GLAZING) {
+                    panelCount = (config as WindowConfig).elevationGrid.doorPositions.length;
                 } else {
                      switch(config.windowType) {
                         case WindowType.SLIDING: panelCount = config.shutterConfig === '2G' ? 2 : config.shutterConfig === '4G' ? 4 : 3; break;
@@ -1213,7 +1247,7 @@ const App: React.FC = () => {
             <div className="relative flex-1 flex flex-col min-w-0">
                 {!isDesktopPanelOpen && ( <button onClick={() => setIsDesktopPanelOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex" aria-label="Expand panel"> <ChevronLeftIcon className="w-5 h-5 rotate-180" /> </button> )}
               <div className="flex-grow relative">
-                 <WindowCanvas config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} />
+                 <WindowCanvas config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} onToggleElevationDoor={handleToggleElevationDoor} />
               </div>
               <div className="flex-shrink-0 no-print hidden lg:block">
                   <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onBatchAdd={handleBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={handleViewQuotation} />

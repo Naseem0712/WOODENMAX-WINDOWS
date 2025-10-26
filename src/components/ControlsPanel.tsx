@@ -124,7 +124,10 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
             displayConfig.ventilatorGrid.forEach((row, r) => { row.forEach((cell, c) => { if (cell.type === 'door') { panels.push({ id: `ventilator-${r}-${c}`, label: `Door (R${r + 1}, C${c + 1})` }); } }); });
             break;
         case WindowType.GLASS_PARTITION:
-            displayConfig.partitionPanels.types.forEach((p, i) => { if (p.type !== 'fixed') { panels.push({ id: `partition-${i}`, label: `Panel ${i + 1} (${p.type})` }); } });
+            config.partitionPanels.types.forEach((p, i) => { if (p.type !== 'fixed') { panels.push({ id: `partition-${i}`, label: `Panel ${i + 1} (${p.type})` }); } });
+            break;
+        case WindowType.ELEVATION_GLAZING:
+            config.elevationGrid?.doorPositions.forEach(p => { panels.push({ id: `elevation-${p.row}-${p.col}`, label: `Door (R${p.row + 1}, C${p.col + 1})` }); });
             break;
     }
     if (selectedPanelId && !panels.some(p => p.id === selectedPanelId)) {
@@ -133,7 +136,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         setSelectedPanelId(panels[0].id);
     }
     return panels;
-  }, [displayConfig, selectedPanelId, activeWindowType]);
+  }, [displayConfig, config, selectedPanelId, activeWindowType]);
 
   const currentHandle = useMemo((): HandleConfig | null => {
     if (!selectedPanelId) return null;
@@ -144,10 +147,11 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         case 'sliding': return displayConfig.slidingHandles[parseInt(parts[1], 10)] || null;
         case 'casement': return displayConfig.doorPositions.find(p => p.row === parseInt(parts[1], 10) && p.col === parseInt(parts[2], 10))?.handle || null;
         case 'ventilator': return displayConfig.ventilatorGrid[parseInt(parts[1], 10)]?.[parseInt(parts[2], 10)]?.handle || null;
-        case 'partition': return displayConfig.partitionPanels.types[parseInt(parts[1], 10)]?.handle || null;
+        case 'partition': return config.partitionPanels.types[parseInt(parts[1], 10)]?.handle || null;
+        case 'elevation': return config.elevationGrid?.doorPositions.find(p => p.row === parseInt(parts[1], 10) && p.col === parseInt(parts[2], 10))?.handle || null;
         default: return null;
     }
-  }, [selectedPanelId, displayConfig]);
+  }, [selectedPanelId, displayConfig, config]);
 
   const handleDimensionChange = (key: keyof ProfileSeries['dimensions'], value: number | '') => {
     setConfig('series', { ...series, dimensions: { ...series.dimensions, [key]: value } });
@@ -254,10 +258,12 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
 
       {activeWindowType === WindowType.ELEVATION_GLAZING && config.elevationGrid && (
         <CollapsibleCard title="Elevation Grid Pattern" isOpen={openCard === 'Elevation Grid Pattern'} onToggle={() => handleToggleCard('Elevation Grid Pattern')}>
+           <p className="text-xs text-slate-400 mb-4">Click on a glass panel in the canvas to turn it into an operable door.</p>
           <div className="grid grid-cols-2 gap-4">
-              <DimensionInput label="Mullion (Rafter) Size" value_mm={config.elevationGrid.mullionSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'mullionSize', value: v })} />
-              <DimensionInput label="Pressure/Cover Plate Size" value_mm={config.elevationGrid.pressurePlateSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'pressurePlateSize', value: v })} />
+              <DimensionInput label="Vertical Mullion Size" value_mm={config.elevationGrid.verticalMullionSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'verticalMullionSize', value: v })} />
+              <DimensionInput label="Horizontal Transom Size" value_mm={config.elevationGrid.horizontalTransomSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'horizontalTransomSize', value: v })} />
           </div>
+          <DimensionInput label="Pressure/Cover Plate Size" value_mm={config.elevationGrid.pressurePlateSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'pressurePlateSize', value: v })} />
           <div className="mt-4 pt-4 border-t border-slate-700">
               <h4 className="text-base font-semibold text-slate-200 mb-2">Vertical Pattern (Columns)</h4>
               <div className="space-y-2">

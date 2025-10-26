@@ -11,6 +11,7 @@ interface WindowCanvasProps {
   config: WindowConfig;
   onRemoveVerticalDivider: (index: number) => void;
   onRemoveHorizontalDivider: (index: number) => void;
+  onToggleElevationDoor: (row: number, col: number) => void;
 }
 
 const DimensionLabel: React.FC<{ value: number; unit?: string, className?: string, style?: React.CSSProperties }> = ({ value, unit = "mm", className, style }) => (
@@ -177,8 +178,11 @@ const createWindowElements = (
     scale: number, 
     dims: any, 
     glassStyles: Record<GlassType, React.CSSProperties>,
-    onRemoveHorizontalDivider: (index: number) => void,
-    onRemoveVerticalDivider: (index: number) => void
+    callbacks: {
+      onRemoveHorizontalDivider: (index: number) => void,
+      onRemoveVerticalDivider: (index: number) => void,
+      onToggleElevationDoor: (row: number, col: number) => void,
+    }
 ) => {
     const { width, height, series, fixedPanels, glassType, profileColor, windowType } = config;
     const numHeight = Number(height) || 0;
@@ -255,43 +259,121 @@ const createWindowElements = (
        switch (windowType) {
             case WindowType.ELEVATION_GLAZING: {
                 if (config.elevationGrid) {
-                    const { rowPattern, colPattern, mullionSize, pressurePlateSize } = config.elevationGrid;
-                    const mullion = Number(mullionSize) || 0;
+                    const { rowPattern, colPattern, verticalMullionSize, horizontalTransomSize, pressurePlateSize, doorPositions } = config.elevationGrid;
+                    const vMullion = Number(verticalMullionSize) || 0;
+                    const hTransom = Number(horizontalTransomSize) || 0;
                     const pressurePlate = Number(pressurePlateSize) || 0;
                     const validColPattern = colPattern.map(Number).filter(v => v > 0);
                     const validRowPattern = rowPattern.map(Number).filter(v => v > 0);
 
+                    // 1. Background Glass
                     innerContent.push(<GlassPanel key="glazing-bg" style={{ left: 0, top: 0, width: innerAreaWidth * scale, height: innerAreaHeight * scale }} glassWidth={innerAreaWidth} glassHeight={innerAreaHeight} />);
-
-                    // Vertical Grid
+                    
+                    // 2. Calculate Cell Coordinates
+                    const colCoords: { x: number, width: number }[] = [];
+                    let currentX = 0;
+                    let colIndex = 0;
                     if (validColPattern.length > 0) {
-                        const patternWidth = validColPattern.reduce((a, b) => a + b, 0);
-                        let currentX = 0;
                         while (currentX < innerAreaWidth) {
-                            for (const colWidth of validColPattern) {
-                                currentX += colWidth;
-                                if (currentX < innerAreaWidth) {
-                                    innerContent.push(<ProfilePiece key={`vmullion-${currentX}`} color={profileColor} style={{ left: (currentX - mullion / 2) * scale, top: 0, width: mullion * scale, height: innerAreaHeight * scale }} />);
-                                    if (pressurePlate > mullion) innerContent.push(<ProfilePiece key={`vplate-${currentX}`} color="#6B7280" style={{ zIndex: 1, left: (currentX - pressurePlate / 2) * scale, top: 0, width: pressurePlate * scale, height: innerAreaHeight * scale }} />);
-                                } else break;
-                            }
-                            if (patternWidth === 0) break;
+                            const patternWidth = validColPattern[colIndex % validColPattern.length];
+                            const remainingWidth = innerAreaWidth - currentX;
+                            const colWidth = Math.min(patternWidth, remainingWidth);
+                            colCoords.push({ x: currentX, width: colWidth });
+                            currentX += colWidth;
+                            colIndex++;
                         }
+                    } else { colCoords.push({ x: 0, width: innerAreaWidth }); }
+
+                    const rowCoords: { y: number, height: number }[] = [];
+                    let currentY = 0;
+                    let rowIndex = 0;
+                    if (validRowPattern.length > 0) {
+                        while (currentY < innerAreaHeight) {
+                            const patternHeight = validRowPattern[rowIndex % validRowPattern.length];
+                            const remainingHeight = innerAreaHeight - currentY;
+                            const rowHeight = Math.min(patternHeight, remainingHeight);
+                            rowCoords.push({ y: currentY, height: rowHeight });
+                            currentY += rowHeight;
+                            rowIndex++;
+                        }
+                    } else { rowCoords.push({ y: 0, height: innerAreaHeight }); }
+
+                    // 3. Draw Profiles (Mullions/Transoms and Pressure Plates)
+                    const profilesAndPlates: React.ReactNode[] = [];
+                    
+                    // Edge Profiles
+                    profilesAndPlates.push(<ProfilePiece key="top-transom" color={profileColor} style={{ left: 0, top: 0, width: innerAreaWidth * scale, height: hTransom * scale }} />);
+                    profilesAndPlates.push(<ProfilePiece key="bottom-transom" color={profileColor} style={{ left: 0, bottom: 0, width: innerAreaWidth * scale, height: hTransom * scale }} />);
+                    profilesAndPlates.push(<ProfilePiece key="left-mullion" color={profileColor} style={{ left: 0, top: 0, width: vMullion * scale, height: innerAreaHeight * scale }} />);
+                    profilesAndPlates.push(<ProfilePiece key="right-mullion" color={profileColor} style={{ right: 0, top: 0, width: vMullion * scale, height: innerAreaHeight * scale }} />);
+
+                    // Internal Vertical Mullions
+                    let accumulatedX = 0;
+                    for (let c = 0; c < colCoords.length - 1; c++) {
+                        accumulatedX += colCoords[c].width;
+                        profilesAndPlates.push(<ProfilePiece key={`vmullion-${c}`} color={profileColor} style={{ left: (accumulatedX - vMullion / 2) * scale, top: 0, width: vMullion * scale, height: innerAreaHeight * scale }} />);
                     }
                     
-                    // Horizontal Grid
-                    if(validRowPattern.length > 0) {
-                        const patternHeight = validRowPattern.reduce((a, b) => a + b, 0);
-                        let currentY = 0;
-                        while (currentY < innerAreaHeight) {
-                            for (const rowHeight of validRowPattern) {
-                                currentY += rowHeight;
-                                if (currentY < innerAreaHeight) {
-                                    innerContent.push(<ProfilePiece key={`hmullion-${currentY}`} color={profileColor} style={{ left: 0, top: (currentY - mullion / 2) * scale, width: innerAreaWidth * scale, height: mullion * scale }} />);
-                                    if (pressurePlate > mullion) innerContent.push(<ProfilePiece key={`hplate-${currentY}`} color="#6B7280" style={{ zIndex: 1, left: 0, top: (currentY - pressurePlate / 2) * scale, width: innerAreaWidth * scale, height: pressurePlate * scale }} />);
-                                } else break;
+                    // Internal Horizontal Transoms
+                    let accumulatedY = 0;
+                    for (let r = 0; r < rowCoords.length - 1; r++) {
+                        accumulatedY += rowCoords[r].height;
+                        profilesAndPlates.push(<ProfilePiece key={`hmullion-${r}`} color={profileColor} style={{ left: 0, top: (accumulatedY - hTransom / 2) * scale, width: innerAreaWidth * scale, height: hTransom * scale }} />);
+                    }
+                    
+                    // Pressure Plates (on top of all profiles)
+                    if (pressurePlate > 0) {
+                        // Edge Plates
+                        profilesAndPlates.push(<ProfilePiece key="top-plate" color="#6B7280" style={{ zIndex: 1, left: 0, top: (hTransom - pressurePlate)/2*scale, width: innerAreaWidth*scale, height: pressurePlate*scale }} />);
+                        profilesAndPlates.push(<ProfilePiece key="bottom-plate" color="#6B7280" style={{ zIndex: 1, left: 0, bottom: (hTransom - pressurePlate)/2*scale, width: innerAreaWidth*scale, height: pressurePlate*scale }} />);
+                        profilesAndPlates.push(<ProfilePiece key="left-plate" color="#6B7280" style={{ zIndex: 1, top: 0, left: (vMullion - pressurePlate)/2*scale, height: innerAreaHeight*scale, width: pressurePlate*scale }} />);
+                        profilesAndPlates.push(<ProfilePiece key="right-plate" color="#6B7280" style={{ zIndex: 1, top: 0, right: (vMullion - pressurePlate)/2*scale, height: innerAreaHeight*scale, width: pressurePlate*scale }} />);
+
+                        // Internal Plates
+                        accumulatedX = 0;
+                        for (let c = 0; c < colCoords.length - 1; c++) {
+                            accumulatedX += colCoords[c].width;
+                            profilesAndPlates.push(<ProfilePiece key={`vplate-${c}`} color="#6B7280" style={{ zIndex: 1, left: (accumulatedX - pressurePlate / 2) * scale, top: 0, width: pressurePlate * scale, height: innerAreaHeight * scale }} />);
+                        }
+                        accumulatedY = 0;
+                        for (let r = 0; r < rowCoords.length - 1; r++) {
+                            accumulatedY += rowCoords[r].height;
+                            profilesAndPlates.push(<ProfilePiece key={`hplate-${r}`} color="#6B7280" style={{ zIndex: 1, left: 0, top: (accumulatedY - pressurePlate / 2) * scale, width: innerAreaWidth * scale, height: pressurePlate * scale }} />);
+                        }
+                    }
+                    innerContent.push(<div key="profiles-wrapper" className="absolute inset-0">{profilesAndPlates}</div>);
+
+                    // 4. Render Doors and Clickable Overlays
+                    for (let r = 0; r < rowCoords.length; r++) {
+                        for (let c = 0; c < colCoords.length; c++) {
+                            const cell = colCoords[c];
+                            const row = rowCoords[r];
+                            const isDoor = doorPositions.some(p => p.row === r && p.col === c);
+
+                            innerContent.push(
+                                <button key={`cell-btn-${r}-${c}`} 
+                                        onClick={() => callbacks.onToggleElevationDoor(r, c)} 
+                                        className="absolute hover:bg-white/20 z-20"
+                                        style={{ left: cell.x*scale, top: row.y*scale, width: cell.width*scale, height: row.height*scale }}
+                                />
+                            );
+
+                            if (isDoor) {
+                                const doorInfo = doorPositions.find(p => p.row === r && p.col === c)!;
+                                
+                                innerContent.push(
+                                  <div key={`cell-door-${r}-${c}`} className="absolute" style={{left: cell.x*scale, top: row.y*scale, width: cell.width*scale, height: row.height*scale, zIndex: 15}}>
+                                    <MiteredFrame width={cell.width} height={row.height} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
+                                    <GlassPanel style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cell.width - 2 * dims.casementShutter)*scale, height: (row.height - 2 * dims.casementShutter)*scale }} glassWidth={cell.width - 2 * dims.casementShutter} glassHeight={row.height - 2 * dims.casementShutter}>
+                                      <ShutterIndicator type="hinged" />
+                                    </GlassPanel>
+                                  </div>
+                                );
+
+                                 if (doorInfo.handle) {
+                                    handleElements.push(<div key={`handle-elev-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (cell.x + cell.width * doorInfo.handle.x / 100) * scale, top: (row.y + row.height * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} /></div>);
+                                }
                             }
-                             if (patternHeight === 0) break;
                         }
                     }
                 }
@@ -412,7 +494,7 @@ const createWindowElements = (
 
                 horizontalDividers.forEach((pos, i) => {
                     innerContent.push(
-                      <button key={`hmullion-${i}`} onClick={() => onRemoveHorizontalDivider(i)} className="absolute w-full group" style={{ top: (pos * innerAreaHeight - dims.mullion / 2) * scale, height: dims.mullion * scale, zIndex: 10 }}>
+                      <button key={`hmullion-${i}`} onClick={() => callbacks.onRemoveHorizontalDivider(i)} className="absolute w-full group" style={{ top: (pos * innerAreaHeight - dims.mullion / 2) * scale, height: dims.mullion * scale, zIndex: 10 }}>
                           <ProfilePiece color={profileColor} style={{left: 0, top: 0, width: '100%', height: '100%'}}/>
                           <div className="absolute inset-0 bg-red-500 bg-opacity-0 group-hover:bg-opacity-50 transition-colors flex items-center justify-center">
                               <TrashIcon className="w-5 h-5 text-white opacity-0 group-hover:opacity-100"/>
@@ -423,7 +505,7 @@ const createWindowElements = (
             
                 verticalDividers.forEach((pos, i) => {
                     innerContent.push(
-                      <button key={`vmullion-${i}`} onClick={() => onRemoveVerticalDivider(i)} className="absolute h-full group" style={{ left: (pos * innerAreaWidth - dims.mullion / 2) * scale, width: dims.mullion * scale, zIndex: 10 }}>
+                      <button key={`vmullion-${i}`} onClick={() => callbacks.onRemoveVerticalDivider(i)} className="absolute h-full group" style={{ left: (pos * innerAreaWidth - dims.mullion / 2) * scale, width: dims.mullion * scale, zIndex: 10 }}>
                          <ProfilePiece color={profileColor} style={{left: 0, top: 0, width: '100%', height: '100%'}}/>
                          <div className="absolute inset-0 bg-red-500 bg-opacity-0 group-hover:bg-opacity-50 transition-colors flex items-center justify-center">
                               <TrashIcon className="w-5 h-5 text-white opacity-0 group-hover:opacity-100"/>
@@ -516,7 +598,7 @@ const RenderedWindow: React.FC<{
 };
 
 export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
-  const { config, onRemoveHorizontalDivider, onRemoveVerticalDivider } = props;
+  const { config, onRemoveHorizontalDivider, onRemoveVerticalDivider, onToggleElevationDoor } = props;
   const { width, height, series, profileColor, windowType } = config;
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -560,6 +642,12 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     [GlassType.BLACK_TINTED]: { backgroundColor: 'hsl(0, 0%, 20%)', opacity: 0.7 },
   }), []);
 
+  const canvasCallbacks = useMemo(() => ({
+    onRemoveHorizontalDivider,
+    onRemoveVerticalDivider,
+    onToggleElevationDoor,
+  }), [onRemoveHorizontalDivider, onRemoveVerticalDivider, onToggleElevationDoor]);
+
   if (numWidth <= 0 || numHeight <= 0) {
     return ( <div className="w-full h-full flex items-center justify-center bg-transparent"> <p className="text-slate-500">Please enter valid dimensions to begin.</p> </div> );
   }
@@ -578,8 +666,8 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
                     const cornerConfigLeft: WindowConfig = { ...config, ...config.leftConfig, width: leftW, windowType: config.leftConfig.windowType, fixedPanels: [] };
                     const cornerConfigRight: WindowConfig = { ...config, ...config.rightConfig, width: rightW, windowType: config.rightConfig.windowType, fixedPanels: [] };
                     
-                    const leftElements = createWindowElements(cornerConfigLeft, scale, dims, glassStyles, () => {}, () => {});
-                    const rightElements = createWindowElements(cornerConfigRight, scale, dims, glassStyles, () => {}, () => {});
+                    const leftElements = createWindowElements(cornerConfigLeft, scale, dims, glassStyles, canvasCallbacks);
+                    const rightElements = createWindowElements(cornerConfigRight, scale, dims, glassStyles, canvasCallbacks);
 
                     return (
                         <div className="relative shadow-lg flex items-start" style={{ width: totalW * scale, height: numHeight * scale }}>
@@ -600,7 +688,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
                     )
                 })()
             ) : (
-                <RenderedWindow config={config} elements={createWindowElements(config, scale, dims, glassStyles, onRemoveHorizontalDivider, onRemoveVerticalDivider)} scale={scale} />
+                <RenderedWindow config={config} elements={createWindowElements(config, scale, dims, glassStyles, canvasCallbacks)} scale={scale} />
             )}
         </div>
       
