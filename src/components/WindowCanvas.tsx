@@ -190,7 +190,7 @@ const createWindowElements = (
         const leftFix = fixedPanels.find(p => p.position === FixedPanelPosition.LEFT);
         const rightFix = fixedPanels.find(p => p.position === FixedPanelPosition.RIGHT);
 
-        const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) ? dims.outerFrame : 0;
+        const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.ELEVATION_GLAZING) ? dims.outerFrame : 0;
         const holeX1 = leftFix ? leftFix.size : frameOffset;
         const holeY1 = topFix ? topFix.size : frameOffset;
         const holeX2 = rightFix ? w - rightFix.size : w - frameOffset;
@@ -253,6 +253,50 @@ const createWindowElements = (
     const innerContent: React.ReactNode[] = [];
     if (innerAreaWidth > 0 && innerAreaHeight > 0) {
        switch (windowType) {
+            case WindowType.ELEVATION_GLAZING: {
+                if (config.elevationGrid) {
+                    const { rowPattern, colPattern, mullionSize, pressurePlateSize } = config.elevationGrid;
+                    const mullion = Number(mullionSize) || 0;
+                    const pressurePlate = Number(pressurePlateSize) || 0;
+                    const validColPattern = colPattern.map(Number).filter(v => v > 0);
+                    const validRowPattern = rowPattern.map(Number).filter(v => v > 0);
+
+                    innerContent.push(<GlassPanel key="glazing-bg" style={{ left: 0, top: 0, width: innerAreaWidth * scale, height: innerAreaHeight * scale }} glassWidth={innerAreaWidth} glassHeight={innerAreaHeight} />);
+
+                    // Vertical Grid
+                    if (validColPattern.length > 0) {
+                        const patternWidth = validColPattern.reduce((a, b) => a + b, 0);
+                        let currentX = 0;
+                        while (currentX < innerAreaWidth) {
+                            for (const colWidth of validColPattern) {
+                                currentX += colWidth;
+                                if (currentX < innerAreaWidth) {
+                                    innerContent.push(<ProfilePiece key={`vmullion-${currentX}`} color={profileColor} style={{ left: (currentX - mullion / 2) * scale, top: 0, width: mullion * scale, height: innerAreaHeight * scale }} />);
+                                    if (pressurePlate > mullion) innerContent.push(<ProfilePiece key={`vplate-${currentX}`} color="#6B7280" style={{ zIndex: 1, left: (currentX - pressurePlate / 2) * scale, top: 0, width: pressurePlate * scale, height: innerAreaHeight * scale }} />);
+                                } else break;
+                            }
+                            if (patternWidth === 0) break;
+                        }
+                    }
+                    
+                    // Horizontal Grid
+                    if(validRowPattern.length > 0) {
+                        const patternHeight = validRowPattern.reduce((a, b) => a + b, 0);
+                        let currentY = 0;
+                        while (currentY < innerAreaHeight) {
+                            for (const rowHeight of validRowPattern) {
+                                currentY += rowHeight;
+                                if (currentY < innerAreaHeight) {
+                                    innerContent.push(<ProfilePiece key={`hmullion-${currentY}`} color={profileColor} style={{ left: 0, top: (currentY - mullion / 2) * scale, width: innerAreaWidth * scale, height: mullion * scale }} />);
+                                    if (pressurePlate > mullion) innerContent.push(<ProfilePiece key={`hplate-${currentY}`} color="#6B7280" style={{ zIndex: 1, left: 0, top: (currentY - pressurePlate / 2) * scale, width: innerAreaWidth * scale, height: pressurePlate * scale }} />);
+                                } else break;
+                            }
+                             if (patternHeight === 0) break;
+                        }
+                    }
+                }
+                break;
+            }
             case WindowType.SLIDING: {
                 const { shutterConfig, fixedShutters, slidingHandles } = config;
                 const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;

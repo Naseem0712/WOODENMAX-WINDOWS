@@ -4,6 +4,7 @@ export enum WindowType {
   CASEMENT = 'casement',
   VENTILATOR = 'ventilator',
   GLASS_PARTITION = 'glass_partition',
+  ELEVATION_GLAZING = 'elevation_glazing',
   CORNER = 'corner',
 }
 
@@ -178,6 +179,14 @@ export interface WindowConfig {
     count: number; 
     types: PartitionPanelConfig[]; 
     hasTopChannel: boolean;
+  };
+
+  // Elevation Glazing specific
+  elevationGrid: {
+    rowPattern: (number | '')[];
+    colPattern: (number | '')[];
+    mullionSize: number | '';
+    pressurePlateSize: number | '';
   };
   
   // Corner specific

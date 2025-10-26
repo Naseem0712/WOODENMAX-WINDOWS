@@ -44,6 +44,10 @@ type ConfigAction =
   | { type: 'SET_PARTITION_HAS_TOP_CHANNEL'; payload: boolean }
   | { type: 'CYCLE_PARTITION_PANEL_FRAMING'; payload: number }
   | { type: 'SET_SIDE_CONFIG'; payload: { side: 'left' | 'right'; config: Partial<CornerSideConfig> } }
+  | { type: 'ADD_ELEVATION_PATTERN'; payload: { patternType: 'row' | 'col' } }
+  | { type: 'REMOVE_ELEVATION_PATTERN'; payload: { patternType: 'row' | 'col'; index: number } }
+  | { type: 'UPDATE_ELEVATION_PATTERN'; payload: { patternType: 'row' | 'col'; index: number; value: number | '' } }
+  | { type: 'UPDATE_ELEVATION_GRID_PROP'; payload: { prop: 'mullionSize' | 'pressurePlateSize'; value: number | '' } }
   | { type: 'RESET_DESIGN' };
 
 
@@ -330,6 +334,19 @@ const DEFAULT_GLASS_PARTITION_SERIES: ProfileSeries = {
   },
 };
 
+const DEFAULT_ELEVATION_GLAZING_SERIES: ProfileSeries = {
+  id: 'series-glazing-default',
+  name: 'Standard Structural Glazing',
+  type: WindowType.ELEVATION_GLAZING,
+  dimensions: { ...BASE_DIMENSIONS, outerFrame: 75, mullion: 50 },
+  hardwareItems: [],
+  glassOptions: {
+    thicknesses: [8, 10, 12, 15],
+    customThicknessAllowed: true,
+    specialTypes: ['dgu', 'laminated'],
+  },
+};
+
 const DEFAULT_CORNER_SERIES: ProfileSeries = {
     id: 'series-corner-default',
     name: 'Standard Corner Series',
@@ -362,8 +379,8 @@ const defaultCornerSideConfig: CornerSideConfig = {
 };
 
 const initialConfig: ConfigState = {
-    width: 1800,
-    height: 2100,
+    width: 15000,
+    height: 15000,
     fixedPanels: [],
     glassType: GlassType.CLEAR,
     glassThickness: 8,
@@ -381,6 +398,12 @@ const initialConfig: ConfigState = {
     doorPositions: [{ row: 0, col: 0 }, { row: 0, col: 1 }],
     ventilatorGrid: [],
     partitionPanels: { count: 2, types: [{ type: 'fixed' }, { type: 'sliding' }], hasTopChannel: true },
+    elevationGrid: {
+        rowPattern: [609.6, 1524, 609.6, 609.6], // 2ft, 5ft, 2ft, 2ft
+        colPattern: [1000, 1200, 1500], // 1m, 1.2m, 1.5m
+        mullionSize: 50,
+        pressurePlateSize: 60,
+    },
     leftWidth: 1200,
     rightWidth: 1200,
     cornerPostWidth: 100,
@@ -393,6 +416,7 @@ const SERIES_MAP: Record<WindowType, ProfileSeries> = {
     [WindowType.CASEMENT]: DEFAULT_CASEMENT_SERIES,
     [WindowType.VENTILATOR]: DEFAULT_VENTILATOR_SERIES,
     [WindowType.GLASS_PARTITION]: DEFAULT_GLASS_PARTITION_SERIES,
+    [WindowType.ELEVATION_GLAZING]: DEFAULT_ELEVATION_GLAZING_SERIES,
     [WindowType.CORNER]: DEFAULT_CORNER_SERIES,
 };
 
@@ -549,7 +573,7 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
         case 'SET_WINDOW_TYPE': {
           const newType = action.payload;
           const newState: ConfigState = { ...state, windowType: newType };
-          if (newType === WindowType.GLASS_PARTITION) {
+          if (newType === WindowType.GLASS_PARTITION || newType === WindowType.ELEVATION_GLAZING) {
             newState.fixedPanels = [];
           }
            if (newType === WindowType.CORNER) {
@@ -594,6 +618,33 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             const currentFraming = newTypes[index].framing || 'none';
             newTypes[index] = { ...newTypes[index], framing: currentFraming === 'none' ? 'full' : 'none' };
             return { ...state, partitionPanels: { ...state.partitionPanels, types: newTypes } };
+        }
+        case 'ADD_ELEVATION_PATTERN': {
+            const { patternType } = action.payload;
+            if (!state.elevationGrid) return state;
+            const key = patternType === 'row' ? 'rowPattern' : 'colPattern';
+            const newPattern = [...state.elevationGrid[key], 1000];
+            return { ...state, elevationGrid: { ...state.elevationGrid, [key]: newPattern } };
+        }
+        case 'REMOVE_ELEVATION_PATTERN': {
+            const { patternType, index } = action.payload;
+            if (!state.elevationGrid) return state;
+            const key = patternType === 'row' ? 'rowPattern' : 'colPattern';
+            const newPattern = state.elevationGrid[key].filter((_, i) => i !== index);
+            return { ...state, elevationGrid: { ...state.elevationGrid, [key]: newPattern } };
+        }
+        case 'UPDATE_ELEVATION_PATTERN': {
+            const { patternType, index, value } = action.payload;
+            if (!state.elevationGrid) return state;
+            const key = patternType === 'row' ? 'rowPattern' : 'colPattern';
+            const newPattern = [...state.elevationGrid[key]];
+            newPattern[index] = value;
+            return { ...state, elevationGrid: { ...state.elevationGrid, [key]: newPattern } };
+        }
+        case 'UPDATE_ELEVATION_GRID_PROP': {
+            const { prop, value } = action.payload;
+            if (!state.elevationGrid) return state;
+            return { ...state, elevationGrid: { ...state.elevationGrid, [prop]: value } };
         }
         case 'RESET_DESIGN': {
              return {
@@ -738,7 +789,7 @@ const App: React.FC = () => {
   const availableSeries = useMemo(() => {
     const allSeries = [
         DEFAULT_SLIDING_SERIES, DEFAULT_CASEMENT_SERIES, DEFAULT_VENTILATOR_SERIES, 
-        DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_CORNER_SERIES, ...savedSeries
+        DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_ELEVATION_GLAZING_SERIES, DEFAULT_CORNER_SERIES, ...savedSeries
     ];
     return allSeries.filter((s, index, self) => index === self.findIndex(t => t.id === s.id));
   }, [savedSeries]);
@@ -931,6 +982,16 @@ const App: React.FC = () => {
   const onCyclePartitionPanelType = useCallback((index: number) => dispatch({ type: 'CYCLE_PARTITION_PANEL_TYPE', payload: index }), []);
   const onSetPartitionHasTopChannel = useCallback((hasChannel: boolean) => dispatch({ type: 'SET_PARTITION_HAS_TOP_CHANNEL', payload: hasChannel }), []);
   const onCyclePartitionPanelFraming = useCallback((index: number) => dispatch({ type: 'CYCLE_PARTITION_PANEL_FRAMING', payload: index }), []);
+  
+  const handleElevationGridChange = useCallback((action: 'add' | 'remove' | 'update' | 'update_prop', payload: any) => {
+    switch (action) {
+        case 'add': dispatch({ type: 'ADD_ELEVATION_PATTERN', payload }); break;
+        case 'remove': dispatch({ type: 'REMOVE_ELEVATION_PATTERN', payload }); break;
+        case 'update': dispatch({ type: 'UPDATE_ELEVATION_PATTERN', payload }); break;
+        case 'update_prop': dispatch({ type: 'UPDATE_ELEVATION_GRID_PROP', payload }); break;
+    }
+  }, []);
+
   const handleResetDesign = useCallback(() => {
     if (window.confirm("Are you sure you want to reset the current design? All changes will be lost.")) {
         dispatch({ type: 'RESET_DESIGN' });
@@ -1067,10 +1128,11 @@ const App: React.FC = () => {
     onCyclePartitionPanelType,
     onSetPartitionHasTopChannel,
     onCyclePartitionPanelFraming,
+    onElevationGridChange: handleElevationGridChange,
     onResetDesign: handleResetDesign,
     activeCornerSide,
     setActiveCornerSide
-  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleResetDesign, activeCornerSide]);
+  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleElevationGridChange, handleResetDesign, activeCornerSide]);
 
   const handleOpenConfigure = () => setActiveMobilePanel('configure');
   const handleOpenQuote = () => setActiveMobilePanel('quotation');

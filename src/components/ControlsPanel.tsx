@@ -45,6 +45,7 @@ interface ControlsPanelProps {
   onCyclePartitionPanelType: (index: number) => void;
   onSetPartitionHasTopChannel: (hasChannel: boolean) => void;
   onCyclePartitionPanelFraming: (index: number) => void;
+  onElevationGridChange: (action: 'add' | 'remove' | 'update' | 'update_prop', payload: any) => void;
   onResetDesign: () => void;
 
   activeCornerSide: 'left' | 'right';
@@ -76,7 +77,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
     onHardwareChange, onAddHardware, onRemoveHardware,
     toggleDoorPosition, onVentilatorCellClick,
     savedColors, setSavedColors, onUpdateHandle,
-    onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onResetDesign,
+    onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onElevationGridChange, onResetDesign,
     activeCornerSide, setActiveCornerSide
   } = props;
 
@@ -201,10 +202,10 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
 
       <CollapsibleCard title="Design Type" isOpen={openCard === 'Design Type'} onToggle={() => handleToggleCard('Design Type')}>
           <div className="grid grid-cols-3 bg-slate-700 rounded-md p-1 gap-1">
-              {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.CORNER].map(type => {
-                  const typeLabel = type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+              {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.ELEVATION_GLAZING, WindowType.CORNER].map(type => {
+                  const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                   const isActive = (isCorner && type === WindowType.CORNER) || (!isCorner && windowType === type);
-                  return <button key={type} onClick={() => setConfig('windowType', type)} className={`p-2 text-sm font-semibold rounded capitalize ${isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>{typeLabel}</button>
+                  return <button key={type} onClick={() => setConfig('windowType', type)} className={`p-2 text-xs font-semibold rounded capitalize ${isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>{typeLabel}</button>
               })}
           </div>
       </CollapsibleCard>
@@ -236,6 +237,39 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
               <option value={WindowType.VENTILATOR}>Ventilator</option>
             </Select>
          </CollapsibleCard>
+      )}
+
+      {activeWindowType === WindowType.ELEVATION_GLAZING && config.elevationGrid && (
+        <CollapsibleCard title="Elevation Grid Pattern" isOpen={openCard === 'Elevation Grid Pattern'} onToggle={() => handleToggleCard('Elevation Grid Pattern')}>
+          <div className="grid grid-cols-2 gap-4">
+              <DimensionInput label="Mullion (Rafter) Size" value_mm={config.elevationGrid.mullionSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'mullionSize', value: v })} />
+              <DimensionInput label="Pressure/Cover Plate Size" value_mm={config.elevationGrid.pressurePlateSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'pressurePlateSize', value: v })} />
+          </div>
+          <div className="mt-4 pt-4 border-t border-slate-700">
+              <h4 className="text-base font-semibold text-slate-200 mb-2">Vertical Pattern (Columns)</h4>
+              <div className="space-y-2">
+                  {config.elevationGrid.colPattern.map((width, index) => (
+                      <div key={index} className="flex items-end gap-2">
+                          <DimensionInput label={`Width ${index + 1}`} value_mm={width} onChange_mm={v => onElevationGridChange('update', { patternType: 'col', index, value: v })} className="flex-grow" />
+                          <Button variant="danger" onClick={() => onElevationGridChange('remove', { patternType: 'col', index })} className="p-2 h-10 w-10 flex-shrink-0"><TrashIcon className="w-5 h-5"/></Button>
+                      </div>
+                  ))}
+              </div>
+              <Button variant="secondary" className="w-full mt-2" onClick={() => onElevationGridChange('add', { patternType: 'col' })}><PlusIcon className="w-4 h-4 mr-2" /> Add Column Width</Button>
+          </div>
+           <div className="mt-4 pt-4 border-t border-slate-700">
+              <h4 className="text-base font-semibold text-slate-200 mb-2">Horizontal Pattern (Rows)</h4>
+              <div className="space-y-2">
+                  {config.elevationGrid.rowPattern.map((height, index) => (
+                       <div key={index} className="flex items-end gap-2">
+                          <DimensionInput label={`Height ${index + 1}`} value_mm={height} onChange_mm={v => onElevationGridChange('update', { patternType: 'row', index, value: v })} className="flex-grow" />
+                          <Button variant="danger" onClick={() => onElevationGridChange('remove', { patternType: 'row', index })} className="p-2 h-10 w-10 flex-shrink-0"><TrashIcon className="w-5 h-5"/></Button>
+                      </div>
+                  ))}
+              </div>
+              <Button variant="secondary" className="w-full mt-2" onClick={() => onElevationGridChange('add', { patternType: 'row' })}><PlusIcon className="w-4 h-4 mr-2" /> Add Row Height</Button>
+          </div>
+        </CollapsibleCard>
       )}
 
       {activeWindowType === WindowType.SLIDING && (
@@ -401,7 +435,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         </div>
       </CollapsibleCard>
       
-      {!isCorner && windowType !== WindowType.GLASS_PARTITION && (
+      {(!isCorner && ![WindowType.GLASS_PARTITION, WindowType.ELEVATION_GLAZING].includes(windowType)) && (
         <CollapsibleCard title="Fixed Panels" isOpen={openCard === 'Fixed Panels'} onToggle={() => handleToggleCard('Fixed Panels')}>
            <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.TOP)}><PlusIcon className="w-4 h-4 mr-2" /> Top</Button>
