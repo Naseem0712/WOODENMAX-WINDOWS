@@ -150,6 +150,8 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
                     type="number"
                     inputMode="decimal"
                     placeholder="Weight"
+                    aria-label={`Weight for ${label}`}
+                    name={`${id}-weight`}
                     value={weightValue}
                     onChange={e => onWeightChange(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full pl-3 pr-12 py-1 bg-slate-700 border border-slate-600 rounded-md text-white text-xs focus:ring-1 focus:ring-indigo-500"
@@ -162,6 +164,8 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
                     type="number"
                     inputMode="decimal"
                     placeholder="Length"
+                    aria-label={`Length for ${label}`}
+                    name={`${id}-length`}
                     value={lengthValue}
                     onChange={e => onLengthChange(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full pl-3 pr-5 py-1 bg-slate-700 border border-slate-600 rounded-md text-white text-xs focus:ring-1 focus:ring-indigo-500"

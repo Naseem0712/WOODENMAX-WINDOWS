@@ -31,10 +31,10 @@ const Section: React.FC<{title: string, children: React.ReactNode, className?: s
     </div>
 );
 
-const TextArea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & {label: string}> = ({label, ...props}) => (
+const TextArea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & {label: string}> = ({id, label, ...props}) => (
     <div>
-      <label className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
-      <textarea {...props} className="w-full h-24 px-3 py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-scrollbar" />
+      <label htmlFor={id} className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
+      <textarea id={id} {...props} className="w-full h-24 px-3 py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-scrollbar" />
     </div>
 );
 
@@ -203,27 +203,27 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
 
         <div className="flex-grow overflow-y-auto p-6 custom-scrollbar">
             <div className="space-y-4">
-              <Input label="" value={settings.title} onChange={e => setSettings({...settings, title: e.target.value})} className="mb-4 text-2xl font-bold !bg-transparent border-0 focus:ring-0 p-0" />
+              <Input id="quotation-title" name="quotation-title" label="" value={settings.title} onChange={e => setSettings({...settings, title: e.target.value})} className="mb-4 text-2xl font-bold !bg-transparent border-0 focus:ring-0 p-0" />
               <div className="grid md:grid-cols-2 gap-4">
                   <Section title="Your Company Details">
                       <div className="flex gap-4 items-center">
                           <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 rounded-md object-cover bg-slate-600"/>
                           <div className="flex-grow">
-                              <Input label="Company Name" value={settings.company.name} onChange={e => handleSettingsChange('company', 'name', e.target.value)} />
+                              <Input id="company-name" name="company-name" label="Company Name" value={settings.company.name} onChange={e => handleSettingsChange('company', 'name', e.target.value)} />
                               <Button variant="secondary" className="w-full mt-2" onClick={() => companyLogoInputRef.current?.click()}><UploadIcon className="w-4 h-4 mr-2"/> Upload Logo</Button>
                               <input type="file" ref={companyLogoInputRef} onChange={handleLogoUpload} className="hidden" accept="image/*" />
                           </div>
                       </div>
-                      <Input label="Address" value={settings.company.address} onChange={e => handleSettingsChange('company', 'address', e.target.value)} />
+                      <Input id="company-address" name="company-address" label="Address" value={settings.company.address} onChange={e => handleSettingsChange('company', 'address', e.target.value)} />
                       <div className="grid grid-cols-2 gap-4">
-                          <Input label="Email" type="email" value={settings.company.email} onChange={e => handleSettingsChange('company', 'email', e.target.value)} />
-                          <Input label="Website" value={settings.company.website} onChange={e => handleSettingsChange('company', 'website', e.target.value)} />
+                          <Input id="company-email" name="company-email" label="Email" type="email" value={settings.company.email} onChange={e => handleSettingsChange('company', 'email', e.target.value)} />
+                          <Input id="company-website" name="company-website" label="Website" value={settings.company.website} onChange={e => handleSettingsChange('company', 'website', e.target.value)} />
                       </div>
                   </Section>
                   <Section title="Customer Details">
-                      <Input label="Customer Name" value={settings.customer.name} onChange={e => handleSettingsChange('customer', 'name', e.target.value)} />
-                      <Input label="Address" value={settings.customer.address} onChange={e => handleSettingsChange('customer', 'address', e.target.value)} />
-                      <Input label="Contact Person" value={settings.customer.contactPerson} onChange={e => handleSettingsChange('customer', 'contactPerson', e.target.value)} />
+                      <Input id="customer-name" name="customer-name" label="Customer Name" value={settings.customer.name} onChange={e => handleSettingsChange('customer', 'name', e.target.value)} />
+                      <Input id="customer-address" name="customer-address" label="Address" value={settings.customer.address} onChange={e => handleSettingsChange('customer', 'address', e.target.value)} />
+                      <Input id="customer-contact" name="customer-contact" label="Contact Person" value={settings.customer.contactPerson} onChange={e => handleSettingsChange('customer', 'contactPerson', e.target.value)} />
                   </Section>
               </div>
               
@@ -275,18 +275,18 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
 
               <div className="grid md:grid-cols-2 gap-4">
                   <Section title="Details & Terms">
-                      <TextArea label="Description" value={settings.description} onChange={e => setSettings({...settings, description: e.target.value})} maxLength={1500} />
-                      <TextArea label="Terms & Conditions" value={settings.terms} onChange={e => setSettings({...settings, terms: e.target.value})} />
+                      <TextArea id="quotation-description" name="quotation-description" label="Description" value={settings.description} onChange={e => setSettings({...settings, description: e.target.value})} maxLength={1500} />
+                      <TextArea id="quotation-terms" name="quotation-terms" label="Terms & Conditions" value={settings.terms} onChange={e => setSettings({...settings, terms: e.target.value})} />
                   </Section>
                   <Section title="Bank & Signature">
                       <div className="grid grid-cols-2 gap-4">
-                          <Input label="A/C Name" value={settings.bankDetails.name} onChange={e => handleSettingsChange('bankDetails', 'name', e.target.value)} />
-                          <Input label="A/C Number" type="text" inputMode="numeric" value={settings.bankDetails.accountNumber} onChange={e => handleSettingsChange('bankDetails', 'accountNumber', e.target.value)} />
+                          <Input id="bank-ac-name" name="bank-ac-name" label="A/C Name" value={settings.bankDetails.name} onChange={e => handleSettingsChange('bankDetails', 'name', e.target.value)} />
+                          <Input id="bank-ac-number" name="bank-ac-number" label="A/C Number" type="text" inputMode="numeric" value={settings.bankDetails.accountNumber} onChange={e => handleSettingsChange('bankDetails', 'accountNumber', e.target.value)} />
                       </div>
                       <div className="grid grid-cols-3 gap-4">
-                          <Input label="IFSC Code" value={settings.bankDetails.ifsc} onChange={e => handleSettingsChange('bankDetails', 'ifsc', e.target.value)} />
-                          <Input label="Branch" value={settings.bankDetails.branch} onChange={e => handleSettingsChange('bankDetails', 'branch', e.target.value)} />
-                          <Select label="A/C Type" value={settings.bankDetails.accountType} onChange={e => handleSettingsChange('bankDetails', 'accountType', e.target.value as 'savings' | 'current')}>
+                          <Input id="bank-ifsc" name="bank-ifsc" label="IFSC Code" value={settings.bankDetails.ifsc} onChange={e => handleSettingsChange('bankDetails', 'ifsc', e.target.value)} />
+                          <Input id="bank-branch" name="bank-branch" label="Branch" value={settings.bankDetails.branch} onChange={e => handleSettingsChange('bankDetails', 'branch', e.target.value)} />
+                          <Select id="bank-ac-type" name="bank-ac-type" label="A/C Type" value={settings.bankDetails.accountType} onChange={e => handleSettingsChange('bankDetails', 'accountType', e.target.value as 'savings' | 'current')}>
                               <option value="current">Current</option>
                               <option value="savings">Savings</option>
                           </Select>
@@ -305,15 +305,15 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
                     <span className="font-semibold text-white ml-2">₹{Math.round(subTotal).toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex gap-2 items-center">
-                    <div className="w-32"><Input label="Discount" type="number" inputMode="decimal" value={settings.financials.discount} onChange={e => handleSettingsChange('financials', 'discount', e.target.value === '' ? '' : Number(e.target.value))}/></div>
-                    <Select label="" value={settings.financials.discountType} onChange={e => handleSettingsChange('financials', 'discountType', e.target.value as 'percentage' | 'fixed')} className="mt-5">
+                    <div className="w-32"><Input id="discount-amount" name="discount-amount" label="Discount" type="number" inputMode="decimal" value={settings.financials.discount} onChange={e => handleSettingsChange('financials', 'discount', e.target.value === '' ? '' : Number(e.target.value))}/></div>
+                    <Select id="discount-type" name="discount-type" label="" aria-label="Discount Type" value={settings.financials.discountType} onChange={e => handleSettingsChange('financials', 'discountType', e.target.value as 'percentage' | 'fixed')} className="mt-5">
                         <option value="percentage">%</option>
                         <option value="fixed">₹</option>
                     </Select>
                     <span className="text-red-400 text-sm mt-5">(-₹{Math.round(discountAmount).toLocaleString('en-IN')})</span>
                 </div>
                 <div className="flex gap-2 items-center">
-                    <div className="w-24"><Input label="GST" type="number" inputMode="decimal" value={settings.financials.gstPercentage} onChange={e => handleSettingsChange('financials', 'gstPercentage', e.target.value === '' ? '' : Number(e.target.value))} unit="%"/></div>
+                    <div className="w-24"><Input id="gst-percentage" name="gst-percentage" label="GST" type="number" inputMode="decimal" value={settings.financials.gstPercentage} onChange={e => handleSettingsChange('financials', 'gstPercentage', e.target.value === '' ? '' : Number(e.target.value))} unit="%"/></div>
                     <span className="text-green-400 text-sm mt-5">(+₹{Math.round(gstAmount).toLocaleString('en-IN')})</span>
                 </div>
                 <div className="text-right">

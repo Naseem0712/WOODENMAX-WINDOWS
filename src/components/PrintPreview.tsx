@@ -638,6 +638,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
 
 const EditableSection: React.FC<{title: string, value: string, onChange: (value: string) => void}> = ({ title, value, onChange }) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const id = useMemo(() => title.toLowerCase().replace(/[^a-z0-9]+/g, '-'), [title]);
 
     useEffect(() => {
         if (textareaRef.current) {
@@ -648,7 +649,7 @@ const EditableSection: React.FC<{title: string, value: string, onChange: (value:
 
     return (
         <div className="print-final-details mt-4" style={{breakInside: 'avoid'}}>
-            <h3 className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">{title}</h3>
+            <h3 id={id} className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">{title}</h3>
             <textarea 
                 ref={textareaRef}
                 value={value}
@@ -656,6 +657,8 @@ const EditableSection: React.FC<{title: string, value: string, onChange: (value:
                 className="w-full text-xs whitespace-pre-wrap bg-transparent border-gray-300 rounded-md p-1 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 print-editable"
                 rows={1}
                 style={{overflow: 'hidden'}}
+                aria-labelledby={id}
+                name={id}
             />
         </div>
     );

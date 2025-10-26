@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType } from '../types';
@@ -67,10 +66,10 @@ function getContrastYIQ(hexcolor: string){
     return (yiq >= 128) ? 'black' : 'white';
 }
 
-const Slider: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string, unit?: string }> = ({ label, unit, ...props }) => (
+const Slider: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string, unit?: string }> = ({ id, label, unit, ...props }) => (
     <div className='flex-1'>
-        <label className="block text-xs font-medium text-slate-300 mb-1">{label} <span className='text-slate-400'>{props.value}{unit}</span></label>
-        <input type="range" className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-indigo-500" {...props} />
+        <label htmlFor={id} className="block text-xs font-medium text-slate-300 mb-1">{label} <span className='text-slate-400'>{props.value}{unit}</span></label>
+        <input type="range" id={id} name={id} className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-indigo-500" {...props} />
     </div>
 );
 
@@ -340,15 +339,15 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         {isCorner ? (
             <>
                 <div className="grid grid-cols-2 gap-4">
-                    <DimensionInput label="Left Wall Width" value_mm={config.leftWidth} onChange_mm={v => setConfig('leftWidth', v)} placeholder="e.g., 1200" />
-                    <DimensionInput label="Right Wall Width" value_mm={config.rightWidth} onChange_mm={v => setConfig('rightWidth', v)} placeholder="e.g., 1200" />
+                    <DimensionInput id="left-width" name="left-width" label="Left Wall Width" value_mm={config.leftWidth} onChange_mm={v => setConfig('leftWidth', v)} placeholder="e.g., 1200" />
+                    <DimensionInput id="right-width" name="right-width" label="Right Wall Width" value_mm={config.rightWidth} onChange_mm={v => setConfig('rightWidth', v)} placeholder="e.g., 1200" />
                 </div>
-                 <DimensionInput label="Corner Post Width" value_mm={config.cornerPostWidth} onChange_mm={v => setConfig('cornerPostWidth', v)} placeholder="e.g., 100" />
+                 <DimensionInput id="corner-post-width" name="corner-post-width" label="Corner Post Width" value_mm={config.cornerPostWidth} onChange_mm={v => setConfig('cornerPostWidth', v)} placeholder="e.g., 100" />
             </>
         ) : (
-            <DimensionInput label="Total Width" value_mm={config.width} onChange_mm={v => setConfig('width', v)} placeholder="e.g., 1800" />
+            <DimensionInput id="total-width" name="total-width" label="Total Width" value_mm={config.width} onChange_mm={v => setConfig('width', v)} placeholder="e.g., 1800" />
         )}
-        <DimensionInput label="Total Height" value_mm={config.height} onChange_mm={v => setConfig('height', v)} placeholder="e.g., 1200" />
+        <DimensionInput id="total-height" name="total-height" label="Total Height" value_mm={config.height} onChange_mm={v => setConfig('height', v)} placeholder="e.g., 1200" />
       </CollapsibleCard>
       
       {isCorner && (
@@ -357,7 +356,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
                 <button onClick={() => setActiveCornerSide('left')} className={`p-2 text-sm font-semibold rounded ${activeCornerSide === 'left' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Left Wall</button>
                 <button onClick={() => setActiveCornerSide('right')} className={`p-2 text-sm font-semibold rounded ${activeCornerSide === 'right' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Right Wall</button>
             </div>
-            <Select label={`${activeCornerSide === 'left' ? 'Left' : 'Right'} Wall Type`} value={displayConfig.windowType} onChange={(e) => setSideConfig({ windowType: e.target.value as CornerSideConfig['windowType'] })}>
+            <Select id="corner-side-type" name="corner-side-type" label={`${activeCornerSide === 'left' ? 'Left' : 'Right'} Wall Type`} value={displayConfig.windowType} onChange={(e) => setSideConfig({ windowType: e.target.value as CornerSideConfig['windowType'] })}>
               <option value={WindowType.SLIDING}>Sliding</option>
               <option value={WindowType.CASEMENT}>Casement / Fixed</option>
               <option value={WindowType.VENTILATOR}>Ventilator</option>
@@ -369,12 +368,14 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         <CollapsibleCard title="Elevation Grid Pattern" isOpen={openCard === 'Elevation Grid Pattern'} onToggle={() => handleToggleCard('Elevation Grid Pattern')}>
            <p className="text-xs text-slate-400 mb-4">Click on a glass panel in the canvas to turn it into an operable door.</p>
           <div className="grid grid-cols-2 gap-4">
-              <DimensionInput label="Vertical Mullion Size" value_mm={config.elevationGrid.verticalMullionSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'verticalMullionSize', value: v })} />
-              <DimensionInput label="Horizontal Transom Size" value_mm={config.elevationGrid.horizontalTransomSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'horizontalTransomSize', value: v })} />
+              <DimensionInput id="elevation-v-mullion" name="elevation-v-mullion" label="Vertical Mullion Size" value_mm={config.elevationGrid.verticalMullionSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'verticalMullionSize', value: v })} />
+              <DimensionInput id="elevation-h-transom" name="elevation-h-transom" label="Horizontal Transom Size" value_mm={config.elevationGrid.horizontalTransomSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'horizontalTransomSize', value: v })} />
           </div>
-          <DimensionInput label="Pressure/Cover Plate Size" value_mm={config.elevationGrid.pressurePlateSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'pressurePlateSize', value: v })} />
+          <DimensionInput id="elevation-pressure-plate" name="elevation-pressure-plate" label="Pressure/Cover Plate Size" value_mm={config.elevationGrid.pressurePlateSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'pressurePlateSize', value: v })} />
           <div className="mt-4 pt-4 border-t border-slate-700">
              <DimensionInput 
+                id="elevation-floor-height"
+                name="elevation-floor-height"
                 label="Floor to Floor Height (Optional)" 
                 value_mm={config.elevationGrid.floorHeight} 
                 onChange_mm={v => onElevationGridChange('update_prop', { prop: 'floorHeight', value: v })} 
@@ -386,7 +387,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
               <div className="space-y-2">
                   {config.elevationGrid.colPattern.map((width, index) => (
                       <div key={index} className="flex items-end gap-2">
-                          <DimensionInput label={`Width ${index + 1}`} value_mm={width} onChange_mm={v => onElevationGridChange('update', { patternType: 'col', index, value: v })} className="flex-grow" />
+                          <DimensionInput id={`elevation-col-${index}`} name={`elevation-col-${index}`} label={`Width ${index + 1}`} value_mm={width} onChange_mm={v => onElevationGridChange('update', { patternType: 'col', index, value: v })} className="flex-grow" />
                           <Button variant="danger" onClick={() => onElevationGridChange('remove', { patternType: 'col', index })} className="p-2 h-10 w-10 flex-shrink-0"><TrashIcon className="w-5 h-5"/></Button>
                       </div>
                   ))}
@@ -398,7 +399,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
               <div className="space-y-2">
                   {config.elevationGrid.rowPattern.map((height, index) => (
                        <div key={index} className="flex items-end gap-2">
-                          <DimensionInput label={`Height ${index + 1}`} value_mm={height} onChange_mm={v => onElevationGridChange('update', { patternType: 'row', index, value: v })} className="flex-grow" />
+                          <DimensionInput id={`elevation-row-${index}`} name={`elevation-row-${index}`} label={`Height ${index + 1}`} value_mm={height} onChange_mm={v => onElevationGridChange('update', { patternType: 'row', index, value: v })} className="flex-grow" />
                           <Button variant="danger" onClick={() => onElevationGridChange('remove', { patternType: 'row', index })} className="p-2 h-10 w-10 flex-shrink-0"><TrashIcon className="w-5 h-5"/></Button>
                       </div>
                   ))}
@@ -410,11 +411,11 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
 
       {activeWindowType === WindowType.SLIDING && (
         <CollapsibleCard title="Track & Shutter Setup" isOpen={openCard === 'Track & Shutter Setup'} onToggle={() => handleToggleCard('Track & Shutter Setup')}>
-            <Select label="Track Type" value={displayConfig.trackType} onChange={(e) => isCorner ? setSideConfig({trackType: parseInt(e.target.value)}) : setConfig('trackType', parseInt(e.target.value) as TrackType)}>
+            <Select id="track-type" name="track-type" label="Track Type" value={displayConfig.trackType} onChange={(e) => isCorner ? setSideConfig({trackType: parseInt(e.target.value)}) : setConfig('trackType', parseInt(e.target.value) as TrackType)}>
                 <option value={TrackType.TWO_TRACK}>2-Track</option>
                 <option value={TrackType.THREE_TRACK}>3-Track</option>
             </Select>
-            <Select label="Shutter Configuration" value={displayConfig.shutterConfig} onChange={(e) => isCorner ? setSideConfig({shutterConfig: e.target.value as ShutterConfigType}) : setConfig('shutterConfig', e.target.value as ShutterConfigType)}>
+            <Select id="shutter-config" name="shutter-config" label="Shutter Configuration" value={displayConfig.shutterConfig} onChange={(e) => isCorner ? setSideConfig({shutterConfig: e.target.value as ShutterConfigType}) : setConfig('shutterConfig', e.target.value as ShutterConfigType)}>
                 {displayConfig.trackType === TrackType.TWO_TRACK && <><option value="2G">2 Glass Shutters</option><option value="4G">4 Glass Shutters</option></>}
                 {displayConfig.trackType === TrackType.THREE_TRACK && <><option value="3G">3 Glass Shutters</option><option value="2G1M">2 Glass + 1 Mesh Shutter</option></>}
             </Select>
@@ -424,7 +425,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
                 <div className="grid grid-cols-2 gap-2">
                     {displayConfig.fixedShutters.map((_, i) => (
                         <label key={i} className="flex items-center space-x-2 p-2 bg-slate-700 rounded-md cursor-pointer hover:bg-slate-600">
-                            <input type="checkbox" checked={displayConfig.fixedShutters[i] || false} onChange={e => handleFixShutterChange(i, e.target.checked)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                            <input type="checkbox" id={`fix-shutter-${i}`} name={`fix-shutter-${i}`} checked={displayConfig.fixedShutters[i] || false} onChange={e => handleFixShutterChange(i, e.target.checked)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
                             <span className="text-sm text-slate-200">Fix Shutter {i + 1}</span>
                         </label>
                     ))}
@@ -437,8 +438,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
       {(activeWindowType === WindowType.CASEMENT || activeWindowType === WindowType.VENTILATOR) && (
           <CollapsibleCard title="Grid Layout" isOpen={openCard === 'Grid Layout'} onToggle={() => handleToggleCard('Grid Layout')}>
               <div className="grid grid-cols-2 gap-4">
-                  <Input label="Rows" type="number" inputMode="numeric" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
-                  <Input label="Columns" type="number" inputMode="numeric" value={gridCols} min={1} onChange={e => setGridSize(gridRows, Math.max(1, parseInt(e.target.value) || 1))} />
+                  <Input id="grid-rows" name="grid-rows" label="Rows" type="number" inputMode="numeric" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
+                  <Input id="grid-cols" name="grid-cols" label="Columns" type="number" inputMode="numeric" value={gridCols} min={1} onChange={e => setGridSize(gridRows, Math.max(1, parseInt(e.target.value) || 1))} />
               </div>
               <div className="mt-4">
                   <label className="block text-sm font-medium text-slate-300 mb-2">Panel Configuration (Click to toggle)</label>
@@ -468,9 +469,9 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
 
       {windowType === WindowType.GLASS_PARTITION && (
         <CollapsibleCard title="Partition Panel Setup" isOpen={openCard === 'Partition Panel Setup'} onToggle={() => handleToggleCard('Partition Panel Setup')}>
-          <Input label="Number of Panels" type="number" inputMode="numeric" min={1} max={8} value={config.partitionPanels.count} onChange={e => onSetPartitionPanelCount(Math.max(1, parseInt(e.target.value) || 1))}/>
+          <Input id="partition-count" name="partition-count" label="Number of Panels" type="number" inputMode="numeric" min={1} max={8} value={config.partitionPanels.count} onChange={e => onSetPartitionPanelCount(Math.max(1, parseInt(e.target.value) || 1))}/>
            <label className="flex items-center space-x-2 cursor-pointer mt-2">
-              <input type="checkbox" checked={config.partitionPanels.hasTopChannel} onChange={e => onSetPartitionHasTopChannel(e.target.checked)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
+              <input type="checkbox" id="partition-has-top-channel" name="partition-has-top-channel" checked={config.partitionPanels.hasTopChannel} onChange={e => onSetPartitionHasTopChannel(e.target.checked)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
               <span className="text-sm text-slate-200">Enable Top/Bottom Channel</span>
           </label>
           {config.partitionPanels.count > 0 && (
@@ -498,19 +499,19 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
 
       {operablePanels.length > 0 && (
           <CollapsibleCard title="Handle Configuration" isOpen={openCard === 'Handle Configuration'} onToggle={() => handleToggleCard('Handle Configuration')}>
-              <Select label="Select Panel" value={selectedPanelId} onChange={e => setSelectedPanelId(e.target.value)}>
+              <Select id="handle-panel-select" name="handle-panel-select" label="Select Panel" value={selectedPanelId} onChange={e => setSelectedPanelId(e.target.value)}>
                 {operablePanels.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
               </Select>
               {selectedPanelId && (
                   <div className="p-2 bg-slate-700 rounded-md space-y-3">
                       <label className="flex items-center space-x-2 cursor-pointer">
-                          <input type="checkbox" checked={!!currentHandle} onChange={e => onUpdateHandle(selectedPanelId, e.target.checked ? { x: 50, y: 50, orientation: 'vertical' } : null)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
+                          <input type="checkbox" id="handle-enable" name="handle-enable" checked={!!currentHandle} onChange={e => onUpdateHandle(selectedPanelId, e.target.checked ? { x: 50, y: 50, orientation: 'vertical' } : null)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
                           <span className="text-sm text-slate-200">Enable Handle</span>
                       </label>
                       {currentHandle && (
                           <div className="space-y-3">
-                              <Slider label={`Horizontal Position: ${currentHandle.x}%`} value={currentHandle.x} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, x: parseInt(e.target.value)})}/>
-                              <Slider label={`Vertical Position: ${currentHandle.y}%`} value={currentHandle.y} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, y: parseInt(e.target.value)})}/>
+                              <Slider id="handle-pos-x" label={`Horizontal Position: ${currentHandle.x}%`} value={currentHandle.x} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, x: parseInt(e.target.value)})}/>
+                              <Slider id="handle-pos-y" label={`Vertical Position: ${currentHandle.y}%`} value={currentHandle.y} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, y: parseInt(e.target.value)})}/>
                                <div className="grid grid-cols-2 gap-2">
                                 <Button variant={currentHandle.orientation === 'vertical' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, {...currentHandle, orientation: 'vertical'})}>Vertical</Button>
                                 <Button variant={currentHandle.orientation === 'horizontal' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, {...currentHandle, orientation: 'horizontal'})}>Horizontal</Button>
@@ -524,10 +525,10 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
 
       <CollapsibleCard title="Appearance" isOpen={openCard === 'Appearance'} onToggle={() => handleToggleCard('Appearance')}>
         <div className="grid grid-cols-2 gap-4">
-            <Select label="Glass Tint" value={config.glassType} onChange={(e) => setConfig('glassType', e.target.value as GlassType)}>
+            <Select id="appearance-glass-tint" name="appearance-glass-tint" label="Glass Tint" value={config.glassType} onChange={(e) => setConfig('glassType', e.target.value as GlassType)}>
               {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </Select>
-            <Select label="Special Type" value={config.glassSpecialType} onChange={e => setConfig('glassSpecialType', e.target.value as GlassSpecialType)}>
+            <Select id="appearance-special-type" name="appearance-special-type" label="Special Type" value={config.glassSpecialType} onChange={e => setConfig('glassSpecialType', e.target.value as GlassSpecialType)}>
                 <option value="none">None</option>
                 {series.glassOptions.specialTypes.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
             </Select>
@@ -536,22 +537,22 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
             <div className="p-3 bg-slate-900/50 rounded-md mt-4 space-y-3">
                 <h4 className="text-base font-semibold text-slate-200">Laminated Glass Details</h4>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                    <Input label="Glass 1 Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.glass1Thickness} onChange={e => onLaminatedConfigChange({ glass1Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
-                    <Select label="Glass 1 Type" value={config.laminatedGlassConfig.glass1Type} onChange={e => onLaminatedConfigChange({ glass1Type: e.target.value as GlassType })}>
+                    <Input id="laminated-g1-thickness" name="laminated-g1-thickness" label="Glass 1 Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.glass1Thickness} onChange={e => onLaminatedConfigChange({ glass1Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                    <Select id="laminated-g1-type" name="laminated-g1-type" label="Glass 1 Type" value={config.laminatedGlassConfig.glass1Type} onChange={e => onLaminatedConfigChange({ glass1Type: e.target.value as GlassType })}>
                         {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </Select>
-                    <Input label="PVB Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.pvbThickness} onChange={e => onLaminatedConfigChange({ pvbThickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
-                    <Select label="PVB Type" value={config.laminatedGlassConfig.pvbType} onChange={e => onLaminatedConfigChange({ pvbType: e.target.value as LaminatedGlassConfig['pvbType'] })}>
+                    <Input id="laminated-pvb-thickness" name="laminated-pvb-thickness" label="PVB Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.pvbThickness} onChange={e => onLaminatedConfigChange({ pvbThickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                    <Select id="laminated-pvb-type" name="laminated-pvb-type" label="PVB Type" value={config.laminatedGlassConfig.pvbType} onChange={e => onLaminatedConfigChange({ pvbType: e.target.value as LaminatedGlassConfig['pvbType'] })}>
                         <option value="clear">Clear</option>
                         <option value="milky_white">Milky White</option>
                     </Select>
-                    <Input label="Glass 2 Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.glass2Thickness} onChange={e => onLaminatedConfigChange({ glass2Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
-                    <Select label="Glass 2 Type" value={config.laminatedGlassConfig.glass2Type} onChange={e => onLaminatedConfigChange({ glass2Type: e.target.value as GlassType })}>
+                    <Input id="laminated-g2-thickness" name="laminated-g2-thickness" label="Glass 2 Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.glass2Thickness} onChange={e => onLaminatedConfigChange({ glass2Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                    <Select id="laminated-g2-type" name="laminated-g2-type" label="Glass 2 Type" value={config.laminatedGlassConfig.glass2Type} onChange={e => onLaminatedConfigChange({ glass2Type: e.target.value as GlassType })}>
                         {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </Select>
                 </div>
                 <label className="flex items-center space-x-2 cursor-pointer pt-2">
-                    <input type="checkbox" checked={config.laminatedGlassConfig.isToughened} onChange={e => onLaminatedConfigChange({ isToughened: e.target.checked })} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                    <input type="checkbox" id="laminated-is-toughened" name="laminated-is-toughened" checked={config.laminatedGlassConfig.isToughened} onChange={e => onLaminatedConfigChange({ isToughened: e.target.checked })} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
                     <span className="text-sm text-slate-200">Toughened / Tempered Glass</span>
                 </label>
             </div>
@@ -560,21 +561,21 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
             <div className="p-3 bg-slate-900/50 rounded-md mt-4 space-y-3">
                 <h4 className="text-base font-semibold text-slate-200">DGU (Insulated) Glass Details</h4>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                    <Input label="Glass 1 Thickness" type="number" inputMode="decimal" value={config.dguGlassConfig.glass1Thickness} onChange={e => onDguConfigChange({ glass1Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
-                    <Select label="Glass 1 Type" value={config.dguGlassConfig.glass1Type} onChange={e => onDguConfigChange({ glass1Type: e.target.value as GlassType })}>
+                    <Input id="dgu-g1-thickness" name="dgu-g1-thickness" label="Glass 1 Thickness" type="number" inputMode="decimal" value={config.dguGlassConfig.glass1Thickness} onChange={e => onDguConfigChange({ glass1Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                    <Select id="dgu-g1-type" name="dgu-g1-type" label="Glass 1 Type" value={config.dguGlassConfig.glass1Type} onChange={e => onDguConfigChange({ glass1Type: e.target.value as GlassType })}>
                         {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </Select>
-                    <Select label="Air Gap" value={config.dguGlassConfig.airGap} onChange={e => onDguConfigChange({ airGap: e.target.value === '' ? '' : Number(e.target.value) })}>
+                    <Select id="dgu-air-gap" name="dgu-air-gap" label="Air Gap" value={config.dguGlassConfig.airGap} onChange={e => onDguConfigChange({ airGap: e.target.value === '' ? '' : Number(e.target.value) })}>
                         {[6, 8, 10, 12, 15].map(g => <option key={g} value={g}>{g} mm</option>)}
                     </Select>
                     <div />
-                    <Input label="Glass 2 Thickness" type="number" inputMode="decimal" value={config.dguGlassConfig.glass2Thickness} onChange={e => onDguConfigChange({ glass2Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
-                    <Select label="Glass 2 Type" value={config.dguGlassConfig.glass2Type} onChange={e => onDguConfigChange({ glass2Type: e.target.value as GlassType })}>
+                    <Input id="dgu-g2-thickness" name="dgu-g2-thickness" label="Glass 2 Thickness" type="number" inputMode="decimal" value={config.dguGlassConfig.glass2Thickness} onChange={e => onDguConfigChange({ glass2Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                    <Select id="dgu-g2-type" name="dgu-g2-type" label="Glass 2 Type" value={config.dguGlassConfig.glass2Type} onChange={e => onDguConfigChange({ glass2Type: e.target.value as GlassType })}>
                         {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </Select>
                 </div>
                 <label className="flex items-center space-x-2 cursor-pointer pt-2">
-                    <input type="checkbox" checked={config.dguGlassConfig.isToughened} onChange={e => onDguConfigChange({ isToughened: e.target.checked })} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                    <input type="checkbox" id="dgu-is-toughened" name="dgu-is-toughened" checked={config.dguGlassConfig.isToughened} onChange={e => onDguConfigChange({ isToughened: e.target.checked })} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
                     <span className="text-sm text-slate-200">Toughened / Tempered Glass</span>
                 </label>
             </div>
@@ -582,14 +583,14 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         {config.glassSpecialType === 'none' && (
             <div className="grid grid-cols-2 gap-4 mt-4">
             <div>
-                <Select label="Glass Thickness" value={isCustomThickness ? 'custom' : displayConfig.glassThickness} onChange={handleThicknessChange}>
+                <Select id="glass-thickness" name="glass-thickness" label="Glass Thickness" value={isCustomThickness ? 'custom' : displayConfig.glassThickness} onChange={handleThicknessChange}>
                     <option value="">Auto</option>
                     {series.glassOptions.thicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
                     {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
                 </Select>
-                {isCustomThickness && ( <Input label="Custom Thickness (mm)" type="number" inputMode="decimal" value={displayConfig.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))} className="mt-2" /> )}
+                {isCustomThickness && ( <Input id="custom-glass-thickness" name="custom-glass-thickness" label="Custom Thickness (mm)" type="number" inputMode="decimal" value={displayConfig.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))} className="mt-2" /> )}
             </div>
-            <Input label="Glass Name / Brand (Optional)" type="text" value={config.customGlassName} onChange={e => setConfig('customGlassName', e.target.value)} placeholder="e.g. Saint-Gobain" />
+            <Input id="glass-name" name="glass-name" label="Glass Name / Brand (Optional)" type="text" value={config.customGlassName} onChange={e => setConfig('customGlassName', e.target.value)} placeholder="e.g. Saint-Gobain" />
             </div>
         )}
         <div className="pt-4 mt-4 border-t border-slate-700">
@@ -621,21 +622,22 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
              <div className="p-3 bg-slate-900/50 rounded-md space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                      <DimensionInput
+                        id="georgian-bar-thickness"
+                        name="georgian-bar-thickness"
                         label="Bar Thickness"
                         value_mm={glassGrid.barThickness}
                         onChange_mm={val => setConfig('glassGrid', { ...glassGrid, barThickness: Number(val) || 0 })}
                     />
                      <div className='flex items-end pb-2'>
                         <label className="flex items-center space-x-2 cursor-pointer">
-                            <input type="checkbox" checked={glassGrid.applyToAll} onChange={handleApplyToAllChange} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
+                            <input type="checkbox" id="georgian-apply-all" name="georgian-apply-all" checked={glassGrid.applyToAll} onChange={handleApplyToAllChange} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
                             <span className="text-sm text-slate-200">Apply to All Panels</span>
                         </label>
                      </div>
                 </div>
 
                 {!glassGrid.applyToAll && (
-                    // FIX: Replaced div and manual label with Select component's label prop.
-                    <Select label="Target Panel" value={activeGeorgianPanelId} onChange={e => setActiveGeorgianPanelId(e.target.value)}>
+                    <Select id="georgian-target-panel" name="georgian-target-panel" label="Target Panel" value={activeGeorgianPanelId} onChange={e => setActiveGeorgianPanelId(e.target.value)}>
                         <option value="default">Default</option>
                         {availableGeorgianPanels.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </Select>
@@ -643,18 +645,18 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
                 
                 <div className="space-y-3 pt-2 border-t border-slate-700">
                      <h4 className="text-xs font-semibold text-slate-300">Horizontal Bars</h4>
-                      <Input label="Count" type="number" min="0" value={activeGeorgianPattern.horizontal.count} onChange={e => handleGeorgianPatternChange('horizontal', 'count', parseInt(e.target.value) || 0)} />
+                      <Input id="georgian-h-count" name="georgian-h-count" label="Count" type="number" min="0" value={activeGeorgianPattern.horizontal.count} onChange={e => handleGeorgianPatternChange('horizontal', 'count', parseInt(e.target.value) || 0)} />
                      <div className='flex items-end gap-4'>
-                        <Slider label="Offset" unit='mm' min={0} max={3000} step={10} value={activeGeorgianPattern.horizontal.offset} onChange={e => handleGeorgianPatternChange('horizontal', 'offset', parseInt(e.target.value))} />
-                        <Slider label="Gap" unit='mm' min={50} max={3000} step={10} value={activeGeorgianPattern.horizontal.gap} onChange={e => handleGeorgianPatternChange('horizontal', 'gap', parseInt(e.target.value))} />
+                        <Slider id="georgian-h-offset" label="Offset" unit='mm' min={0} max={3000} step={10} value={activeGeorgianPattern.horizontal.offset} onChange={e => handleGeorgianPatternChange('horizontal', 'offset', parseInt(e.target.value))} />
+                        <Slider id="georgian-h-gap" label="Gap" unit='mm' min={50} max={3000} step={10} value={activeGeorgianPattern.horizontal.gap} onChange={e => handleGeorgianPatternChange('horizontal', 'gap', parseInt(e.target.value))} />
                      </div>
                 </div>
                  <div className="space-y-3 pt-2 border-t border-slate-700">
                      <h4 className="text-xs font-semibold text-slate-300">Vertical Bars</h4>
-                      <Input label="Count" type="number" min="0" value={activeGeorgianPattern.vertical.count} onChange={e => handleGeorgianPatternChange('vertical', 'count', parseInt(e.target.value) || 0)} />
+                      <Input id="georgian-v-count" name="georgian-v-count" label="Count" type="number" min="0" value={activeGeorgianPattern.vertical.count} onChange={e => handleGeorgianPatternChange('vertical', 'count', parseInt(e.target.value) || 0)} />
                      <div className='flex items-end gap-4'>
-                        <Slider label="Offset" unit='mm' min={0} max={3000} step={10} value={activeGeorgianPattern.vertical.offset} onChange={e => handleGeorgianPatternChange('vertical', 'offset', parseInt(e.target.value))} />
-                        <Slider label="Gap" unit='mm' min={50} max={3000} step={10} value={activeGeorgianPattern.vertical.gap} onChange={e => handleGeorgianPatternChange('vertical', 'gap', parseInt(e.target.value))} />
+                        <Slider id="georgian-v-offset" label="Offset" unit='mm' min={0} max={3000} step={10} value={activeGeorgianPattern.vertical.offset} onChange={e => handleGeorgianPatternChange('vertical', 'offset', parseInt(e.target.value))} />
+                        <Slider id="georgian-v-gap" label="Gap" unit='mm' min={50} max={3000} step={10} value={activeGeorgianPattern.vertical.gap} onChange={e => handleGeorgianPatternChange('vertical', 'gap', parseInt(e.target.value))} />
                      </div>
                 </div>
              </div>
@@ -682,8 +684,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
                 </div>
             ) : (
                 <div className="p-2 bg-slate-700 rounded-md space-y-2">
-                    <Input label="Preset Name" value={newPreset.name} onChange={e => setNewPreset({...newPreset, name: e.target.value})} placeholder="e.g., Wooden Teak" />
-                    {newPreset.type === 'color' && <Input label="Color Hex" type="color" value={newPreset.value} onChange={e => setNewPreset({...newPreset, value: e.target.value})} className="w-full h-10 p-1"/>}
+                    <Input id="new-preset-name" name="new-preset-name" label="Preset Name" value={newPreset.name} onChange={e => setNewPreset({...newPreset, name: e.target.value})} placeholder="e.g., Wooden Teak" />
+                    {newPreset.type === 'color' && <Input id="new-preset-color" name="new-preset-color" label="Color Hex" type="color" value={newPreset.value} onChange={e => setNewPreset({...newPreset, value: e.target.value})} className="w-full h-10 p-1"/>}
                     {newPreset.type === 'texture' && <img src={newPreset.value} alt="texture preview" className="w-full h-10 object-cover rounded" />}
                     <div className="grid grid-cols-2 gap-2"> <Button onClick={handleAddPreset} disabled={!newPreset.name.trim()}>Save Preset</Button> <Button variant="secondary" onClick={() => setIsAddingPreset(false)}>Cancel</Button> </div>
                 </div>
@@ -704,7 +706,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
                    {fixedPanels.map(panel => (
                        <div key={panel.id} className="flex items-center gap-2 p-2 bg-slate-700 rounded">
                            <span className="flex-shrink-0 capitalize font-medium text-slate-300 w-16">{panel.position}</span>
-                           <DimensionInput aria-label={`${panel.position} panel size`} placeholder="Size" value_mm={panel.size} onChange_mm={val => updateFixedPanelSize(panel.id, Number(val) || 0)} className="flex-grow" label=""/>
+                           <DimensionInput id={`fixed-panel-size-${panel.id}`} name={`fixed-panel-size-${panel.id}`} aria-label={`${panel.position} panel size`} placeholder="Size" value_mm={panel.size} onChange_mm={val => updateFixedPanelSize(panel.id, Number(val) || 0)} className="flex-grow" label=""/>
                            <Button variant="danger" onClick={() => removeFixedPanel(panel.id)} className="p-2 h-10 w-10"><TrashIcon className="w-5 h-5"/></Button>
                        </div>
                    ))}
@@ -716,6 +718,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
       <CollapsibleCard title="Profile Series Dimensions" isOpen={openCard === 'Profile Series Dimensions'} onToggle={() => handleToggleCard('Profile Series Dimensions')}>
         <div className="space-y-2">
            <SearchableSelect
+              id="active-profile"
               label="Active Profile"
               options={seriesOptions}
               value={series.id}
@@ -729,7 +732,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
               </div>
           ) : (
             <div className='p-2 bg-slate-700 rounded-md'>
-                <Input label="New Series Name" placeholder='Enter a name...' value={newSeriesName} onChange={e => setNewSeriesName(e.target.value)} />
+                <Input id="new-series-name" name="new-series-name" label="New Series Name" placeholder='Enter a name...' value={newSeriesName} onChange={e => setNewSeriesName(e.target.value)} />
                 <div className="grid grid-cols-2 gap-2 mt-2">
                     <Button onClick={handleConfirmSave} disabled={!newSeriesName.trim()}>Save</Button>
                     <Button variant='secondary' onClick={() => setIsSavingSeries(false)}>Cancel</Button>
@@ -739,12 +742,12 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         </div>
         <hr className="border-slate-700 my-4" />
         {activeWindowType === WindowType.SLIDING && ( <> 
-        <DimensionInput label="Outer Frame (Top/Bottom)" value_mm={series.dimensions.outerFrame} onChange_mm={val => handleDimensionChange('outerFrame', val)} weightValue={series.weights?.outerFrame} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrame', v)} lengthValue={series.lengths?.outerFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrame', v)} /> 
-        <DimensionInput label="Outer Frame (Vertical)" value_mm={series.dimensions.outerFrameVertical} onChange_mm={val => handleDimensionChange('outerFrameVertical', val)} weightValue={series.weights?.outerFrameVertical} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrameVertical', v)} lengthValue={series.lengths?.outerFrameVertical} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrameVertical', v)} />
-        { (fixedPanels.length > 0) && <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} />} <DimensionInput label="Shutter Handle" value_mm={series.dimensions.shutterHandle} onChange_mm={val => handleDimensionChange('shutterHandle', val)} weightValue={series.weights?.shutterHandle} onWeightChange={v => handleProfileDetailChange('weights', 'shutterHandle', v)} lengthValue={series.lengths?.shutterHandle} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterHandle', v)} /> <DimensionInput label="Shutter Interlock" value_mm={series.dimensions.shutterInterlock} onChange_mm={val => handleDimensionChange('shutterInterlock', val)} weightValue={series.weights?.shutterInterlock} onWeightChange={v => handleProfileDetailChange('weights', 'shutterInterlock', v)} lengthValue={series.lengths?.shutterInterlock} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterInterlock', v)} /> { displayConfig.shutterConfig === ShutterConfigType.FOUR_GLASS && <DimensionInput label="Shutter Meeting" value_mm={series.dimensions.shutterMeeting} onChange_mm={val => handleDimensionChange('shutterMeeting', val)} weightValue={series.weights?.shutterMeeting} onWeightChange={v => handleProfileDetailChange('weights', 'shutterMeeting', v)} lengthValue={series.lengths?.shutterMeeting} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterMeeting', v)} />} <DimensionInput label="Shutter Top/Bottom" value_mm={series.dimensions.shutterTop} onChange_mm={val => handleDimensionChange('shutterTop', val)} weightValue={series.weights?.shutterTop} onWeightChange={v => handleProfileDetailChange('weights', 'shutterTop', v)} lengthValue={series.lengths?.shutterTop} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterTop', v)} /> </> )}
-        {(activeWindowType === WindowType.CASEMENT || activeWindowType === WindowType.VENTILATOR) && ( <> <DimensionInput label="Outer Frame" value_mm={series.dimensions.outerFrame} onChange_mm={val => handleDimensionChange('outerFrame', val)} weightValue={series.weights?.outerFrame} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrame', v)} lengthValue={series.lengths?.outerFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrame', v)} /> <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} /> <DimensionInput label="Shutter/Door Frame" value_mm={series.dimensions.casementShutter} onChange_mm={val => handleDimensionChange('casementShutter', val)} weightValue={series.weights?.casementShutter} onWeightChange={v => handleProfileDetailChange('weights', 'casementShutter', v)} lengthValue={series.lengths?.casementShutter} onLengthChange={v => handleProfileDetailChange('lengths', 'casementShutter', v)} /> <DimensionInput label="Mullion Profile" value_mm={series.dimensions.mullion} onChange_mm={val => handleDimensionChange('mullion', val)} weightValue={series.weights?.mullion} onWeightChange={v => handleProfileDetailChange('weights', 'mullion', v)} lengthValue={series.lengths?.mullion} onLengthChange={v => handleProfileDetailChange('lengths', 'mullion', v)} /> </> )}
-        {activeWindowType === WindowType.VENTILATOR && ( <DimensionInput label="Louver Blade" value_mm={series.dimensions.louverBlade} onChange_mm={val => handleDimensionChange('louverBlade', val)} weightValue={series.weights?.louverBlade} onWeightChange={v => handleProfileDetailChange('weights', 'louverBlade', v)} lengthValue={series.lengths?.louverBlade} onLengthChange={v => handleProfileDetailChange('lengths', 'louverBlade', v)} /> )}
-        {windowType === WindowType.GLASS_PARTITION && ( <> <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} /> <DimensionInput label="Hinged Panel Frame" value_mm={series.dimensions.casementShutter} onChange_mm={val => handleDimensionChange('casementShutter', val)} weightValue={series.weights?.casementShutter} onWeightChange={v => handleProfileDetailChange('weights', 'casementShutter', v)} lengthValue={series.lengths?.casementShutter} onLengthChange={v => handleProfileDetailChange('lengths', 'casementShutter', v)} /> <DimensionInput label="Top Track Height" value_mm={series.dimensions.topTrack} onChange_mm={val => handleDimensionChange('topTrack', val)} weightValue={series.weights?.topTrack} onWeightChange={v => handleProfileDetailChange('weights', 'topTrack', v)} lengthValue={series.lengths?.topTrack} onLengthChange={v => handleProfileDetailChange('lengths', 'topTrack', v)} /> <DimensionInput label="Bottom Track Height" value_mm={series.dimensions.bottomTrack} onChange_mm={val => handleDimensionChange('bottomTrack', val)} weightValue={series.weights?.bottomTrack} onWeightChange={v => handleProfileDetailChange('weights', 'bottomTrack', v)} lengthValue={series.lengths?.bottomTrack} onLengthChange={v => handleProfileDetailChange('lengths', 'bottomTrack', v)} /> </> )}
+        <DimensionInput id="dim-outerFrame" name="dim-outerFrame" label="Outer Frame (Top/Bottom)" value_mm={series.dimensions.outerFrame} onChange_mm={val => handleDimensionChange('outerFrame', val)} weightValue={series.weights?.outerFrame} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrame', v)} lengthValue={series.lengths?.outerFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrame', v)} /> 
+        <DimensionInput id="dim-outerFrameVertical" name="dim-outerFrameVertical" label="Outer Frame (Vertical)" value_mm={series.dimensions.outerFrameVertical} onChange_mm={val => handleDimensionChange('outerFrameVertical', val)} weightValue={series.weights?.outerFrameVertical} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrameVertical', v)} lengthValue={series.lengths?.outerFrameVertical} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrameVertical', v)} />
+        { (fixedPanels.length > 0) && <DimensionInput id="dim-fixedFrame" name="dim-fixedFrame" label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} />} <DimensionInput id="dim-shutterHandle" name="dim-shutterHandle" label="Shutter Handle" value_mm={series.dimensions.shutterHandle} onChange_mm={val => handleDimensionChange('shutterHandle', val)} weightValue={series.weights?.shutterHandle} onWeightChange={v => handleProfileDetailChange('weights', 'shutterHandle', v)} lengthValue={series.lengths?.shutterHandle} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterHandle', v)} /> <DimensionInput id="dim-shutterInterlock" name="dim-shutterInterlock" label="Shutter Interlock" value_mm={series.dimensions.shutterInterlock} onChange_mm={val => handleDimensionChange('shutterInterlock', val)} weightValue={series.weights?.shutterInterlock} onWeightChange={v => handleProfileDetailChange('weights', 'shutterInterlock', v)} lengthValue={series.lengths?.shutterInterlock} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterInterlock', v)} /> { displayConfig.shutterConfig === ShutterConfigType.FOUR_GLASS && <DimensionInput id="dim-shutterMeeting" name="dim-shutterMeeting" label="Shutter Meeting" value_mm={series.dimensions.shutterMeeting} onChange_mm={val => handleDimensionChange('shutterMeeting', val)} weightValue={series.weights?.shutterMeeting} onWeightChange={v => handleProfileDetailChange('weights', 'shutterMeeting', v)} lengthValue={series.lengths?.shutterMeeting} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterMeeting', v)} />} <DimensionInput id="dim-shutterTop" name="dim-shutterTop" label="Shutter Top/Bottom" value_mm={series.dimensions.shutterTop} onChange_mm={val => handleDimensionChange('shutterTop', val)} weightValue={series.weights?.shutterTop} onWeightChange={v => handleProfileDetailChange('weights', 'shutterTop', v)} lengthValue={series.lengths?.shutterTop} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterTop', v)} /> </> )}
+        {(activeWindowType === WindowType.CASEMENT || activeWindowType === WindowType.VENTILATOR) && ( <> <DimensionInput id="dim-outerFrame" name="dim-outerFrame" label="Outer Frame" value_mm={series.dimensions.outerFrame} onChange_mm={val => handleDimensionChange('outerFrame', val)} weightValue={series.weights?.outerFrame} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrame', v)} lengthValue={series.lengths?.outerFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrame', v)} /> <DimensionInput id="dim-fixedFrame" name="dim-fixedFrame" label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} /> <DimensionInput id="dim-casementShutter" name="dim-casementShutter" label="Shutter/Door Frame" value_mm={series.dimensions.casementShutter} onChange_mm={val => handleDimensionChange('casementShutter', val)} weightValue={series.weights?.casementShutter} onWeightChange={v => handleProfileDetailChange('weights', 'casementShutter', v)} lengthValue={series.lengths?.casementShutter} onLengthChange={v => handleProfileDetailChange('lengths', 'casementShutter', v)} /> <DimensionInput id="dim-mullion" name="dim-mullion" label="Mullion Profile" value_mm={series.dimensions.mullion} onChange_mm={val => handleDimensionChange('mullion', val)} weightValue={series.weights?.mullion} onWeightChange={v => handleProfileDetailChange('weights', 'mullion', v)} lengthValue={series.lengths?.mullion} onLengthChange={v => handleProfileDetailChange('lengths', 'mullion', v)} /> </> )}
+        {activeWindowType === WindowType.VENTILATOR && ( <DimensionInput id="dim-louverBlade" name="dim-louverBlade" label="Louver Blade" value_mm={series.dimensions.louverBlade} onChange_mm={val => handleDimensionChange('louverBlade', val)} weightValue={series.weights?.louverBlade} onWeightChange={v => handleProfileDetailChange('weights', 'louverBlade', v)} lengthValue={series.lengths?.louverBlade} onLengthChange={v => handleProfileDetailChange('lengths', 'louverBlade', v)} /> )}
+        {windowType === WindowType.GLASS_PARTITION && ( <> <DimensionInput id="dim-fixedFrame" name="dim-fixedFrame" label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} /> <DimensionInput id="dim-casementShutter" name="dim-casementShutter" label="Hinged Panel Frame" value_mm={series.dimensions.casementShutter} onChange_mm={val => handleDimensionChange('casementShutter', val)} weightValue={series.weights?.casementShutter} onWeightChange={v => handleProfileDetailChange('weights', 'casementShutter', v)} lengthValue={series.lengths?.casementShutter} onLengthChange={v => handleProfileDetailChange('lengths', 'casementShutter', v)} /> <DimensionInput id="dim-topTrack" name="dim-topTrack" label="Top Track Height" value_mm={series.dimensions.topTrack} onChange_mm={val => handleDimensionChange('topTrack', val)} weightValue={series.weights?.topTrack} onWeightChange={v => handleProfileDetailChange('weights', 'topTrack', v)} lengthValue={series.lengths?.topTrack} onLengthChange={v => handleProfileDetailChange('lengths', 'topTrack', v)} /> <DimensionInput id="dim-bottomTrack" name="dim-bottomTrack" label="Bottom Track Height" value_mm={series.dimensions.bottomTrack} onChange_mm={val => handleDimensionChange('bottomTrack', val)} weightValue={series.weights?.bottomTrack} onWeightChange={v => handleProfileDetailChange('weights', 'bottomTrack', v)} lengthValue={series.lengths?.bottomTrack} onLengthChange={v => handleProfileDetailChange('lengths', 'bottomTrack', v)} /> </> )}
       </CollapsibleCard>
 
       <CollapsibleCard title="Hardware Configuration" isOpen={openCard === 'Hardware Configuration'} onToggle={() => handleToggleCard('Hardware Configuration')}>
@@ -752,13 +755,14 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
               {series.hardwareItems.map(item => (
                   <div key={item.id} className="p-3 bg-slate-700 rounded-md">
                       <div className="flex justify-between items-center mb-2">
-                          <input className="font-semibold text-slate-200 bg-transparent focus:bg-slate-600 rounded px-1 outline-none w-full" value={item.name} onChange={(e) => onHardwareChange(item.id, 'name', e.target.value)} />
+                          <label htmlFor={`hw-name-${item.id}`} className="sr-only">Hardware Name</label>
+                          <input id={`hw-name-${item.id}`} name={`hw-name-${item.id}`} aria-label="Hardware item name" className="font-semibold text-slate-200 bg-transparent focus:bg-slate-600 rounded px-1 outline-none w-full" value={item.name} onChange={(e) => onHardwareChange(item.id, 'name', e.target.value)} />
                           <Button variant="danger" onClick={() => onRemoveHardware(item.id)} className="p-1 h-7 w-7 flex-shrink-0 ml-2"><TrashIcon className="w-4 h-4"/></Button>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
-                          <Input label="Qty" type="number" inputMode="numeric" value={item.qtyPerShutter} onChange={e => onHardwareChange(item.id, 'qtyPerShutter', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 2"/>
-                          <Input label="Rate" type="number" inputMode="decimal" value={item.rate} onChange={e => onHardwareChange(item.id, 'rate', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 50"/>
-                           <Select label="Unit" value={item.unit} onChange={(e) => onHardwareChange(item.id, 'unit', e.target.value as 'per_shutter_or_door' | 'per_window')}> <option value="per_shutter_or_door">Per Door/Panel</option> <option value="per_window">Per Window</option> </Select>
+                          <Input id={`hw-qty-${item.id}`} name={`hw-qty-${item.id}`} label="Qty" type="number" inputMode="numeric" value={item.qtyPerShutter} onChange={e => onHardwareChange(item.id, 'qtyPerShutter', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 2"/>
+                          <Input id={`hw-rate-${item.id}`} name={`hw-rate-${item.id}`} label="Rate" type="number" inputMode="decimal" value={item.rate} onChange={e => onHardwareChange(item.id, 'rate', e.target.value === '' ? '' : parseInt(e.target.value) || 0)} placeholder="e.g., 50"/>
+                           <Select id={`hw-unit-${item.id}`} name={`hw-unit-${item.id}`} label="Unit" value={item.unit} onChange={(e) => onHardwareChange(item.id, 'unit', e.target.value as 'per_shutter_or_door' | 'per_window')}> <option value="per_shutter_or_door">Per Door/Panel</option> <option value="per_window">Per Window</option> </Select>
                       </div>
                   </div>
               ))}

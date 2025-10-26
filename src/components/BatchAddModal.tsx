@@ -99,7 +99,7 @@ export const BatchAddModal: React.FC<BatchAddModalProps> = ({ isOpen, onClose, b
         <div className="flex-grow overflow-y-auto p-4 custom-scrollbar">
             <div className='flex justify-end mb-4'>
                 <div className='w-48'>
-                    <Select label="Dimension Unit" value={unit} onChange={e => setUnit(e.target.value as Unit)}>
+                    <Select id="batch-unit-selector" name="batch-unit-selector" label="Dimension Unit" value={unit} onChange={e => setUnit(e.target.value as Unit)}>
                         <option value="mm">mm</option>
                         <option value="cm">cm</option>
                         <option value="in">in</option>
@@ -122,19 +122,19 @@ export const BatchAddModal: React.FC<BatchAddModalProps> = ({ isOpen, onClose, b
                     <div key={row.id} className="bg-slate-700/50 rounded-lg p-3">
                         <div className="flex flex-col md:flex-row md:items-center md:gap-x-2 space-y-2 md:space-y-0">
                              <div className="flex-grow md:w-3/12">
-                                <Input label="Title" placeholder={`Window ${index + 1}`} value={row.title} onChange={e => handleRowChange(row.id, 'title', e.target.value)} className="!py-1.5"/>
+                                <Input id={`batch-title-${row.id}`} name={`batch-title-${row.id}`} label="Title" placeholder={`Window ${index + 1}`} value={row.title} onChange={e => handleRowChange(row.id, 'title', e.target.value)} className="!py-1.5"/>
                             </div>
                             <div className="flex-grow md:w-2/12">
-                                <DimensionInput label="Width" value_mm={row.width} onChange_mm={v => handleRowChange(row.id, 'width', v)} controlledUnit={unit} />
+                                <DimensionInput id={`batch-width-${row.id}`} name={`batch-width-${row.id}`} label="Width" value_mm={row.width} onChange_mm={v => handleRowChange(row.id, 'width', v)} controlledUnit={unit} />
                             </div>
                             <div className="flex-grow md:w-2/12">
-                                <DimensionInput label="Height" value_mm={row.height} onChange_mm={v => handleRowChange(row.id, 'height', v)} controlledUnit={unit} />
+                                <DimensionInput id={`batch-height-${row.id}`} name={`batch-height-${row.id}`} label="Height" value_mm={row.height} onChange_mm={v => handleRowChange(row.id, 'height', v)} controlledUnit={unit} />
                             </div>
                             <div className="flex-grow md:w-2/12">
-                                <Input label="Quantity" type="number" inputMode="numeric" placeholder="1" value={row.quantity} onChange={e => handleRowChange(row.id, 'quantity', e.target.value)} className="!py-1.5" />
+                                <Input id={`batch-qty-${row.id}`} name={`batch-qty-${row.id}`} label="Quantity" type="number" inputMode="numeric" placeholder="1" value={row.quantity} onChange={e => handleRowChange(row.id, 'quantity', e.target.value)} className="!py-1.5" />
                             </div>
                             <div className="flex-grow md:w-2/12">
-                                <Input label="Rate" type="number" inputMode="numeric" placeholder="550" value={row.rate} onChange={e => handleRowChange(row.id, 'rate', e.target.value)} className="!py-1.5" />
+                                <Input id={`batch-rate-${row.id}`} name={`batch-rate-${row.id}`} label="Rate" type="number" inputMode="numeric" placeholder="550" value={row.rate} onChange={e => handleRowChange(row.id, 'rate', e.target.value)} className="!py-1.5" />
                             </div>
                             <div className="flex-shrink-0 md:w-1/12 text-right">
                                {rows.length > 1 && (

@@ -64,6 +64,8 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
                     <div className="grid grid-cols-4 gap-2">
                         <div className="col-span-2">
                            <Input 
+                                id="window-title"
+                                name="window-title"
                                 label="Window Tag" 
                                 type="text" 
                                 placeholder="e.g. Living Room"
@@ -72,6 +74,8 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
                             />
                         </div>
                         <Input 
+                            id="quantity"
+                            name="quantity"
                             label="Quantity" 
                             type="number" 
                             inputMode="numeric"
@@ -80,6 +84,8 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
                             onChange={e => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                         />
                         <Select
+                            id="area-type"
+                            name="area-type"
                             label="Unit"
                             value={areaType}
                             onChange={e => setAreaType(e.target.value as AreaType)}
@@ -91,7 +97,9 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
                 </div>
                 
                 <div className="md:col-span-2">
-                     <Input 
+                     <Input
+                        id="base-rate"
+                        name="base-rate"
                         label="Base Rate" 
                         type="number" 
                         inputMode="decimal"
