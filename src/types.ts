@@ -144,6 +144,24 @@ export interface CornerSideConfig {
   ventilatorGrid: VentilatorCell[][];
 }
 
+export interface LaminatedGlassConfig {
+  glass1Thickness: number | '';
+  glass1Type: GlassType;
+  pvbThickness: number | '';
+  pvbType: 'clear' | 'milky_white';
+  glass2Thickness: number | '';
+  glass2Type: GlassType;
+  isToughened: boolean;
+}
+
+export interface DguGlassConfig {
+  glass1Thickness: number | '';
+  glass1Type: GlassType;
+  airGap: number | '';
+  glass2Thickness: number | '';
+  glass2Type: GlassType;
+  isToughened: boolean;
+}
 
 export interface WindowConfig {
   width: number | '';
@@ -153,12 +171,16 @@ export interface WindowConfig {
   glassType: GlassType;
   glassThickness: number | '';
   customGlassName: string;
-  glassSpecialType: GlassSpecialType;
   profileColor: string;
   glassGrid: { rows: number, cols: number };
   
   // Type discriminator
   windowType: WindowType;
+  
+  // Special Glass Config
+  glassSpecialType: GlassSpecialType;
+  laminatedGlassConfig: LaminatedGlassConfig;
+  dguGlassConfig: DguGlassConfig;
 
   // Sliding specific
   trackType: TrackType;

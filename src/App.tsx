@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback } from 'react';
-import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig } from './types';
+import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
@@ -48,6 +48,8 @@ type ConfigAction =
   | { type: 'REMOVE_ELEVATION_PATTERN'; payload: { patternType: 'row' | 'col'; index: number } }
   | { type: 'UPDATE_ELEVATION_PATTERN'; payload: { patternType: 'row' | 'col'; index: number; value: number | '' } }
   | { type: 'UPDATE_ELEVATION_GRID_PROP'; payload: { prop: 'mullionSize' | 'pressurePlateSize'; value: number | '' } }
+  | { type: 'UPDATE_LAMINATED_CONFIG'; payload: Partial<LaminatedGlassConfig> }
+  | { type: 'UPDATE_DGU_CONFIG'; payload: Partial<DguGlassConfig> }
   | { type: 'RESET_DESIGN' };
 
 
@@ -389,6 +391,23 @@ const initialConfig: ConfigState = {
     profileColor: '#374151',
     glassGrid: { rows: 0, cols: 0 },
     windowType: WindowType.SLIDING,
+    laminatedGlassConfig: {
+        glass1Thickness: 6,
+        glass1Type: GlassType.CLEAR,
+        pvbThickness: 1.52,
+        pvbType: 'clear',
+        glass2Thickness: 5,
+        glass2Type: GlassType.CLEAR,
+        isToughened: true,
+    },
+    dguGlassConfig: {
+        glass1Thickness: 6,
+        glass1Type: GlassType.CLEAR,
+        airGap: 12,
+        glass2Thickness: 6,
+        glass2Type: GlassType.CLEAR,
+        isToughened: true,
+    },
     trackType: TrackType.TWO_TRACK,
     shutterConfig: ShutterConfigType.TWO_GLASS,
     fixedShutters: [],
@@ -646,6 +665,10 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             if (!state.elevationGrid) return state;
             return { ...state, elevationGrid: { ...state.elevationGrid, [prop]: value } };
         }
+        case 'UPDATE_LAMINATED_CONFIG':
+            return { ...state, laminatedGlassConfig: { ...state.laminatedGlassConfig, ...action.payload } };
+        case 'UPDATE_DGU_CONFIG':
+            return { ...state, dguGlassConfig: { ...state.dguGlassConfig, ...action.payload } };
         case 'RESET_DESIGN': {
              return {
                 ...initialConfig,
@@ -669,6 +692,12 @@ const getInitialConfig = (): ConfigState => {
           parsed.partitionPanels.types.forEach((t: any) => {
               if (typeof t.framing === 'undefined') t.framing = 'none';
           });
+      }
+      if (!parsed.laminatedGlassConfig) {
+        parsed.laminatedGlassConfig = initialConfig.laminatedGlassConfig;
+      }
+      if (!parsed.dguGlassConfig) {
+        parsed.dguGlassConfig = initialConfig.dguGlassConfig;
       }
       return { ...initialConfig, ...parsed };
     }
@@ -992,6 +1021,13 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleLaminatedConfigChange = useCallback((payload: Partial<LaminatedGlassConfig>) => {
+    dispatch({ type: 'UPDATE_LAMINATED_CONFIG', payload });
+  }, []);
+  const handleDguConfigChange = useCallback((payload: Partial<DguGlassConfig>) => {
+    dispatch({ type: 'UPDATE_DGU_CONFIG', payload });
+  }, []);
+
   const handleResetDesign = useCallback(() => {
     if (window.confirm("Are you sure you want to reset the current design? All changes will be lost.")) {
         dispatch({ type: 'RESET_DESIGN' });
@@ -1129,10 +1165,12 @@ const App: React.FC = () => {
     onSetPartitionHasTopChannel,
     onCyclePartitionPanelFraming,
     onElevationGridChange: handleElevationGridChange,
+    onLaminatedConfigChange: handleLaminatedConfigChange,
+    onDguConfigChange: handleDguConfigChange,
     onResetDesign: handleResetDesign,
     activeCornerSide,
     setActiveCornerSide
-  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleElevationGridChange, handleResetDesign, activeCornerSide]);
+  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleElevationGridChange, handleLaminatedConfigChange, handleDguConfigChange, handleResetDesign, activeCornerSide]);
 
   const handleOpenConfigure = () => setActiveMobilePanel('configure');
   const handleOpenQuote = () => setActiveMobilePanel('quotation');

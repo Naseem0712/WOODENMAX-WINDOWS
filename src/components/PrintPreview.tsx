@@ -493,6 +493,29 @@ const EditableSection: React.FC<{title: string, value: string, onChange: (value:
     );
 };
 
+const getGlassDescription = (config: WindowConfig): string => {
+    const formatType = (type: string) => type.replace(/_/g, ' ').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+    if (config.glassSpecialType === 'laminated' && config.laminatedGlassConfig) {
+        const { glass1Thickness, glass1Type, pvbThickness, glass2Thickness, glass2Type, isToughened } = config.laminatedGlassConfig;
+        return `${glass1Thickness || '?'}mm ${formatType(glass1Type)} + ${pvbThickness || '?'}mm PVB + ${glass2Thickness || '?'}mm ${formatType(glass2Type)}${isToughened ? ' (Toughened)' : ''}`;
+    }
+    if (config.glassSpecialType === 'dgu' && config.dguGlassConfig) {
+        const { glass1Thickness, glass1Type, airGap, glass2Thickness, glass2Type, isToughened } = config.dguGlassConfig;
+        return `${glass1Thickness || '?'}mm ${formatType(glass1Type)} + ${airGap || '?'}mm Air Gap + ${glass2Thickness || '?'}mm ${formatType(glass2Type)}${isToughened ? ' (Toughened)' : ''}`;
+    }
+    
+    // Fallback for simple glass
+    let desc = `${config.glassThickness}mm ${formatType(config.glassType)}`;
+    if (config.glassSpecialType !== 'none') {
+        desc += ` (${formatType(config.glassSpecialType)})`;
+    }
+    if (config.customGlassName) {
+        desc += ` - ${config.customGlassName}`;
+    }
+    return desc;
+}
+
 const getItemDetails = (item: QuotationItem) => {
     const { config, quantity } = item;
     const { windowType, shutterConfig, doorPositions, ventilatorGrid } = config;
@@ -705,6 +728,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                     const unitAmount = (singleArea * item.rate) + item.hardwareCost;
 
                                     const { panelCounts, relevantHardware } = getItemDetails(item);
+                                    const glassDescription = getGlassDescription(item.config);
 
                                     return (
                                         <tr key={item.id} className="border-b border-gray-300 print-item">
@@ -721,7 +745,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                         <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Color:</td><td>{item.profileColorName}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Glass:</td><td>{item.config.glassThickness}mm {item.config.glassType}{item.config.glassSpecialType !== 'none' ? ` (${item.config.glassSpecialType})` : ''} {item.config.customGlassName && `- ${item.config.customGlassName}`}</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Glass:</td><td>{glassDescription}</td></tr>
                                                         {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
                                                         {relevantHardware.length > 0 && (
                                                             <tr>

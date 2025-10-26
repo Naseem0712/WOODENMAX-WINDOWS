@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig, ProfileDimensions } from '../types';
+import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType } from '../types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -46,6 +46,8 @@ interface ControlsPanelProps {
   onSetPartitionHasTopChannel: (hasChannel: boolean) => void;
   onCyclePartitionPanelFraming: (index: number) => void;
   onElevationGridChange: (action: 'add' | 'remove' | 'update' | 'update_prop', payload: any) => void;
+  onLaminatedConfigChange: (payload: Partial<LaminatedGlassConfig>) => void;
+  onDguConfigChange: (payload: Partial<DguGlassConfig>) => void;
   onResetDesign: () => void;
 
   activeCornerSide: 'left' | 'right';
@@ -77,7 +79,9 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
     onHardwareChange, onAddHardware, onRemoveHardware,
     toggleDoorPosition, onVentilatorCellClick,
     savedColors, setSavedColors, onUpdateHandle,
-    onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onElevationGridChange, onResetDesign,
+    onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onElevationGridChange,
+    onLaminatedConfigChange, onDguConfigChange,
+    onResetDesign,
     activeCornerSide, setActiveCornerSide
   } = props;
 
@@ -189,6 +193,15 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
     const thickness = value === 'custom' ? 15 : (value === '' ? '' : Number(value));
     setConfig('glassThickness', thickness);
   };
+  
+  const glassTypeOptions = [
+    { value: GlassType.CLEAR, label: "Clear" },
+    { value: GlassType.FROSTED, label: "Frosted" },
+    { value: GlassType.TINTED_BLUE, label: "Tinted Blue" },
+    { value: GlassType.CLEAR_SAPPHIRE, label: "Clear Sapphire" },
+    { value: GlassType.BROWN_TINTED, label: "Brown Tinted" },
+    { value: GlassType.BLACK_TINTED, label: "Black Tinted" },
+  ];
 
   return (
     <div className="w-full p-4 space-y-4 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
@@ -390,24 +403,73 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
       <CollapsibleCard title="Appearance" isOpen={openCard === 'Appearance'} onToggle={() => handleToggleCard('Appearance')}>
         <div className="grid grid-cols-2 gap-4">
             <Select label="Glass Tint" value={config.glassType} onChange={(e) => setConfig('glassType', e.target.value as GlassType)}>
-              <option value="clear">Clear</option> <option value="frosted">Frosted</option> <option value="tinted-blue">Tinted Blue</option> <option value="clear-sapphire">Clear Sapphire</option> <option value="brown-tinted">Brown Tinted</option> <option value="black-tinted">Black Tinted</option>
+              {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </Select>
             <Select label="Special Type" value={config.glassSpecialType} onChange={e => setConfig('glassSpecialType', e.target.value as GlassSpecialType)}>
                 <option value="none">None</option>
                 {series.glassOptions.specialTypes.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
             </Select>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Select label="Glass Thickness" value={isCustomThickness ? 'custom' : displayConfig.glassThickness} onChange={handleThicknessChange}>
-                <option value="">Auto</option>
-                {series.glassOptions.thicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
-                {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
-            </Select>
-            {isCustomThickness && ( <Input label="Custom Thickness (mm)" type="number" inputMode="decimal" value={displayConfig.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))} className="mt-2" /> )}
-          </div>
-          <Input label="Glass Name / Brand (Optional)" type="text" value={config.customGlassName} onChange={e => setConfig('customGlassName', e.target.value)} placeholder="e.g. Saint-Gobain" />
-        </div>
+        {config.glassSpecialType === 'laminated' && config.laminatedGlassConfig && (
+            <div className="p-3 bg-slate-900/50 rounded-md mt-4 space-y-3">
+                <h4 className="text-base font-semibold text-slate-200">Laminated Glass Details</h4>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                    <Input label="Glass 1 Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.glass1Thickness} onChange={e => onLaminatedConfigChange({ glass1Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                    <Select label="Glass 1 Type" value={config.laminatedGlassConfig.glass1Type} onChange={e => onLaminatedConfigChange({ glass1Type: e.target.value as GlassType })}>
+                        {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </Select>
+                    <Input label="PVB Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.pvbThickness} onChange={e => onLaminatedConfigChange({ pvbThickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                    <Select label="PVB Type" value={config.laminatedGlassConfig.pvbType} onChange={e => onLaminatedConfigChange({ pvbType: e.target.value as LaminatedGlassConfig['pvbType'] })}>
+                        <option value="clear">Clear</option>
+                        <option value="milky_white">Milky White</option>
+                    </Select>
+                    <Input label="Glass 2 Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.glass2Thickness} onChange={e => onLaminatedConfigChange({ glass2Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                    <Select label="Glass 2 Type" value={config.laminatedGlassConfig.glass2Type} onChange={e => onLaminatedConfigChange({ glass2Type: e.target.value as GlassType })}>
+                        {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </Select>
+                </div>
+                <label className="flex items-center space-x-2 cursor-pointer pt-2">
+                    <input type="checkbox" checked={config.laminatedGlassConfig.isToughened} onChange={e => onLaminatedConfigChange({ isToughened: e.target.checked })} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                    <span className="text-sm text-slate-200">Toughened / Tempered Glass</span>
+                </label>
+            </div>
+        )}
+        {config.glassSpecialType === 'dgu' && config.dguGlassConfig && (
+            <div className="p-3 bg-slate-900/50 rounded-md mt-4 space-y-3">
+                <h4 className="text-base font-semibold text-slate-200">DGU (Insulated) Glass Details</h4>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                    <Input label="Glass 1 Thickness" type="number" inputMode="decimal" value={config.dguGlassConfig.glass1Thickness} onChange={e => onDguConfigChange({ glass1Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                    <Select label="Glass 1 Type" value={config.dguGlassConfig.glass1Type} onChange={e => onDguConfigChange({ glass1Type: e.target.value as GlassType })}>
+                        {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </Select>
+                    <Select label="Air Gap" value={config.dguGlassConfig.airGap} onChange={e => onDguConfigChange({ airGap: e.target.value === '' ? '' : Number(e.target.value) })}>
+                        {[6, 8, 10, 12, 15].map(g => <option key={g} value={g}>{g} mm</option>)}
+                    </Select>
+                    <div />
+                    <Input label="Glass 2 Thickness" type="number" inputMode="decimal" value={config.dguGlassConfig.glass2Thickness} onChange={e => onDguConfigChange({ glass2Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                    <Select label="Glass 2 Type" value={config.dguGlassConfig.glass2Type} onChange={e => onDguConfigChange({ glass2Type: e.target.value as GlassType })}>
+                        {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </Select>
+                </div>
+                <label className="flex items-center space-x-2 cursor-pointer pt-2">
+                    <input type="checkbox" checked={config.dguGlassConfig.isToughened} onChange={e => onDguConfigChange({ isToughened: e.target.checked })} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                    <span className="text-sm text-slate-200">Toughened / Tempered Glass</span>
+                </label>
+            </div>
+        )}
+        {config.glassSpecialType === 'none' && (
+            <div className="grid grid-cols-2 gap-4 mt-4">
+            <div>
+                <Select label="Glass Thickness" value={isCustomThickness ? 'custom' : displayConfig.glassThickness} onChange={handleThicknessChange}>
+                    <option value="">Auto</option>
+                    {series.glassOptions.thicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
+                    {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
+                </Select>
+                {isCustomThickness && ( <Input label="Custom Thickness (mm)" type="number" inputMode="decimal" value={displayConfig.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))} className="mt-2" /> )}
+            </div>
+            <Input label="Glass Name / Brand (Optional)" type="text" value={config.customGlassName} onChange={e => setConfig('customGlassName', e.target.value)} placeholder="e.g. Saint-Gobain" />
+            </div>
+        )}
         <div className="pt-4 mt-4 border-t border-slate-700">
              <label className="block text-sm font-medium text-slate-300 mb-2">Glass Grid</label>
              <div className="grid grid-cols-2 gap-4">
