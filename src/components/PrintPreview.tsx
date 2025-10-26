@@ -101,6 +101,7 @@ const PrintGlassGrid: React.FC<{
     height: number;
     scale: number;
 }> = ({ config, panelId, width, height, scale }) => {
+    // FIX: Add optional chaining to prevent crash if glassGrid is missing
     const { glassGrid } = config;
     if (!glassGrid || typeof glassGrid.barThickness === 'undefined') {
       return null;

@@ -1,4 +1,5 @@
 
+
 export enum WindowType {
   SLIDING = 'sliding',
   CASEMENT = 'casement',
@@ -54,7 +55,8 @@ export interface ProfileDimensions {
   // Glass Partition
   topTrack: number | '';
   bottomTrack: number | '';
-  // FIX: Added missing glassGridProfile property to support Georgian Bar thickness configuration.
+  
+  // FIX: Added 'glassGridProfile' to support legacy glass grid configurations that define bar thickness within the profile series.
   glassGridProfile: number | '';
 }
 

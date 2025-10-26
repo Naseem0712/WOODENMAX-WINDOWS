@@ -1,9 +1,11 @@
+
+
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, HardwareItem } from '../types';
+import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, HardwareItem } from './types';
 import { Button } from './ui/Button';
 import { PrinterIcon } from './icons/PrinterIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
-import { FixedPanelPosition, ShutterConfigType, WindowType } from '../types';
+import { FixedPanelPosition, ShutterConfigType, WindowType } from './types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import html2pdf from 'html2pdf.js';
 
@@ -94,7 +96,6 @@ const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> =
     return <div style={{ position: 'absolute', boxSizing: 'border-box', ...style, ...backgroundStyle }} />;
 };
 
-// FIX: Refactor PrintGlassGrid to use the new 'patterns' structure from GlassGridConfig.
 const PrintGlassGrid: React.FC<{
     config: WindowConfig;
     panelId: string;
@@ -102,35 +103,66 @@ const PrintGlassGrid: React.FC<{
     height: number;
     scale: number;
 }> = ({ config, panelId, width, height, scale }) => {
-    const { glassGrid } = config;
-    if (!glassGrid || typeof glassGrid.barThickness === 'undefined') {
-      return null;
-    }
-    const { barThickness, applyToAll, patterns } = glassGrid;
-    if (barThickness <= 0) return null;
-
-    const pattern = (applyToAll || !patterns[panelId]) ? patterns['default'] : patterns[panelId];
-    if (!pattern || (pattern.horizontal.count === 0 && pattern.vertical.count === 0)) return null;
-
-    const elements: React.ReactNode[] = [];
-    const barThicknessScaled = barThickness * scale;
+    const { glassGrid, legacyGlassGrid, series } = config;
     const profileColor = config.profileColor;
 
-    // Horizontal bars
-    for (let i = 0; i < pattern.horizontal.count; i++) {
-        const top = (pattern.horizontal.offset + i * pattern.horizontal.gap) * scale - barThicknessScaled / 2;
-        if (top > height * scale || top < -barThicknessScaled) continue;
-        elements.push(<PrintProfilePiece key={`h-grid-${i}`} color={profileColor} style={{ top, left: 0, width: width * scale, height: barThicknessScaled }} />);
+    // New "patterns" format
+    if (glassGrid && glassGrid.patterns) {
+        const { barThickness, applyToAll, patterns } = glassGrid;
+        if (barThickness <= 0) return null;
+
+        const pattern = (applyToAll || !patterns[panelId]) ? patterns['default'] : patterns[panelId];
+        if (!pattern || (pattern.horizontal.count === 0 && pattern.vertical.count === 0)) return null;
+
+        const elements: React.ReactNode[] = [];
+        const barThicknessScaled = barThickness * scale;
+
+        // Horizontal bars
+        for (let i = 0; i < pattern.horizontal.count; i++) {
+            const top = (pattern.horizontal.offset + i * pattern.horizontal.gap) * scale - barThicknessScaled / 2;
+            if (top > height * scale || top < -barThicknessScaled) continue;
+            elements.push(<PrintProfilePiece key={`h-grid-${i}`} color={profileColor} style={{ top, left: 0, width: width * scale, height: barThicknessScaled }} />);
+        }
+
+        // Vertical bars
+        for (let i = 0; i < pattern.vertical.count; i++) {
+            const left = (pattern.vertical.offset + i * pattern.vertical.gap) * scale - barThicknessScaled / 2;
+            if (left > width * scale || left < -barThicknessScaled) continue;
+            elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={profileColor} style={{ left, top: 0, width: barThicknessScaled, height: height * scale }} />);
+        }
+
+        return <>{elements}</>;
+    }
+    
+    // Legacy "rows/cols" format
+    const oldGridData = legacyGlassGrid || (glassGrid as any);
+    if (oldGridData && typeof oldGridData.rows !== 'undefined') {
+        const rows = Number(oldGridData.rows) || 0;
+        const cols = Number(oldGridData.cols) || 0;
+        // FIX: Added 'glassGridProfile' to the ProfileDimensions type to resolve this error.
+        const barThickness = Number(series.dimensions.glassGridProfile) || 15;
+
+        if (barThickness <= 0 || (rows === 0 && cols === 0)) return null;
+
+        const elements: React.ReactNode[] = [];
+        const barThicknessScaled = barThickness * scale;
+
+        if (rows > 0) {
+            const vGap = (height * scale) / (rows + 1);
+            for (let i = 1; i <= rows; i++) {
+                elements.push(<PrintProfilePiece key={`h-grid-${i}`} color={profileColor} style={{ top: i * vGap - barThicknessScaled / 2, left: 0, width: width * scale, height: barThicknessScaled }} />);
+            }
+        }
+        if (cols > 0) {
+            const hGap = (width * scale) / (cols + 1);
+            for (let i = 1; i <= cols; i++) {
+                elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={profileColor} style={{ left: i * hGap - barThicknessScaled / 2, top: 0, width: barThicknessScaled, height: height * scale }} />);
+            }
+        }
+        return <>{elements}</>;
     }
 
-    // Vertical bars
-    for (let i = 0; i < pattern.vertical.count; i++) {
-        const left = (pattern.vertical.offset + i * pattern.vertical.gap) * scale - barThicknessScaled / 2;
-        if (left > width * scale || left < -barThicknessScaled) continue;
-        elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={profileColor} style={{ left, top: 0, width: barThicknessScaled, height: height * scale }} />);
-    }
-
-    return <>{elements}</>;
+    return null;
 };
 
 
@@ -240,7 +272,8 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         shutterMeeting: Number(series.dimensions.shutterMeeting) || 0, casementShutter: Number(series.dimensions.casementShutter) || 0,
         mullion: Number(series.dimensions.mullion) || 0, louverBlade: Number(series.dimensions.louverBlade) || 0,
         topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0, 
-        glassGridProfile: Number(config.glassGrid.barThickness) || 0,
+        // FIX: Added 'glassGridProfile' to the ProfileDimensions type to resolve this error.
+        glassGridProfile: Number(config.glassGrid?.barThickness) || Number(series.dimensions.glassGridProfile) || 0,
     };
 
     const glassStyle = { backgroundColor: '#E2E8F0', boxSizing: 'border-box' as const, border: '0.5px solid #999' };
@@ -280,7 +313,6 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
       });
       return (
         <div className="absolute" style={panelStyle}>
-            {/* FIX: Use refactored PrintGlassGrid component which expects config and panelId. */}
             <PrintGlassGrid config={config} panelId={panelId} width={glassWidthPx / scale} height={glassHeightPx / scale} scale={scale} />
             {childrenWithProps}
         </div> 
@@ -801,189 +833,4 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
           <div className="absolute inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-[100] no-print">
             <svg className="animate-spin h-10 w-10 text-white mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <h3 className="text-white text-xl font-bold">Generating PDF...</h3>
-            <p className="text-slate-300">This may take a moment. Please wait.</p>
-          </div>
-        )}
-        <div className="flex-shrink-0 bg-slate-800 p-3 flex justify-between items-center no-print">
-            <div>
-                <h2 className="text-xl font-bold text-white">Print Preview</h2>
-                <p className="text-xs text-slate-400">Review your quotation below before printing or exporting.</p>
-            </div>
-            <div className="flex gap-2">
-                <Button onClick={handleExportPdf} variant="secondary" disabled={isExporting}>
-                    {isExporting ? 'Exporting...' : <><DownloadIcon className="w-5 h-5 mr-2"/> Export PDF</>}
-                </Button>
-                <Button onClick={handlePrint}><PrinterIcon className="w-5 h-5 mr-2"/> Print</Button>
-                <Button onClick={onClose} variant="secondary"><XMarkIcon className="w-5 h-5 mr-2"/> Close</Button>
-            </div>
-        </div>
-        <div ref={printContainerRef} className="flex-grow overflow-y-auto bg-slate-900 print-preview-container custom-scrollbar">
-            <div className="a4-page single-scroll-preview text-black">
-                {/* --- Start of Printable Content --- */}
-                <div className="print-header" style={{height: 'auto'}}>
-                    <div className="flex justify-between items-start">
-                        <div className="flex items-start gap-4">
-                            <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 object-contain"/>
-                            <div>
-                                <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
-                                <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
-                                <p className="text-xs">{settings.company.email} | {settings.company.website}</p>
-                            </div>
-                        </div>
-                        <div className="text-right text-xs">
-                            <p><strong>Date:</strong> {quoteDate}</p>
-                            <p><strong>Quote #:</strong> {quoteNumber}</p>
-                        </div>
-                    </div>
-                    <div className="flex justify-between text-xs mt-4">
-                        <div className="bg-gray-100 p-2 rounded w-full">
-                            <h3 className="font-bold mb-1">To:</h3>
-                            <p className="font-semibold">{settings.customer.name}</p>
-                            <p className="whitespace-pre-wrap">{settings.customer.address}</p>
-                            <p><strong>Attn:</strong> {settings.customer.contactPerson}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="print-content" style={{display: 'block'}}>
-                    <h3 className="text-xl font-bold text-black text-center my-4">{settings.title}</h3>
-                    <div className="w-full text-[8pt]">
-                        <table className="w-full" style={{borderCollapse: 'collapse'}}>
-                            <thead className="bg-gray-200">
-                                <tr className="border-b-2 border-t-2 border-black">
-                                    <th className="p-1 text-center w-[5%]">#</th>
-                                    <th className="p-1 text-left w-[65%]" colSpan={2}>Item Description</th>
-                                    <th className="p-1 text-center w-[10%]">Qty</th>
-                                    <th className="p-1 text-right w-[20%]" colSpan={2}>Total Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {items.map((item, index) => {
-                                    const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
-                                    const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
-                                    const totalArea = singleArea * item.quantity;
-                                    const baseCost = totalArea * item.rate;
-                                    const totalHardwareCost = item.hardwareCost * item.quantity;
-                                    const totalCost = baseCost + totalHardwareCost;
-                                    
-                                    const unitAmount = (singleArea * item.rate) + item.hardwareCost;
-
-                                    const { panelCounts, hardwareDetails, relevantHardware } = getItemDetails(item);
-                                    const glassDescription = getGlassDescription(item.config);
-
-                                    return (
-                                        <tr key={item.id} className="border-b border-gray-300 print-item">
-                                            <td className="p-2 align-top text-center">{index + 1}</td>
-                                            
-                                            {item.config.windowType !== WindowType.ELEVATION_GLAZING ? (
-                                                <td className="p-2 align-top w-[25%]" style={{ width: '150px' }}>
-                                                    <PrintableWindow config={item.config} />
-                                                </td>
-                                            ) : null}
-                                            
-                                            <td 
-                                                className="p-2 align-top"
-                                                colSpan={item.config.windowType === WindowType.ELEVATION_GLAZING ? 2 : 1}
-                                            >
-                                                <p className="font-bold print-window-title">{item.title}</p>
-                                                <table className="w-full text-[7pt] mt-1 details-table">
-                                                    <tbody>
-                                                        <tr><td className='pr-2 font-semibold'>Series:</td><td>{item.config.series.name}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Size:</td><td>{item.config.windowType === 'elevation_glazing' && item.config.elevationGrid ? `${item.config.elevationGrid.colPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)} x ${item.config.elevationGrid.rowPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)}` : `${item.config.width} x ${item.config.height}`} mm</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Color:</td><td>{item.profileColorName || item.config.profileColor}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Glass:</td><td>{glassDescription}</td></tr>
-                                                        {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
-                                                        {relevantHardware.length > 0 && (
-                                                            <tr>
-                                                                <td className='pr-2 font-semibold pt-1 align-top'>Hardware:</td>
-                                                                <td className='pt-1'>
-                                                                    {relevantHardware.map((hw, i) => (
-                                                                        <span key={i} className="block">{hw.name}</span>
-                                                                    ))}
-                                                                </td>
-                                                            </tr>
-                                                        )}
-                                                    </tbody>
-                                                </table>
-                                            </td>
-                                            <td className="p-2 align-top text-center">{item.quantity}</td>
-                                            <td className="p-2 align-top text-right font-bold" colSpan={2}>₹{Math.round(totalCost).toLocaleString('en-IN')}</td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div className="print-summary final-summary-page" style={{breakInside: 'avoid'}}>
-                        <div className="flex justify-end mt-4">
-                            <div className="w-2/5 text-xs">
-                                <table className="w-full">
-                                    <tbody>
-                                        <tr className="border-b border-gray-300">
-                                            <td className="py-1 pr-4">Sub-Total</td>
-                                            <td className="py-1 text-right font-semibold">₹{subTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                        </tr>
-                                        <tr className="border-b border-gray-300">
-                                            <td className="py-1 pr-4">Discount ({settings.financials.discountType === 'percentage' ? `${settings.financials.discount}%` : 'Fixed'})</td>
-                                            <td className="py-1 text-right font-semibold">(-) ₹{discountAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                        </tr>
-                                        <tr className="border-b-2 border-black">
-                                            <td className="py-1 pr-4 font-bold">Total before Tax</td>
-                                            <td className="py-1 text-right font-bold">₹{totalAfterDiscount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                        </tr>
-                                        <tr className="border-b border-gray-300">
-                                            <td className="py-1 pr-4">GST @ {settings.financials.gstPercentage}%</td>
-                                            <td className="py-1 text-right font-semibold">(+) ₹{gstAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                        </tr>
-                                        <tr className="border-t-2 border-black bg-gray-200">
-                                            <td className="p-2 pr-4 font-bold text-sm">Grand Total</td>
-                                            <td className="p-2 text-right font-bold text-sm">₹{grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        <div className="text-xs mt-2 text-right font-bold">
-                            <p>Amount in Words: {amountToWords(grandTotal)}</p>
-                        </div>
-                        
-                        <EditableSection title="Description" value={settings.description} onChange={(val) => setSettings({...settings, description: val})} />
-                        <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} />
-                        
-                        <div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs" style={{breakBefore: 'avoid'}}>
-                            <div className="flex-grow">
-                                <h3 className="font-bold text-sm mb-1">Bank Details</h3>
-                                <p><strong>A/C Name:</strong> {settings.bankDetails.name}</p>
-                                <p><strong>A/C No:</strong> {settings.bankDetails.accountNumber}</p>
-                                <p><strong>IFSC:</strong> {settings.bankDetails.ifsc}</p>
-                                <p><strong>Branch:</strong> {settings.bankDetails.branch}</p>
-                                <p><strong>A/C Type:</strong> {settings.bankDetails.accountType}</p>
-                            </div>
-                            <div className="w-1/3 text-center self-end">
-                                <div className="border-t-2 border-black pt-2 mt-16">
-                                    Authorised Signature
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="print-footer-container">
-                        <div className="print-footer">
-                            <div className="text-right text-[7pt] self-end">
-                                Page <span className="page-counter"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {/* --- End of Printable Content --- */}
-            </div>
-        </div>
-    </div>
-  );
-};
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.13

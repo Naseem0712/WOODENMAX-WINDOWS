@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { WindowConfig, HandleConfig, CornerSideConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType } from './types';
@@ -175,7 +176,6 @@ const ButtJointFrame: React.FC<{ width: number; height: number; top: number; bot
     );
 });
 
-// FIX: Refactor SlidingShutter to remove redundant props (glassType, glassTexture, glassStyles) and rely on the config object passed to GlassPanel.
 const SlidingShutter: React.FC<{
     config: WindowConfig;
     panelId: string;
@@ -185,12 +185,11 @@ const SlidingShutter: React.FC<{
     bottomProfile: number;
     rightProfile: number;
     leftProfile: number;
-    color: string;
     scale: number;
     isMesh: boolean;
     isFixed?: boolean;
     isSliding?: boolean;
-}> = React.memo(({ config, panelId, width, height, topProfile, rightProfile, bottomProfile, leftProfile, color, scale, isMesh, isFixed = false, isSliding = false }) => {
+}> = React.memo(({ config, panelId, width, height, topProfile, rightProfile, bottomProfile, leftProfile, scale, isMesh, isFixed = false, isSliding = false }) => {
     
     const glassWidth = width - leftProfile - rightProfile;
     const glassHeight = height - topProfile - bottomProfile;
@@ -205,7 +204,7 @@ const SlidingShutter: React.FC<{
                 leftSize={leftProfile}
                 rightSize={rightProfile}
                 scale={scale}
-                color={color}
+                color={config.profileColor}
              />
             <div className="absolute" style={{ left: leftProfile * scale, top: topProfile * scale }}>
                 <GlassPanel
@@ -460,8 +459,7 @@ const createWindowElements = (
                     
                     slidingHandles.forEach((handleConfig, i) => { if (handleConfig) { handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (positions[i] + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>); } });
                     
-                    // FIX: Removed redundant props from SlidingShutter call
-                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} color={profileColor} scale={scale} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
+                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} scale={scale} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
                 } else {
                     const shutterDivider = hasMesh ? 2 : numShutters;
                     const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * dims.shutterInterlock) / shutterDivider;
@@ -472,8 +470,7 @@ const createWindowElements = (
                         const handleConfig = slidingHandles[i];
                         if (handleConfig) { handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>); }
                         
-                        // FIX: Removed redundant props from SlidingShutter call
-                        return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : dims.shutterInterlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock} color={profileColor} scale={scale} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div> );
+                        return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : dims.shutterInterlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock} scale={scale} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div> );
                     }));
                 }
                 break;
