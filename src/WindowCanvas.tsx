@@ -272,7 +272,7 @@ const createWindowElements = (
 
                     const profilesAndPlates: React.ReactNode[] = [];
 
-                    // Render glass panels first, cell by cell
+                    // 1. Render glass panels first, cell by cell
                     let currentY_cell = 0;
                     for (let r = 0; r < validRowPattern.length; r++) {
                         let currentX_cell = 0;
@@ -292,21 +292,21 @@ const createWindowElements = (
                         currentY_cell += validRowPattern[r];
                     }
 
-                    // Then render profiles at the seams
-                    // Transoms
+                    // 2. Then render profiles at the seams
+                    // Transoms (Horizontal)
                     let currentY_profile = 0;
                     for (let r = 0; r < validRowPattern.length - 1; r++) {
                         currentY_profile += validRowPattern[r];
                         profilesAndPlates.push(<ProfilePiece key={`htransom-${r}`} color={profileColor} style={{ left: 0, top: (currentY_profile - hTransom / 2) * scale, width: totalGridWidth * scale, height: hTransom * scale, zIndex: 1 }} />);
                     }
-                    // Mullions
+                    // Mullions (Vertical)
                     let currentX_profile = 0;
                     for (let c = 0; c < validColPattern.length - 1; c++) {
                         currentX_profile += validColPattern[c];
                         profilesAndPlates.push(<ProfilePiece key={`vmullion-${c}`} color={profileColor} style={{ top: 0, left: (currentX_profile - vMullion / 2) * scale, width: vMullion * scale, height: totalGridHeight * scale, zIndex: 1 }} />);
                     }
 
-                    // Pressure Plates
+                    // 3. Pressure Plates on top
                     if (pressurePlate > 0) {
                         // Horizontal plates
                         currentY_profile = 0;
@@ -323,11 +323,12 @@ const createWindowElements = (
                     }
                     innerContent.push(<div key="profiles-wrapper" className="absolute inset-0">{profilesAndPlates}</div>);
 
-                    // Render Doors and Clickable Overlays
+
+                    // 4. Render Doors and Clickable Overlays
                     currentY_cell = 0;
                     for (let r = 0; r < validRowPattern.length; r++) {
-                         let currentX_cell = 0;
-                         for (let c = 0; c < validColPattern.length; c++) {
+                        let currentX_cell = 0;
+                        for (let c = 0; c < validColPattern.length; c++) {
                             const cellWidth = validColPattern[c];
                             const cellHeight = validRowPattern[r];
                             const isDoor = doorPositions.some(p => p.row === r && p.col === c);
@@ -356,7 +357,7 @@ const createWindowElements = (
                                     handleElements.push(<div key={`handle-elev-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (currentX_cell + cellWidth * doorInfo.handle.x / 100) * scale, top: (currentY_cell + cellHeight * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} /></div>);
                                 }
                             }
-                             currentX_cell += cellWidth;
+                            currentX_cell += cellWidth;
                         }
                         currentY_cell += validRowPattern[r];
                     }
@@ -555,11 +556,17 @@ const RenderedWindow: React.FC<{
     scale: number;
     showLabels?: boolean;
 }> = ({ config, elements, scale, showLabels = true }) => {
-    const { width, height } = config;
-    const numHeight = Number(height) || 0;
+    const { width, height, windowType } = config;
+    let numWidth = Number(width) || 0;
+    let numHeight = Number(height) || 0;
+    if(windowType === WindowType.ELEVATION_GLAZING && config.elevationGrid) {
+        numWidth = config.elevationGrid.colPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0);
+        numHeight = config.elevationGrid.rowPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0);
+    }
+
 
     return (
-        <div className="relative shadow-lg" style={{ width: (Number(width) || 0) * scale, height: numHeight * scale }}>
+        <div className="relative shadow-lg" style={{ width: numWidth * scale, height: numHeight * scale }}>
           {elements.glassElements}
           {elements.profileElements}
           
@@ -571,7 +578,7 @@ const RenderedWindow: React.FC<{
           )}
           
           {showLabels && <>
-            <DimensionLabel value={Number(width) || 0} className="-top-8 left-1/2 -translate-x-1/2" />
+            <DimensionLabel value={numWidth} className="-top-8 left-1/2 -translate-x-1/2" />
             <DimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 -left-16 rotate-[-90deg]" />
             
             {elements.geometry.topFix && <DimensionLabel value={elements.geometry.topFix.size} className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 text-cyan-200" style={{top: elements.geometry.topFix.size * scale / 2}}/>}
