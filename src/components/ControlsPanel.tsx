@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useRef } from 'react';
-import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig } from '../types';
+
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType } from '../types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -66,10 +67,10 @@ function getContrastYIQ(hexcolor: string){
     return (yiq >= 128) ? 'black' : 'white';
 }
 
-const Slider: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string }> = ({ label, ...props }) => (
-    <div>
-        <label className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
-        <input type="range" min="0" max="100" className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer" {...props} />
+const Slider: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string, unit?: string }> = ({ label, unit, ...props }) => (
+    <div className='flex-1'>
+        <label className="block text-xs font-medium text-slate-300 mb-1">{label} <span className='text-slate-400'>{props.value}{unit}</span></label>
+        <input type="range" className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-indigo-500" {...props} />
     </div>
 );
 
@@ -86,7 +87,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
     activeCornerSide, setActiveCornerSide
   } = props;
 
-  const { windowType, series, fixedPanels } = config;
+  const { windowType, series, fixedPanels, glassGrid } = config;
   const [openCard, setOpenCard] = useState<string | null>('Design Type');
   const [isSavingSeries, setIsSavingSeries] = useState(false);
   const [newSeriesName, setNewSeriesName] = useState('');
@@ -97,6 +98,79 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
   const profileTextureUploadRef = useRef<HTMLInputElement>(null);
   
   const isCorner = windowType === WindowType.CORNER;
+
+  // Georgian Bars Logic
+  const [activeGeorgianPanelId, setActiveGeorgianPanelId] = useState('default');
+  const availableGeorgianPanels = useMemo(() => {
+    const panels: { id: string, name: string }[] = [];
+    switch(windowType) {
+        case WindowType.SLIDING:
+            const numShutters = config.shutterConfig === '2G' ? 2 : config.shutterConfig === '4G' ? 4 : 3;
+            for (let i = 0; i < numShutters; i++) panels.push({ id: `sliding-${i}`, name: `Shutter ${i+1}`});
+            break;
+        case WindowType.CASEMENT:
+        case WindowType.VENTILATOR:
+            const rows = config.horizontalDividers.length + 1;
+            const cols = config.verticalDividers.length + 1;
+            for(let r=0; r<rows; r++) {
+                for(let c=0; c<cols; c++) {
+                    panels.push({ id: `cell-${r}-${c}`, name: `Panel (R${r+1},C${c+1})`});
+                }
+            }
+            break;
+        case WindowType.GLASS_PARTITION:
+            for(let i=0; i<config.partitionPanels.count; i++) panels.push({ id: `partition-${i}`, name: `Panel ${i+1}`});
+            break;
+            case WindowType.ELEVATION_GLAZING:
+            if (config.elevationGrid) {
+                const rows = config.elevationGrid.rowPattern.length;
+                const cols = config.elevationGrid.colPattern.length;
+                    for(let r=0; r<rows; r++) {
+                    for(let c=0; c<cols; c++) {
+                        const isDoor = config.elevationGrid.doorPositions.some(p => p.row === r && p.col === c);
+                        if (isDoor) {
+                            panels.push({ id: `elevation-door-${r}-${c}`, name: `Door (R${r+1},C${c+1})` });
+                        } else {
+                            panels.push({ id: `elevation-${r}-${c}`, name: `Panel (R${r+1},C${c+1})` });
+                        }
+                    }
+                }
+            }
+            break;
+    }
+    config.fixedPanels.forEach(p => panels.push({id: `fixed-${p.position}`, name: `Fixed ${p.position}`}));
+    return panels;
+  }, [config]);
+
+  useEffect(() => {
+    if (!glassGrid.applyToAll && !availableGeorgianPanels.some(p => p.id === activeGeorgianPanelId)) {
+        setActiveGeorgianPanelId('default');
+    }
+  }, [availableGeorgianPanels, activeGeorgianPanelId, glassGrid.applyToAll]);
+
+  const activeGeorgianPattern = glassGrid.patterns[activeGeorgianPanelId] || glassGrid.patterns['default'];
+  
+  const handleGeorgianPatternChange = (direction: 'horizontal' | 'vertical', field: 'count' | 'offset' | 'gap', value: number) => {
+    const newPatterns = { ...glassGrid.patterns };
+    const targetId = glassGrid.applyToAll ? 'default' : activeGeorgianPanelId;
+
+    const currentPattern = newPatterns[targetId] || newPatterns['default'];
+    
+    newPatterns[targetId] = {
+        ...currentPattern,
+        [direction]: {
+            ...currentPattern[direction],
+            [field]: value
+        }
+    };
+    setConfig('glassGrid', { ...glassGrid, patterns: newPatterns });
+  };
+
+  const handleApplyToAllChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setConfig('glassGrid', { ...glassGrid, applyToAll: e.target.checked });
+    if(e.target.checked) setActiveGeorgianPanelId('default');
+  }
+  // End Georgian Bars Logic
 
   const handleGlassTextureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -544,17 +618,46 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         </div>
         <div className="pt-4 mt-4 border-t border-slate-700">
              <label className="block text-sm font-medium text-slate-300 mb-2">Georgian Bars</label>
-             <div className="grid grid-cols-2 gap-4">
-                <Input label="Rows" type="number" min="0" inputMode="numeric" value={config.glassGrid.rows} onChange={e => setConfig('glassGrid', {...config.glassGrid, rows: Math.max(0, parseInt(e.target.value) || 0)})} />
-                <Input label="Columns" type="number" min="0" inputMode="numeric" value={config.glassGrid.cols} onChange={e => setConfig('glassGrid', {...config.glassGrid, cols: Math.max(0, parseInt(e.target.value) || 0)})} />
-            </div>
-            <div className="mt-4">
-                <DimensionInput
-                    label="Bar Thickness"
-                    value_mm={series.dimensions.glassGridProfile}
-                    onChange_mm={val => setConfig('series', { ...series, dimensions: { ...series.dimensions, glassGridProfile: val } })}
-                />
-            </div>
+             <div className="p-3 bg-slate-900/50 rounded-md space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                     <DimensionInput
+                        label="Bar Thickness"
+                        value_mm={glassGrid.barThickness}
+                        onChange_mm={val => setConfig('glassGrid', { ...glassGrid, barThickness: Number(val) || 0 })}
+                    />
+                     <div className='flex items-end pb-2'>
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" checked={glassGrid.applyToAll} onChange={handleApplyToAllChange} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
+                            <span className="text-sm text-slate-200">Apply to All Panels</span>
+                        </label>
+                     </div>
+                </div>
+
+                {!glassGrid.applyToAll && (
+                    // FIX: Replaced div and manual label with Select component's label prop.
+                    <Select label="Target Panel" value={activeGeorgianPanelId} onChange={e => setActiveGeorgianPanelId(e.target.value)}>
+                        <option value="default">Default</option>
+                        {availableGeorgianPanels.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </Select>
+                )}
+                
+                <div className="space-y-3 pt-2 border-t border-slate-700">
+                     <h4 className="text-xs font-semibold text-slate-300">Horizontal Bars</h4>
+                      <Input label="Count" type="number" min="0" value={activeGeorgianPattern.horizontal.count} onChange={e => handleGeorgianPatternChange('horizontal', 'count', parseInt(e.target.value) || 0)} />
+                     <div className='flex items-end gap-4'>
+                        <Slider label="Offset" unit='mm' min={0} max={3000} step={10} value={activeGeorgianPattern.horizontal.offset} onChange={e => handleGeorgianPatternChange('horizontal', 'offset', parseInt(e.target.value))} />
+                        <Slider label="Gap" unit='mm' min={50} max={3000} step={10} value={activeGeorgianPattern.horizontal.gap} onChange={e => handleGeorgianPatternChange('horizontal', 'gap', parseInt(e.target.value))} />
+                     </div>
+                </div>
+                 <div className="space-y-3 pt-2 border-t border-slate-700">
+                     <h4 className="text-xs font-semibold text-slate-300">Vertical Bars</h4>
+                      <Input label="Count" type="number" min="0" value={activeGeorgianPattern.vertical.count} onChange={e => handleGeorgianPatternChange('vertical', 'count', parseInt(e.target.value) || 0)} />
+                     <div className='flex items-end gap-4'>
+                        <Slider label="Offset" unit='mm' min={0} max={3000} step={10} value={activeGeorgianPattern.vertical.offset} onChange={e => handleGeorgianPatternChange('vertical', 'offset', parseInt(e.target.value))} />
+                        <Slider label="Gap" unit='mm' min={50} max={3000} step={10} value={activeGeorgianPattern.vertical.gap} onChange={e => handleGeorgianPatternChange('vertical', 'gap', parseInt(e.target.value))} />
+                     </div>
+                </div>
+             </div>
         </div>
         <div className="pt-4 mt-4 border-t border-slate-700">
             <label className="block text-sm font-medium text-slate-300 mb-2">Profile Color</label>
@@ -641,7 +744,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
         { (fixedPanels.length > 0) && <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} />} <DimensionInput label="Shutter Handle" value_mm={series.dimensions.shutterHandle} onChange_mm={val => handleDimensionChange('shutterHandle', val)} weightValue={series.weights?.shutterHandle} onWeightChange={v => handleProfileDetailChange('weights', 'shutterHandle', v)} lengthValue={series.lengths?.shutterHandle} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterHandle', v)} /> <DimensionInput label="Shutter Interlock" value_mm={series.dimensions.shutterInterlock} onChange_mm={val => handleDimensionChange('shutterInterlock', val)} weightValue={series.weights?.shutterInterlock} onWeightChange={v => handleProfileDetailChange('weights', 'shutterInterlock', v)} lengthValue={series.lengths?.shutterInterlock} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterInterlock', v)} /> { displayConfig.shutterConfig === ShutterConfigType.FOUR_GLASS && <DimensionInput label="Shutter Meeting" value_mm={series.dimensions.shutterMeeting} onChange_mm={val => handleDimensionChange('shutterMeeting', val)} weightValue={series.weights?.shutterMeeting} onWeightChange={v => handleProfileDetailChange('weights', 'shutterMeeting', v)} lengthValue={series.lengths?.shutterMeeting} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterMeeting', v)} />} <DimensionInput label="Shutter Top/Bottom" value_mm={series.dimensions.shutterTop} onChange_mm={val => handleDimensionChange('shutterTop', val)} weightValue={series.weights?.shutterTop} onWeightChange={v => handleProfileDetailChange('weights', 'shutterTop', v)} lengthValue={series.lengths?.shutterTop} onLengthChange={v => handleProfileDetailChange('lengths', 'shutterTop', v)} /> </> )}
         {(activeWindowType === WindowType.CASEMENT || activeWindowType === WindowType.VENTILATOR) && ( <> <DimensionInput label="Outer Frame" value_mm={series.dimensions.outerFrame} onChange_mm={val => handleDimensionChange('outerFrame', val)} weightValue={series.weights?.outerFrame} onWeightChange={v => handleProfileDetailChange('weights', 'outerFrame', v)} lengthValue={series.lengths?.outerFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'outerFrame', v)} /> <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} /> <DimensionInput label="Shutter/Door Frame" value_mm={series.dimensions.casementShutter} onChange_mm={val => handleDimensionChange('casementShutter', val)} weightValue={series.weights?.casementShutter} onWeightChange={v => handleProfileDetailChange('weights', 'casementShutter', v)} lengthValue={series.lengths?.casementShutter} onLengthChange={v => handleProfileDetailChange('lengths', 'casementShutter', v)} /> <DimensionInput label="Mullion Profile" value_mm={series.dimensions.mullion} onChange_mm={val => handleDimensionChange('mullion', val)} weightValue={series.weights?.mullion} onWeightChange={v => handleProfileDetailChange('weights', 'mullion', v)} lengthValue={series.lengths?.mullion} onLengthChange={v => handleProfileDetailChange('lengths', 'mullion', v)} /> </> )}
         {activeWindowType === WindowType.VENTILATOR && ( <DimensionInput label="Louver Blade" value_mm={series.dimensions.louverBlade} onChange_mm={val => handleDimensionChange('louverBlade', val)} weightValue={series.weights?.louverBlade} onWeightChange={v => handleProfileDetailChange('weights', 'louverBlade', v)} lengthValue={series.lengths?.louverBlade} onLengthChange={v => handleProfileDetailChange('lengths', 'louverBlade', v)} /> )}
-        {windowType === WindowType.GLASS_PARTITION && ( <> <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} /> <DimensionInput label="Hinged Panel Frame" value_mm={series.dimensions.casementShutter} onChange_mm={val => handleDimensionChange('casementShutter', val)} weightValue={series.weights?.casementShutter} onWeightChange={v => handleProfileDetailChange('weights', 'casementShutter', v)} lengthValue={series.lengths?.casementShutter} onLengthChange={v => handleProfileDetailChange('lengths', 'casementShutter', v)} /> <DimensionInput label="Top Track Height" value_mm={series.dimensions.topTrack} onChange_mm={val => handleDimensionChange('topTrack', val)} weightValue={series.weights?.topTrack} onWeightChange={v => handleProfileDetailChange('weights', 'topTrack', v)} lengthValue={series.lengths?.topTrack} onLengthChange={v => handleProfileDetailChange('lengths', 'topTrack', v)} /> <DimensionInput label="Bottom Track Height" value_mm={series.dimensions.bottomTrack} onChange_mm={val => handleDimensionChange('bottomTrack', val)} weightValue={series.weights?.bottomTrack} onWeightChange={v => handleProfileDetailChange('weights', 'bottomTrack', v)} lengthValue={series.lengths?.bottomTrack} onLengthChange={v => handleProfileDetailChange('lengths', 'bottomTrack', v)} /> <DimensionInput label="Georgian Bar Profile" value_mm={series.dimensions.glassGridProfile} onChange_mm={val => handleDimensionChange('glassGridProfile', val)} weightValue={series.weights?.glassGridProfile} onWeightChange={v => handleProfileDetailChange('weights', 'glassGridProfile', v)} lengthValue={series.lengths?.glassGridProfile} onLengthChange={v => handleProfileDetailChange('lengths', 'glassGridProfile', v)} /> </> )}
+        {windowType === WindowType.GLASS_PARTITION && ( <> <DimensionInput label="Fixed Panel Frame" value_mm={series.dimensions.fixedFrame} onChange_mm={val => handleDimensionChange('fixedFrame', val)} weightValue={series.weights?.fixedFrame} onWeightChange={v => handleProfileDetailChange('weights', 'fixedFrame', v)} lengthValue={series.lengths?.fixedFrame} onLengthChange={v => handleProfileDetailChange('lengths', 'fixedFrame', v)} /> <DimensionInput label="Hinged Panel Frame" value_mm={series.dimensions.casementShutter} onChange_mm={val => handleDimensionChange('casementShutter', val)} weightValue={series.weights?.casementShutter} onWeightChange={v => handleProfileDetailChange('weights', 'casementShutter', v)} lengthValue={series.lengths?.casementShutter} onLengthChange={v => handleProfileDetailChange('lengths', 'casementShutter', v)} /> <DimensionInput label="Top Track Height" value_mm={series.dimensions.topTrack} onChange_mm={val => handleDimensionChange('topTrack', val)} weightValue={series.weights?.topTrack} onWeightChange={v => handleProfileDetailChange('weights', 'topTrack', v)} lengthValue={series.lengths?.topTrack} onLengthChange={v => handleProfileDetailChange('lengths', 'topTrack', v)} /> <DimensionInput label="Bottom Track Height" value_mm={series.dimensions.bottomTrack} onChange_mm={val => handleDimensionChange('bottomTrack', val)} weightValue={series.weights?.bottomTrack} onWeightChange={v => handleProfileDetailChange('weights', 'bottomTrack', v)} lengthValue={series.lengths?.bottomTrack} onLengthChange={v => handleProfileDetailChange('lengths', 'bottomTrack', v)} /> </> )}
       </CollapsibleCard>
 
       <CollapsibleCard title="Hardware Configuration" isOpen={openCard === 'Hardware Configuration'} onToggle={() => handleToggleCard('Hardware Configuration')}>

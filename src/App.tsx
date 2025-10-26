@@ -1,5 +1,5 @@
+
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback } from 'react';
-// FIX: Import the new GlassGridConfig type.
 import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
@@ -16,7 +16,6 @@ import { ListBulletIcon } from './components/icons/ListBulletIcon';
 import { DocumentTextIcon } from './components/icons/DocumentTextIcon';
 import { BatchAddModal, type BatchAddItem } from './components/BatchAddModal';
 import { ContentModal } from './components/ContentModal';
-import { GeorgianBarsPanel } from './components/GeorgianBarsPanel';
 
 interface BeforeInstallPromptEvent extends Event {
     readonly platforms: Array<string>;
@@ -55,8 +54,7 @@ type ConfigAction =
   | { type: 'UPDATE_DGU_CONFIG'; payload: Partial<DguGlassConfig> }
   | { type: 'RESET_DESIGN' };
 
-
-// FIX: Added 'glassGridProfile' to satisfy the ProfileDimensions type.
+// FIX: Added missing `glassGridProfile` property to satisfy the `ProfileDimensions` type.
 const BASE_DIMENSIONS = {
     outerFrame: 0, outerFrameVertical: 0, fixedFrame: 0, shutterHandle: 0, shutterInterlock: 0,
     shutterTop: 0, shutterBottom: 0, shutterMeeting: 0, casementShutter: 0,
@@ -1272,11 +1270,6 @@ const App: React.FC = () => {
     handleCloseMobilePanels();
   };
 
-  const isGeorgianBarsActive = useMemo(() => {
-    const defaultPattern = windowConfig.glassGrid.patterns['default'];
-    return (defaultPattern.horizontal.count > 0 || defaultPattern.vertical.count > 0);
-  }, [windowConfig.glassGrid]);
-
   return (
     <>
       <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} />
@@ -1305,7 +1298,6 @@ const App: React.FC = () => {
                 {!isDesktopPanelOpen && ( <button onClick={() => setIsDesktopPanelOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex" aria-label="Expand panel"> <ChevronLeftIcon className="w-5 h-5 rotate-180" /> </button> )}
               <div className="flex-grow relative">
                  <WindowCanvas config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} onToggleElevationDoor={handleToggleElevationDoor} />
-                  {isGeorgianBarsActive && <GeorgianBarsPanel config={windowConfig} setConfig={setConfig} />}
               </div>
               <div className="flex-shrink-0 no-print hidden lg:block">
                   <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onBatchAdd={handleBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={handleViewQuotation} />

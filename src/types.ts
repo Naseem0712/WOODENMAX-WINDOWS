@@ -1,3 +1,4 @@
+
 export enum WindowType {
   SLIDING = 'sliding',
   CASEMENT = 'casement',
@@ -162,7 +163,6 @@ export interface DguGlassConfig {
   isToughened: boolean;
 }
 
-// FIX: Added new types for the advanced Georgian bars configuration.
 export interface GlassGridPattern {
     count: number;
     offset: number; // mm
@@ -190,10 +190,8 @@ export interface WindowConfig {
   glassThickness: number | '';
   customGlassName: string;
   profileColor: string;
-  // FIX: Updated glassGrid to use the new detailed config type.
   glassGrid: GlassGridConfig;
-  // FIX: Added legacyGlassGrid for handling migration from the old simple grid type.
-  legacyGlassGrid?: { rows: number, cols: number };
+  legacyGlassGrid?: { rows: number, cols: number }; // For migration
   
   // Type discriminator
   windowType: WindowType;
@@ -287,7 +285,7 @@ export interface QuotationSettings {
 
 // Bill of Materials Types
 export interface BOMProfile {
-  profileKey: keyof ProfileDimensions;
+  profileKey: keyof ProfileDimensions | 'glassGridProfile';
   totalLength: number;
   standardLength: number;
   weightPerMeter?: number;
