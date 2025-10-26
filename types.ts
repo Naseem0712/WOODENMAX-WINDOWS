@@ -3,6 +3,8 @@ export enum WindowType {
   CASEMENT = 'casement',
   VENTILATOR = 'ventilator',
   GLASS_PARTITION = 'glass_partition',
+  ELEVATION_GLAZING = 'elevation_glazing',
+  CORNER = 'corner',
 }
 
 export interface SavedColor {
@@ -30,6 +32,7 @@ export interface GlassOptions {
 export interface ProfileDimensions {
   // Shared
   outerFrame: number | '';
+  outerFrameVertical?: number | '';
   fixedFrame: number | '';
 
   // Sliding
@@ -52,11 +55,17 @@ export interface ProfileDimensions {
   glassGridProfile: number | '';
 }
 
+export type ProfileDetails = {
+    [K in keyof ProfileDimensions]?: number | '';
+}
+
 export interface ProfileSeries {
   id: string;
   name: string;
   type: WindowType;
   dimensions: ProfileDimensions;
+  weights?: ProfileDetails;
+  lengths?: ProfileDetails;
   hardwareItems: HardwareItem[];
   glassOptions: GlassOptions;
 }
@@ -90,6 +99,9 @@ export enum GlassType {
   CLEAR = 'clear',
   FROSTED = 'frosted',
   TINTED_BLUE = 'tinted-blue',
+  CLEAR_SAPPHIRE = 'clear-sapphire',
+  BROWN_TINTED = 'brown-tinted',
+  BLACK_TINTED = 'black-tinted',
 }
 
 export enum AreaType {
@@ -115,6 +127,38 @@ export type PartitionPanelType = 'fixed' | 'sliding' | 'hinged';
 export interface PartitionPanelConfig {
     type: PartitionPanelType;
     handle?: HandleConfig;
+    framing?: 'none' | 'full';
+}
+
+export interface CornerSideConfig {
+  windowType: WindowType.SLIDING | WindowType.CASEMENT | WindowType.VENTILATOR;
+  trackType: TrackType;
+  shutterConfig: ShutterConfigType;
+  fixedShutters: boolean[];
+  slidingHandles: (HandleConfig | null)[];
+  verticalDividers: number[];
+  horizontalDividers: number[];
+  doorPositions: { row: number; col: number; handle?: HandleConfig }[];
+  ventilatorGrid: VentilatorCell[][];
+}
+
+export interface LaminatedGlassConfig {
+  glass1Thickness: number | '';
+  glass1Type: GlassType;
+  pvbThickness: number | '';
+  pvbType: 'clear' | 'milky_white';
+  glass2Thickness: number | '';
+  glass2Type: GlassType;
+  isToughened: boolean;
+}
+
+export interface DguGlassConfig {
+  glass1Thickness: number | '';
+  glass1Type: GlassType;
+  airGap: number | '';
+  glass2Thickness: number | '';
+  glass2Type: GlassType;
+  isToughened: boolean;
 }
 
 export interface WindowConfig {
@@ -124,12 +168,17 @@ export interface WindowConfig {
   fixedPanels: FixedPanel[];
   glassType: GlassType;
   glassThickness: number | '';
-  glassSpecialType: GlassSpecialType;
+  customGlassName: string;
   profileColor: string;
   glassGrid: { rows: number, cols: number };
   
   // Type discriminator
   windowType: WindowType;
+  
+  // Special Glass Config
+  glassSpecialType: GlassSpecialType;
+  laminatedGlassConfig: LaminatedGlassConfig;
+  dguGlassConfig: DguGlassConfig;
 
   // Sliding specific
   trackType: TrackType;
@@ -146,7 +195,29 @@ export interface WindowConfig {
   ventilatorGrid: VentilatorCell[][];
   
   // Glass Partition specific
-  partitionPanels: { count: number; types: PartitionPanelConfig[]; };
+  partitionPanels: { 
+    count: number; 
+    types: PartitionPanelConfig[]; 
+    hasTopChannel: boolean;
+  };
+
+  // Elevation Glazing specific
+  elevationGrid: {
+    rowPattern: (number | '')[];
+    colPattern: (number | '')[];
+    verticalMullionSize: number | '';
+    horizontalTransomSize: number | '';
+    pressurePlateSize: number | '';
+    doorPositions: { row: number; col: number; handle?: HandleConfig }[];
+    floorHeight?: number | '';
+  };
+  
+  // Corner specific
+  leftWidth?: number | '';
+  rightWidth?: number | '';
+  leftConfig?: CornerSideConfig;
+  rightConfig?: CornerSideConfig;
+  cornerPostWidth: number | '';
 }
 
 export interface QuotationItem {
@@ -190,3 +261,28 @@ export interface QuotationSettings {
   terms: string;
   description: string;
 }
+
+// Bill of Materials Types
+export interface BOMProfile {
+  profileKey: keyof ProfileDimensions;
+  totalLength: number;
+  standardLength: number;
+  weightPerMeter?: number;
+  pieces: number[];
+  requiredBars: number;
+  totalWeight: number;
+}
+
+export interface BOMHardware {
+  name: string;
+  totalQuantity: number;
+}
+
+export interface BOMSeries {
+  seriesId: string;
+  seriesName: string;
+  profiles: BOMProfile[];
+  hardware: BOMHardware[];
+}
+
+export type BOM = BOMSeries[];

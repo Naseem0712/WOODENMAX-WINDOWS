@@ -359,7 +359,6 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
 
       {windowType === WindowType.GLASS_PARTITION && (
         <CollapsibleCard title="Partition Panel Setup" isOpen={openCard === 'Partition Panel Setup'} onToggle={() => handleToggleCard('Partition Panel Setup')}>
-          {/* FIX: Changed setConfig to onSetPartitionPanelCount to fix incorrect prop usage. */}
           <Input label="Number of Panels" type="number" inputMode="numeric" min={1} max={8} value={config.partitionPanels.count} onChange={e => onSetPartitionPanelCount(Math.max(1, parseInt(e.target.value) || 1))}/>
            <label className="flex items-center space-x-2 cursor-pointer mt-2">
               <input type="checkbox" checked={config.partitionPanels.hasTopChannel} onChange={e => onSetPartitionHasTopChannel(e.target.checked)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />

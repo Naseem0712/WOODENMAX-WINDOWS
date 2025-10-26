@@ -161,21 +161,18 @@ function calculateProfileUsage(config: WindowConfig): Map<keyof ProfileDimension
             if (totalWidth === 0 || totalHeight === 0) break;
 
             // Outer Frame
-            add('outerFrame', totalWidth, totalWidth, totalHeight, totalHeight);
+            add('outerFrame', totalWidth, totalWidth);
+            add(dims.outerFrameVertical ? 'outerFrameVertical' : 'outerFrame', totalHeight, totalHeight);
             
             // Internal Mullions (Vertical)
             const verticalMullionLength = (floorHeight && Number(floorHeight) > 0) ? Number(floorHeight) : totalHeight;
-            if (validColPattern.length > 1) {
-                for (let i = 0; i < validColPattern.length - 1; i++) {
-                    add('mullion', verticalMullionLength);
-                }
+            for (let i = 0; i < validColPattern.length - 1; i++) {
+                add('mullion', verticalMullionLength);
             }
             
             // Internal Transoms (Horizontal)
-            if (validRowPattern.length > 1) {
-                for (let i = 0; i < validRowPattern.length - 1; i++) {
-                    add('mullion', totalWidth);
-                }
+            for (let i = 0; i < validRowPattern.length - 1; i++) {
+                add('mullion', totalWidth);
             }
 
             // Door Profiles
