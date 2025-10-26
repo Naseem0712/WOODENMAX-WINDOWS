@@ -510,8 +510,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
                       </label>
                       {currentHandle && (
                           <div className="space-y-3">
-                              <Slider id="handle-pos-x" label={`Horizontal Position: ${currentHandle.x}%`} value={currentHandle.x} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, x: parseInt(e.target.value)})}/>
-                              <Slider id="handle-pos-y" label={`Vertical Position: ${currentHandle.y}%`} value={currentHandle.y} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, y: parseInt(e.target.value)})}/>
+                              <Slider id="handle-pos-x" name="handle-pos-x" label={`Horizontal Position: ${currentHandle.x}%`} value={currentHandle.x} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, x: parseInt(e.target.value)})}/>
+                              <Slider id="handle-pos-y" name="handle-pos-y" label={`Vertical Position: ${currentHandle.y}%`} value={currentHandle.y} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, y: parseInt(e.target.value)})}/>
                                <div className="grid grid-cols-2 gap-2">
                                 <Button variant={currentHandle.orientation === 'vertical' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, {...currentHandle, orientation: 'vertical'})}>Vertical</Button>
                                 <Button variant={currentHandle.orientation === 'horizontal' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, {...currentHandle, orientation: 'horizontal'})}>Horizontal</Button>
@@ -647,16 +647,16 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo((props) =>
                      <h4 className="text-xs font-semibold text-slate-300">Horizontal Bars</h4>
                       <Input id="georgian-h-count" name="georgian-h-count" label="Count" type="number" min="0" value={activeGeorgianPattern.horizontal.count} onChange={e => handleGeorgianPatternChange('horizontal', 'count', parseInt(e.target.value) || 0)} />
                      <div className='flex items-end gap-4'>
-                        <Slider id="georgian-h-offset" label="Offset" unit='mm' min={0} max={3000} step={10} value={activeGeorgianPattern.horizontal.offset} onChange={e => handleGeorgianPatternChange('horizontal', 'offset', parseInt(e.target.value))} />
-                        <Slider id="georgian-h-gap" label="Gap" unit='mm' min={50} max={3000} step={10} value={activeGeorgianPattern.horizontal.gap} onChange={e => handleGeorgianPatternChange('horizontal', 'gap', parseInt(e.target.value))} />
+                        <Slider id="georgian-h-offset" name="georgian-h-offset" label="Offset" unit='mm' min={0} max={3000} step={10} value={activeGeorgianPattern.horizontal.offset} onChange={e => handleGeorgianPatternChange('horizontal', 'offset', parseInt(e.target.value))} />
+                        <Slider id="georgian-h-gap" name="georgian-h-gap" label="Gap" unit='mm' min={50} max={3000} step={10} value={activeGeorgianPattern.horizontal.gap} onChange={e => handleGeorgianPatternChange('horizontal', 'gap', parseInt(e.target.value))} />
                      </div>
                 </div>
                  <div className="space-y-3 pt-2 border-t border-slate-700">
                      <h4 className="text-xs font-semibold text-slate-300">Vertical Bars</h4>
                       <Input id="georgian-v-count" name="georgian-v-count" label="Count" type="number" min="0" value={activeGeorgianPattern.vertical.count} onChange={e => handleGeorgianPatternChange('vertical', 'count', parseInt(e.target.value) || 0)} />
                      <div className='flex items-end gap-4'>
-                        <Slider id="georgian-v-offset" label="Offset" unit='mm' min={0} max={3000} step={10} value={activeGeorgianPattern.vertical.offset} onChange={e => handleGeorgianPatternChange('vertical', 'offset', parseInt(e.target.value))} />
-                        <Slider id="georgian-v-gap" label="Gap" unit='mm' min={50} max={3000} step={10} value={activeGeorgianPattern.vertical.gap} onChange={e => handleGeorgianPatternChange('vertical', 'gap', parseInt(e.target.value))} />
+                        <Slider id="georgian-v-offset" name="georgian-v-offset" label="Offset" unit='mm' min={0} max={3000} step={10} value={activeGeorgianPattern.vertical.offset} onChange={e => handleGeorgianPatternChange('vertical', 'offset', parseInt(e.target.value))} />
+                        <Slider id="georgian-v-gap" name="georgian-v-gap" label="Gap" unit='mm' min={50} max={3000} step={10} value={activeGeorgianPattern.vertical.gap} onChange={e => handleGeorgianPatternChange('vertical', 'gap', parseInt(e.target.value))} />
                      </div>
                 </div>
              </div>

@@ -34,7 +34,7 @@ const Section: React.FC<{title: string, children: React.ReactNode, className?: s
 const TextArea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & {label: string}> = ({id, label, ...props}) => (
     <div>
       <label htmlFor={id} className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
-      <textarea id={id} {...props} className="w-full h-24 px-3 py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-scrollbar" />
+      <textarea id={id} name={id} {...props} className="w-full h-24 px-3 py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-scrollbar" />
     </div>
 );
 
