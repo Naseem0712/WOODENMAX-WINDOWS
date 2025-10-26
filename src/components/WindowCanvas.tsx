@@ -5,7 +5,8 @@ import { PlusIcon } from './icons/PlusIcon';
 import { MinusIcon } from './icons/MinusIcon';
 import { ArrowsPointingInIcon } from './icons/ArrowsPointingInIcon';
 import { TrashIcon } from './icons/TrashIcon';
-
+import { PhotoIcon } from './icons/PhotoIcon';
+import html2pdf from 'html2pdf.js';
 
 interface WindowCanvasProps {
   config: WindowConfig;
@@ -406,7 +407,7 @@ const createWindowElements = (
                         }
                     });
                     
-                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} color={profileColor} scale={scale} isMesh={false} glassType={glassType} glassTexture={glassTexture} glassStyles={glassStyles} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
+                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} color={profileColor} scale={scale} isMesh={false} glassType={glassType} glassTexture={config.glassTexture} glassStyles={glassStyles} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
                 } else {
                     const shutterDivider = hasMesh ? 2 : numShutters;
                     const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * dims.shutterInterlock) / shutterDivider;
@@ -419,7 +420,7 @@ const createWindowElements = (
                               handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>);
                         }
                         
-                        return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : dims.shutterInterlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock} color={profileColor} scale={scale} isMesh={isMeshShutter} glassType={glassType} glassTexture={glassTexture} glassStyles={glassStyles} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div> );
+                        return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : dims.shutterInterlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock} color={profileColor} scale={scale} isMesh={isMeshShutter} glassType={glassType} glassTexture={config.glassTexture} glassStyles={glassStyles} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div> );
                     }));
                 }
                 break;
@@ -615,7 +616,9 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   const { width, height, series, profileColor, windowType } = config;
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const renderedWindowRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
+  const [isExporting, setIsExporting] = useState(false);
   
   const numWidth = windowType === WindowType.CORNER 
     ? (Number(config.leftWidth) || 0) + (Number(config.rightWidth) || 0) + (Number(config.cornerPostWidth) || 0)
@@ -662,6 +665,42 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     onToggleElevationDoor,
   }), [onRemoveHorizontalDivider, onRemoveVerticalDivider, onToggleElevationDoor]);
 
+    const handleExportPng = () => {
+        const element = renderedWindowRef.current;
+        if (!element || isExporting) return;
+        
+        const windowElement = element.children[0] as HTMLElement;
+        if (!windowElement) return;
+        
+        setIsExporting(true);
+
+        const opt = {
+            margin: 0,
+            html2canvas: {
+                scale: 3250 / (windowElement.offsetWidth || 1),
+                backgroundColor: null,
+                logging: false,
+                useCORS: true,
+            },
+            // Fix: Explicitly cast the format array to a tuple [number, number] to satisfy html2pdf options type.
+            jsPDF: { unit: 'px', format: [windowElement.offsetWidth, windowElement.offsetHeight] as [number, number], orientation: 'portrait' as const }
+        };
+
+        html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((canvas: HTMLCanvasElement) => {
+            const link = document.createElement('a');
+            link.download = `woodenmax-design-${Date.now()}.png`;
+            link.href = canvas.toDataURL('image/png');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setIsExporting(false);
+        }).catch((err: any) => {
+            console.error('Failed to export PNG:', err);
+            alert('Could not export image.');
+            setIsExporting(false);
+        });
+    };
+
   if (numWidth <= 0 || numHeight <= 0) {
     return ( <div className="w-full h-full flex items-center justify-center bg-transparent"> <p className="text-slate-500">Please enter valid dimensions to begin.</p> </div> );
   }
@@ -669,7 +708,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   return (
     <div ref={containerRef} className="absolute inset-0 p-6 flex items-center justify-center bg-transparent overflow-auto">
       <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none"> WoodenMax </div>
-       <div style={{ margin: 'auto' }}>
+       <div ref={renderedWindowRef} style={{ margin: 'auto' }}>
             {windowType === WindowType.CORNER && config.leftConfig && config.rightConfig ? (
                 (() => {
                     const leftW = Number(config.leftWidth) || 0;
@@ -705,6 +744,12 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
                 <RenderedWindow config={config} elements={createWindowElements(config, scale, dims, glassStyles, canvasCallbacks)} scale={scale} />
             )}
         </div>
+      
+      <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 no-print">
+        <button onClick={handleExportPng} title="Export as PNG" disabled={isExporting} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg disabled:opacity-50 disabled:cursor-wait">
+            {isExporting ? <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <PhotoIcon className="w-6 h-6"/>}
+        </button>
+      </div>
       
       <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2 no-print">
          <button onClick={() => setZoom(z => z * 1.2)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><PlusIcon className="w-6 h-6"/></button>

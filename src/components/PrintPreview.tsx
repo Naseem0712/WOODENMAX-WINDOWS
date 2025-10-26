@@ -832,10 +832,17 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                     return (
                                         <tr key={item.id} className="border-b border-gray-300 print-item">
                                             <td className="p-2 align-top text-center">{index + 1}</td>
-                                            <td className="p-2 align-top w-[25%]" style={{ width: '150px' }}>
-                                                <PrintableWindow config={item.config} />
-                                            </td>
-                                            <td className="p-2 align-top w-[40%]">
+                                            
+                                            {item.config.windowType !== WindowType.ELEVATION_GLAZING ? (
+                                                <td className="p-2 align-top w-[25%]" style={{ width: '150px' }}>
+                                                    <PrintableWindow config={item.config} />
+                                                </td>
+                                            ) : null}
+                                            
+                                            <td 
+                                                className="p-2 align-top"
+                                                colSpan={item.config.windowType === WindowType.ELEVATION_GLAZING ? 2 : 1}
+                                            >
                                                 <p className="font-bold print-window-title">{item.title}</p>
                                                 <table className="w-full text-[7pt] mt-1 details-table">
                                                     <tbody>
