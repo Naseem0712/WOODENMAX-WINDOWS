@@ -130,33 +130,35 @@ const MiteredFrame: React.FC<{
     const bs = (bottomSize ?? profileSize) * scale;
     const ls = (leftSize ?? profileSize) * scale;
     const rs = (rightSize ?? profileSize) * scale;
-    const w = width * scale;
-    const h = height * scale;
 
     const isTexture = color && !color.startsWith('#');
-    const uniqueId = useMemo(() => uuidv4(), []);
-    const fill = isTexture ? `url(#pattern-${uniqueId})` : color;
+    const backgroundStyle = isTexture ? { backgroundImage: `url(${color})`, backgroundRepeat: 'repeat' } : { backgroundColor: color };
+    const horizontalBgStyle = { backgroundSize: 'auto 100%' };
+    const verticalBgStyle = { backgroundSize: '100% auto' };
+
+    const baseStyle: React.CSSProperties = {
+        position: 'absolute',
+        boxSizing: 'border-box',
+        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)',
+        ...backgroundStyle
+    };
+
+    const clipTs = Math.max(0, ts);
+    const clipBs = Math.max(0, bs);
+    const clipLs = Math.max(0, ls);
+    const clipRs = Math.max(0, rs);
 
     return (
-        <svg width={w} height={h} className="absolute" style={{ left: 0, top: 0 }}>
-            {isTexture && (
-                <defs>
-                    <pattern id={`pattern-${uniqueId}`} patternUnits="userSpaceOnUse" width="200" height="200">
-                        <image href={color} x="0" y="0" width="200" height="200" />
-                    </pattern>
-                </defs>
-            )}
-            <g style={{'--fill-color': fill} as React.CSSProperties} fill={fill} stroke="rgba(0,0,0,0.3)" strokeWidth="1">
-                {/* Top */}
-                <polygon points={`0,0 ${w},0 ${w-rs},${ts} ${ls},${ts}`} />
-                {/* Bottom */}
-                <polygon points={`${ls},${h-bs} ${w-rs},${h-bs} ${w},${h} 0,${h}`} />
-                {/* Left */}
-                <polygon points={`0,0 ${ls},${ts} ${ls},${h-bs} 0,${h}`} />
-                {/* Right */}
-                <polygon points={`${w-rs},${ts} ${w},0 ${w},${h} ${w-rs},${h-bs}`} />
-            </g>
-        </svg>
+        <div className="absolute" style={{ width: width * scale, height: height * scale }}>
+            {/* Top */}
+            <div style={{...baseStyle, ...(isTexture && horizontalBgStyle), top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
+            {/* Bottom */}
+            <div style={{...baseStyle, ...(isTexture && horizontalBgStyle), bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
+            {/* Left */}
+            <div style={{...baseStyle, ...(isTexture && verticalBgStyle), top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
+            {/* Right */}
+            <div style={{...baseStyle, ...(isTexture && verticalBgStyle), top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
+        </div>
     );
 });
 
@@ -173,43 +175,7 @@ const ButtJointFrame: React.FC<{ width: number; height: number; top: number; bot
     );
 });
 
-const GlassPanel: React.FC<{
-    config: WindowConfig;
-    panelId: string;
-    style: React.CSSProperties;
-    children?: React.ReactNode;
-    glassWidth: number;
-    glassHeight: number;
-    scale: number;
-}> = ({ config, panelId, style, children, glassWidth, glassHeight, scale }) => {
-    const { glassType, glassTexture } = config;
-    
-    const glassStyles: Record<GlassType, React.CSSProperties> = {
-        [GlassType.CLEAR]: { backgroundColor: 'hsl(190, 80%, 85%)', opacity: 0.7 },
-        [GlassType.FROSTED]: { backgroundColor: 'hsl(200, 100%, 95%)', opacity: 0.9, backdropFilter: 'blur(2px)' },
-        [GlassType.TINTED_BLUE]: { backgroundColor: 'hsl(205, 90%, 60%)', opacity: 0.6 },
-        [GlassType.CLEAR_SAPPHIRE]: { backgroundColor: 'hsl(210, 80%, 70%)', opacity: 0.65 },
-        [GlassType.BROWN_TINTED]: { backgroundColor: 'hsl(30, 30%, 30%)', opacity: 0.6 },
-        [GlassType.BLACK_TINTED]: { backgroundColor: 'hsl(0, 0%, 20%)', opacity: 0.7 },
-    };
-
-    const panelStyle: React.CSSProperties = { ...glassStyles[glassType], ...style, boxShadow: 'inset 0 0 1px 1px rgba(0,0,0,0.1)' };
-    if (glassTexture) {
-        panelStyle.backgroundImage = `url(${glassTexture})`;
-        panelStyle.backgroundSize = 'cover';
-        panelStyle.backgroundPosition = 'center';
-        delete panelStyle.backgroundColor;
-        delete panelStyle.opacity;
-    }
-
-    return ( 
-      <div className="absolute" style={panelStyle}>
-        <GlassGrid config={config} panelId={panelId} width={glassWidth} height={glassHeight} scale={scale} />
-        {children}
-      </div> 
-    );
-};
-
+// FIX: Refactor SlidingShutter to remove redundant props and rely on the config object passed to GlassPanel.
 const SlidingShutter: React.FC<{
     config: WindowConfig;
     panelId: string;
@@ -257,6 +223,43 @@ const SlidingShutter: React.FC<{
         </div>
     );
 });
+
+const GlassPanel: React.FC<{
+    config: WindowConfig;
+    panelId: string;
+    style: React.CSSProperties;
+    children?: React.ReactNode;
+    glassWidth: number;
+    glassHeight: number;
+    scale: number;
+}> = ({ config, panelId, style, children, glassWidth, glassHeight, scale }) => {
+    const { glassType, glassTexture } = config;
+    
+    const glassStyles: Record<GlassType, React.CSSProperties> = {
+        [GlassType.CLEAR]: { backgroundColor: 'hsl(190, 80%, 85%)', opacity: 0.7 },
+        [GlassType.FROSTED]: { backgroundColor: 'hsl(200, 100%, 95%)', opacity: 0.9, backdropFilter: 'blur(2px)' },
+        [GlassType.TINTED_BLUE]: { backgroundColor: 'hsl(205, 90%, 60%)', opacity: 0.6 },
+        [GlassType.CLEAR_SAPPHIRE]: { backgroundColor: 'hsl(210, 80%, 70%)', opacity: 0.65 },
+        [GlassType.BROWN_TINTED]: { backgroundColor: 'hsl(30, 30%, 30%)', opacity: 0.6 },
+        [GlassType.BLACK_TINTED]: { backgroundColor: 'hsl(0, 0%, 20%)', opacity: 0.7 },
+    };
+
+    const panelStyle: React.CSSProperties = { ...glassStyles[glassType], ...style, boxShadow: 'inset 0 0 1px 1px rgba(0,0,0,0.1)' };
+    if (glassTexture) {
+        panelStyle.backgroundImage = `url(${glassTexture})`;
+        panelStyle.backgroundSize = 'cover';
+        panelStyle.backgroundPosition = 'center';
+        delete panelStyle.backgroundColor;
+        delete panelStyle.opacity;
+    }
+
+    return ( 
+      <div className="absolute" style={panelStyle}>
+        <GlassGrid config={config} panelId={panelId} width={glassWidth} height={glassHeight} scale={scale} />
+        {children}
+      </div> 
+    );
+};
 
 const createWindowElements = (
     config: WindowConfig, 
@@ -457,6 +460,7 @@ const createWindowElements = (
                     
                     slidingHandles.forEach((handleConfig, i) => { if (handleConfig) { handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (positions[i] + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>); } });
                     
+                    // FIX: Removed redundant/incorrect props from SlidingShutter call
                     innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} color={profileColor} scale={scale} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
                 } else {
                     const shutterDivider = hasMesh ? 2 : numShutters;
@@ -468,6 +472,7 @@ const createWindowElements = (
                         const handleConfig = slidingHandles[i];
                         if (handleConfig) { handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>); }
                         
+                        // FIX: Removed redundant/incorrect props from SlidingShutter call
                         return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : dims.shutterInterlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock} color={profileColor} scale={scale} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div> );
                     }));
                 }
@@ -727,14 +732,17 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
 
         html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((productCanvas: HTMLCanvasElement) => {
             // Create a new canvas with padding
-            const padding = 20; // 20px padding on each side
+            const padding = 30; // 30px padding on each side
             const newCanvas = document.createElement('canvas');
             newCanvas.width = productCanvas.width + padding * 2;
             newCanvas.height = productCanvas.height + padding * 2;
             
             const ctx = newCanvas.getContext('2d');
             if (ctx) {
-                // Draw the product image onto the new canvas with an offset, leaving a transparent border
+                // Fill with white background as requested
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
+                // Draw the product image onto the new canvas with an offset
                 ctx.drawImage(productCanvas, padding, padding);
             }
 

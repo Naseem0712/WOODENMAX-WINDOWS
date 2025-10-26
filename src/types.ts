@@ -54,6 +54,7 @@ export interface ProfileDimensions {
   // Glass Partition
   topTrack: number | '';
   bottomTrack: number | '';
+  // FIX: Added missing glassGridProfile property to support Georgian Bar thickness configuration.
   glassGridProfile: number | '';
 }
 
@@ -103,7 +104,7 @@ export enum GlassType {
   TINTED_BLUE = 'tinted-blue',
   CLEAR_SAPPHIRE = 'clear-sapphire',
   BROWN_TINTED = 'brown-tinted',
-  BLACK_TINTED = 'black-tinted',
+  BLACK_TINTED = 'black-tented',
 }
 
 export enum AreaType {

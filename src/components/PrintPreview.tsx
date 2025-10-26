@@ -82,7 +82,6 @@ const PrintShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | '
 }
 
 const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => {
-    // FIX: Add support for rendering image textures on profiles.
     const isTexture = color && !color.startsWith('#');
     const isHorizontal = (style.width as number) > (style.height as number);
 
@@ -95,7 +94,6 @@ const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> =
     return <div style={{ position: 'absolute', boxSizing: 'border-box', ...style, ...backgroundStyle }} />;
 };
 
-// FIX: Rewritten PrintGlassGrid to use the new GlassGridConfig type.
 const PrintGlassGrid: React.FC<{
     config: WindowConfig;
     panelId: string;
@@ -104,7 +102,7 @@ const PrintGlassGrid: React.FC<{
     scale: number;
 }> = ({ config, panelId, width, height, scale }) => {
     const { glassGrid } = config;
-    if (!glassGrid || typeof glassGrid.barThickness === 'undefined') { // Guard against old type
+    if (!glassGrid || typeof glassGrid.barThickness === 'undefined') {
       return null;
     }
     const { barThickness, applyToAll, patterns } = glassGrid;
@@ -151,7 +149,6 @@ const PrintableMiteredFrame: React.FC<{
     const ls = (leftSize ?? profileSize) * scale;
     const rs = (rightSize ?? profileSize) * scale;
 
-    // FIX: Add support for rendering image textures on mitered frames.
     const isTexture = color && !color.startsWith('#');
     const backgroundStyle = isTexture ? { backgroundImage: `url(${color})`, backgroundRepeat: 'repeat' } : { backgroundColor: color };
     const horizontalBgStyle = { backgroundSize: 'auto 100%' };
@@ -232,7 +229,6 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     }
     const scale = externalScale || Math.min(containerWidthPx / effectiveWidth, containerHeightPx / numHeight);
 
-    // FIX: Destructure glassTexture from config.
     const { series, fixedPanels, profileColor, windowType, glassTexture } = config;
     const dims = {
         outerFrame: Number(series.dimensions.outerFrame) || 0,
@@ -243,8 +239,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         shutterMeeting: Number(series.dimensions.shutterMeeting) || 0, casementShutter: Number(series.dimensions.casementShutter) || 0,
         mullion: Number(series.dimensions.mullion) || 0, louverBlade: Number(series.dimensions.louverBlade) || 0,
         topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0, 
-        // FIX: The type for dimensions doesn't include glassGridProfile, but the calculator uses it. We'll cast to access it.
-        glassGridProfile: Number((series.dimensions as any).glassGridProfile) || 0,
+        glassGridProfile: Number(config.glassGrid.barThickness) || 0,
     };
 
     const glassStyle = { backgroundColor: '#E2E8F0', boxSizing: 'border-box' as const, border: '0.5px solid #999' };
@@ -264,7 +259,6 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     const labelElements: React.ReactNode[] = [];
     const handleElements: React.ReactNode[] = [];
 
-    // FIX: Added panelId prop to GlassPanel for the new PrintGlassGrid.
     const GlassPanel: React.FC<{style: React.CSSProperties, children?: React.ReactNode, glassWidthPx: number, glassHeightPx: number, panelId: string}> = ({ style, children, glassWidthPx, glassHeightPx, panelId }) => {
       const panelStyle: React.CSSProperties = { ...glassStyle, ...style };
 
@@ -285,7 +279,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
       });
       return (
         <div className="absolute" style={panelStyle}>
-            {/* FIX: Call PrintGlassGrid with the correct new props. */}
+            {/* FIX: Use refactored PrintGlassGrid component which expects config and panelId. */}
             <PrintGlassGrid config={config} panelId={panelId} width={glassWidthPx / scale} height={glassHeightPx / scale} scale={scale} />
             {childrenWithProps}
         </div> 
@@ -876,7 +870,6 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                     
                                     const unitAmount = (singleArea * item.rate) + item.hardwareCost;
 
-                                    // FIX: Correctly call getItemDetails to destructure its return value.
                                     const { panelCounts, hardwareDetails, relevantHardware } = getItemDetails(item);
                                     const glassDescription = getGlassDescription(item.config);
 
@@ -901,7 +894,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                         <tr><td className='pr-2 font-semibold'>Size:</td><td>{item.config.windowType === 'elevation_glazing' && item.config.elevationGrid ? `${item.config.elevationGrid.colPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)} x ${item.config.elevationGrid.rowPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)}` : `${item.config.width} x ${item.config.height}`} mm</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Color:</td><td>{item.profileColorName}</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Color:</td><td>{item.profileColorName || item.config.profileColor}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Glass:</td><td>{glassDescription}</td></tr>
                                                         {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
                                                         {relevantHardware.length > 0 && (

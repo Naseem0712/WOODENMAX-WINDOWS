@@ -9,7 +9,6 @@ import { PhotoIcon } from './icons/PhotoIcon';
 import html2pdf from 'html2pdf.js';
 import { v4 as uuidv4 } from 'uuid';
 
-
 interface WindowCanvasProps {
   config: WindowConfig;
   onRemoveVerticalDivider: (index: number) => void;
@@ -131,33 +130,35 @@ const MiteredFrame: React.FC<{
     const bs = (bottomSize ?? profileSize) * scale;
     const ls = (leftSize ?? profileSize) * scale;
     const rs = (rightSize ?? profileSize) * scale;
-    const w = width * scale;
-    const h = height * scale;
 
     const isTexture = color && !color.startsWith('#');
-    const uniqueId = useMemo(() => uuidv4(), []);
-    const fill = isTexture ? `url(#pattern-${uniqueId})` : color;
+    const backgroundStyle = isTexture ? { backgroundImage: `url(${color})`, backgroundRepeat: 'repeat' } : { backgroundColor: color };
+    const horizontalBgStyle = { backgroundSize: 'auto 100%' };
+    const verticalBgStyle = { backgroundSize: '100% auto' };
+
+    const baseStyle: React.CSSProperties = {
+        position: 'absolute',
+        boxSizing: 'border-box',
+        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)',
+        ...backgroundStyle
+    };
+
+    const clipTs = Math.max(0, ts);
+    const clipBs = Math.max(0, bs);
+    const clipLs = Math.max(0, ls);
+    const clipRs = Math.max(0, rs);
 
     return (
-        <svg width={w} height={h} className="absolute" style={{ left: 0, top: 0 }}>
-            {isTexture && (
-                <defs>
-                    <pattern id={`pattern-${uniqueId}`} patternUnits="userSpaceOnUse" width="200" height="200">
-                        <image href={color} x="0" y="0" width="200" height="200" />
-                    </pattern>
-                </defs>
-            )}
-            <g style={{'--fill-color': fill} as React.CSSProperties} fill={fill} stroke="rgba(0,0,0,0.3)" strokeWidth="1">
-                {/* Top */}
-                <polygon points={`0,0 ${w},0 ${w-rs},${ts} ${ls},${ts}`} />
-                {/* Bottom */}
-                <polygon points={`${ls},${h-bs} ${w-rs},${h-bs} ${w},${h} 0,${h}`} />
-                {/* Left */}
-                <polygon points={`0,0 ${ls},${ts} ${ls},${h-bs} 0,${h}`} />
-                {/* Right */}
-                <polygon points={`${w-rs},${ts} ${w},0 ${w},${h} ${w-rs},${h-bs}`} />
-            </g>
-        </svg>
+        <div className="absolute" style={{ width: width * scale, height: height * scale }}>
+            {/* Top */}
+            <div style={{...baseStyle, ...(isTexture && horizontalBgStyle), top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
+            {/* Bottom */}
+            <div style={{...baseStyle, ...(isTexture && horizontalBgStyle), bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
+            {/* Left */}
+            <div style={{...baseStyle, ...(isTexture && verticalBgStyle), top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
+            {/* Right */}
+            <div style={{...baseStyle, ...(isTexture && verticalBgStyle), top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
+        </div>
     );
 });
 
@@ -174,6 +175,7 @@ const ButtJointFrame: React.FC<{ width: number; height: number; top: number; bot
     );
 });
 
+// FIX: Refactor SlidingShutter to remove redundant props (glassType, glassTexture, glassStyles) and rely on the config object passed to GlassPanel.
 const SlidingShutter: React.FC<{
     config: WindowConfig;
     panelId: string;
@@ -186,25 +188,12 @@ const SlidingShutter: React.FC<{
     color: string;
     scale: number;
     isMesh: boolean;
-    glassType: GlassType;
-    glassTexture?: string;
-    glassStyles: Record<GlassType, React.CSSProperties>;
     isFixed?: boolean;
     isSliding?: boolean;
-}> = React.memo(({ config, panelId, width, height, topProfile, rightProfile, bottomProfile, leftProfile, color, scale, isMesh, glassType, glassTexture, glassStyles, isFixed = false, isSliding = false }) => {
+}> = React.memo(({ config, panelId, width, height, topProfile, rightProfile, bottomProfile, leftProfile, color, scale, isMesh, isFixed = false, isSliding = false }) => {
     
     const glassWidth = width - leftProfile - rightProfile;
     const glassHeight = height - topProfile - bottomProfile;
-
-    const glassStyle: React.CSSProperties = { ...(!isMesh && glassStyles[glassType]) };
-
-    if (glassTexture && !isMesh) {
-        glassStyle.backgroundImage = `url(${glassTexture})`;
-        glassStyle.backgroundSize = 'cover';
-        glassStyle.backgroundPosition = 'center';
-        delete glassStyle.backgroundColor;
-        delete glassStyle.opacity;
-    }
 
     return (
         <div className="absolute" style={{ width: width * scale, height: height * scale }}>
@@ -222,9 +211,10 @@ const SlidingShutter: React.FC<{
                 <GlassPanel
                     config={config}
                     panelId={panelId}
-                    style={{ width: glassWidth * scale, height: glassHeight * scale, ...glassStyle }}
+                    style={{ width: glassWidth * scale, height: glassHeight * scale }}
                     glassWidth={glassWidth}
                     glassHeight={glassHeight}
+                    scale={scale}
                 >
                     {isMesh && <div className="w-full h-full" style={{backgroundColor: '#808080', opacity: 0.5, backgroundImage: `linear-gradient(45deg, #000 25%, transparent 25%), linear-gradient(-45deg, #000 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #000 75%), linear-gradient(-45deg, transparent 75%, #000 75%)`, backgroundSize: '4px 4px' }} />}
                     <ShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
@@ -241,8 +231,10 @@ const GlassPanel: React.FC<{
     children?: React.ReactNode;
     glassWidth: number;
     glassHeight: number;
-}> = ({ config, panelId, style, children, glassWidth, glassHeight }) => {
+    scale: number;
+}> = ({ config, panelId, style, children, glassWidth, glassHeight, scale }) => {
     const { glassType, glassTexture } = config;
+    
     const glassStyles: Record<GlassType, React.CSSProperties> = {
         [GlassType.CLEAR]: { backgroundColor: 'hsl(190, 80%, 85%)', opacity: 0.7 },
         [GlassType.FROSTED]: { backgroundColor: 'hsl(200, 100%, 95%)', opacity: 0.9, backdropFilter: 'blur(2px)' },
@@ -263,12 +255,11 @@ const GlassPanel: React.FC<{
 
     return ( 
       <div className="absolute" style={panelStyle}>
-        <GlassGrid config={config} panelId={panelId} width={glassWidth} height={glassHeight} scale={(style.width as number) / glassWidth} />
+        <GlassGrid config={config} panelId={panelId} width={glassWidth} height={glassHeight} scale={scale} />
         {children}
       </div> 
     );
 };
-
 
 const createWindowElements = (
     config: WindowConfig, 
@@ -307,7 +298,6 @@ const createWindowElements = (
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
-  
     if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
         profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
@@ -323,25 +313,25 @@ const createWindowElements = (
         profileElements.push(<ProfilePiece key="divider-top" color={profileColor} style={{ top: (holeY1 - dims.fixedFrame) * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
         const glassW = hDividerWidth;
         const glassH = holeY1 - frameOffset - dims.fixedFrame;
-        glassElements.push(<GlassPanel key="glass-top" panelId="fixed-top" config={config} style={{ top: frameOffset * scale, left: hDividerX * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH} />);
+        glassElements.push(<GlassPanel key="glass-top" panelId="fixed-top" config={config} style={{ top: frameOffset * scale, left: hDividerX * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH} scale={scale} />);
     }
     if (bottomFix) {
         profileElements.push(<ProfilePiece key="divider-bottom" color={profileColor} style={{ top: holeY2 * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
         const glassW = hDividerWidth;
         const glassH = numHeight - holeY2 - frameOffset - dims.fixedFrame;
-        glassElements.push(<GlassPanel key="glass-bottom" panelId="fixed-bottom" config={config} style={{ top: (holeY2 + dims.fixedFrame) * scale, left: hDividerX * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH}/>);
+        glassElements.push(<GlassPanel key="glass-bottom" panelId="fixed-bottom" config={config} style={{ top: (holeY2 + dims.fixedFrame) * scale, left: hDividerX * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH} scale={scale}/>);
     }
     const vGlassY = topFix ? holeY1 : frameOffset;
     const vGlassHeight = (bottomFix ? holeY2 : numHeight - frameOffset) - vGlassY;
     if (leftFix) {
         const glassW = holeX1 - frameOffset - dims.fixedFrame;
         const glassH = vGlassHeight;
-        glassElements.push(<GlassPanel key="glass-left" panelId="fixed-left" config={config} style={{ top: vGlassY * scale, left: frameOffset * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH}/>);
+        glassElements.push(<GlassPanel key="glass-left" panelId="fixed-left" config={config} style={{ top: vGlassY * scale, left: frameOffset * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH} scale={scale}/>);
     }
     if (rightFix) {
         const glassW = w - holeX2 - frameOffset - dims.fixedFrame;
         const glassH = vGlassHeight;
-        glassElements.push(<GlassPanel key="glass-right" panelId="fixed-right" config={config} style={{ top: vGlassY * scale, left: (holeX2 + dims.fixedFrame) * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH}/>);
+        glassElements.push(<GlassPanel key="glass-right" panelId="fixed-right" config={config} style={{ top: vGlassY * scale, left: (holeX2 + dims.fixedFrame) * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH} scale={scale}/>);
     }
 
     const innerContent: React.ReactNode[] = [];
@@ -377,6 +367,7 @@ const createWindowElements = (
                                     style={{ left: currentX_cell * scale, top: currentY_cell * scale, width: cellWidth * scale, height: cellHeight * scale }} 
                                     glassWidth={cellWidth} 
                                     glassHeight={cellHeight} 
+                                    scale={scale}
                                 />
                             );
                             currentX_cell += cellWidth;
@@ -439,7 +430,7 @@ const createWindowElements = (
                                 innerContent.push(
                                   <div key={`cell-door-${r}-${c}`} className="absolute" style={{left: currentX_cell*scale, top: currentY_cell*scale, width: cellWidth*scale, height: cellHeight*scale, zIndex: 15}}>
                                     <MiteredFrame width={cellWidth} height={cellHeight} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
-                                    <GlassPanel panelId={`elevation-door-${r}-${c}`} config={config} style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellWidth - 2 * dims.casementShutter)*scale, height: (cellHeight - 2 * dims.casementShutter)*scale }} glassWidth={cellWidth - 2 * dims.casementShutter} glassHeight={cellHeight - 2 * dims.casementShutter}>
+                                    <GlassPanel panelId={`elevation-door-${r}-${c}`} config={config} style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellWidth - 2 * dims.casementShutter)*scale, height: (cellHeight - 2 * dims.casementShutter)*scale }} glassWidth={cellWidth - 2 * dims.casementShutter} glassHeight={cellHeight - 2 * dims.casementShutter} scale={scale}>
                                       <ShutterIndicator type="hinged" />
                                     </GlassPanel>
                                   </div>
@@ -457,7 +448,7 @@ const createWindowElements = (
                 break;
             }
             case WindowType.SLIDING: {
-                const { shutterConfig, fixedShutters, slidingHandles, glassType, glassTexture } = config;
+                const { shutterConfig, fixedShutters, slidingHandles } = config;
                 const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;
                 const numShutters = is4G ? 4 : (shutterConfig === ShutterConfigType.TWO_GLASS ? 2 : 3);
                 const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
@@ -469,7 +460,8 @@ const createWindowElements = (
                     
                     slidingHandles.forEach((handleConfig, i) => { if (handleConfig) { handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (positions[i] + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>); } });
                     
-                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} color={profileColor} scale={scale} isMesh={false} glassType={glassType} glassTexture={glassTexture} glassStyles={{}} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
+                    // FIX: Removed redundant props from SlidingShutter call
+                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} color={profileColor} scale={scale} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
                 } else {
                     const shutterDivider = hasMesh ? 2 : numShutters;
                     const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * dims.shutterInterlock) / shutterDivider;
@@ -480,7 +472,8 @@ const createWindowElements = (
                         const handleConfig = slidingHandles[i];
                         if (handleConfig) { handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>); }
                         
-                        return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : dims.shutterInterlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock} color={profileColor} scale={scale} isMesh={isMeshShutter} glassType={glassType} glassTexture={glassTexture} glassStyles={{}} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div> );
+                        // FIX: Removed redundant props from SlidingShutter call
+                        return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : dims.shutterInterlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock} color={profileColor} scale={scale} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div> );
                     }));
                 }
                 break;
@@ -514,11 +507,11 @@ const createWindowElements = (
                                 innerContent.push(
                                   <div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>
                                     <MiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
-                                    <GlassPanel panelId={panelId} config={config} style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellW - 2 * dims.casementShutter)*scale, height: (cellH - 2 * dims.casementShutter)*scale }} glassWidth={cellW - 2 * dims.casementShutter} glassHeight={cellH - 2 * dims.casementShutter} />
+                                    <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellW - 2 * dims.casementShutter)*scale, height: (cellH - 2 * dims.casementShutter)*scale }} glassWidth={cellW - 2 * dims.casementShutter} glassHeight={cellH - 2 * dims.casementShutter} scale={scale} />
                                     <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none"><svg viewBox="0 0 100 100" className="w-1/2 h-1/2" style={{transform: c % 2 === 0 ? 'scaleX(1)' : 'scaleX(-1)'}}><path d="M 10 10 L 10 90 L 90 90" stroke="white" strokeDasharray="4" strokeWidth="2" fill="none"/></svg></div>
                                   </div>
                                 );
-                            } else { innerContent.push(<GlassPanel key={`cell-${r}-${c}`} panelId={panelId} config={config} style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}} glassWidth={cellW} glassHeight={cellH} />); }
+                            } else { innerContent.push(<GlassPanel key={`cell-${r}-${c}`} panelId={panelId} config={config} style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}} glassWidth={cellW} glassHeight={cellH} scale={scale} />); }
                         } else { // Ventilator
                             const cell = config.ventilatorGrid[r]?.[c];
                             const cellType = cell?.type || 'glass';
@@ -529,7 +522,7 @@ const createWindowElements = (
                                 innerContent.push(
                                   <div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>
                                     <MiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
-                                    <GlassPanel panelId={panelId} config={config} style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellW - 2 * dims.casementShutter)*scale, height: (cellH - 2 * dims.casementShutter)*scale }} glassWidth={cellW - 2*dims.casementShutter} glassHeight={cellH - 2*dims.casementShutter}/>
+                                    <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellW - 2 * dims.casementShutter)*scale, height: (cellH - 2 * dims.casementShutter)*scale }} glassWidth={cellW - 2*dims.casementShutter} glassHeight={cellH - 2*dims.casementShutter} scale={scale}/>
                                     <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none"><svg viewBox="0 0 100 100" className="w-1/2 h-1/2" style={{transform: c % 2 === 0 ? 'scaleX(1)' : 'scaleX(-1)'}}><path d="M 10 10 L 10 90 L 90 90" stroke="white" strokeDasharray="4" strokeWidth="2" fill="none"/></svg></div>
                                   </div>
                                 );
@@ -556,7 +549,7 @@ const createWindowElements = (
                                   </div>
                                 )
                             }
-                            else { innerContent.push(<GlassPanel key={`cell-${r}-${c}`} panelId={panelId} config={config} style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}} glassWidth={cellW} glassHeight={cellH} />); }
+                            else { innerContent.push(<GlassPanel key={`cell-${r}-${c}`} panelId={panelId} config={config} style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}} glassWidth={cellW} glassHeight={cellH} scale={scale} />); }
                         }
                     }
                 }
@@ -621,7 +614,7 @@ const createWindowElements = (
                     innerContent.push(
                         <div key={`panel-${i}`} className="absolute" style={{left: panelX*scale, top: panelAreaY*scale, width: currentPanelWidth*scale, height: panelAreaHeight*scale, zIndex}}>
                           {isFramed && <MiteredFrame width={currentPanelWidth} height={panelAreaHeight} profileSize={frameSize} scale={scale} color={profileColor} />}
-                          <GlassPanel panelId={panelId} config={config} style={{ left: (isFramed ? frameSize : 0) * scale, top: (isFramed ? frameSize : 0) * scale, width: (currentPanelWidth - (isFramed ? 2 * frameSize : 0)) * scale, height: (panelAreaHeight - (isFramed ? 2 * frameSize : 0)) * scale }} glassWidth={currentPanelWidth - (isFramed ? 2 * frameSize : 0)} glassHeight={panelAreaHeight - (isFramed ? 2 * frameSize : 0)}>
+                          <GlassPanel panelId={panelId} config={config} style={{ left: (isFramed ? frameSize : 0) * scale, top: (isFramed ? frameSize : 0) * scale, width: (currentPanelWidth - (isFramed ? 2 * frameSize : 0)) * scale, height: (panelAreaHeight - (isFramed ? 2 * frameSize : 0)) * scale }} glassWidth={currentPanelWidth - (isFramed ? 2 * frameSize : 0)} glassHeight={panelAreaHeight - (isFramed ? 2 * frameSize : 0)} scale={scale}>
                              <ShutterIndicator type={type} />
                           </GlassPanel>
                         </div>
@@ -721,10 +714,10 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     const handleExportPng = () => {
         const element = renderedWindowRef.current;
         if (!element || isExporting) return;
-        
+
         const windowElement = element.children[0] as HTMLElement;
         if (!windowElement) return;
-        
+
         setIsExporting(true);
 
         const opt = {
@@ -737,13 +730,30 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
             },
         };
 
-        html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((canvas: HTMLCanvasElement) => {
+        html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((productCanvas: HTMLCanvasElement) => {
+            // Create a new canvas with padding
+            const padding = 30; // 30px padding on each side
+            const newCanvas = document.createElement('canvas');
+            newCanvas.width = productCanvas.width + padding * 2;
+            newCanvas.height = productCanvas.height + padding * 2;
+            
+            const ctx = newCanvas.getContext('2d');
+            if (ctx) {
+                // Fill with white background as requested
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
+                // Draw the product image onto the new canvas with an offset
+                ctx.drawImage(productCanvas, padding, padding);
+            }
+
+            // Export the new canvas with padding
             const link = document.createElement('a');
             link.download = `woodenmax-design-${Date.now()}.png`;
-            link.href = canvas.toDataURL('image/png');
+            link.href = newCanvas.toDataURL('image/png');
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            
             setIsExporting(false);
         }).catch((err: any) => {
             console.error('Failed to export PNG:', err);
