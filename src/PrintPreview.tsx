@@ -1,12 +1,10 @@
-
-
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, HardwareItem } from './types';
-import { Button } from './ui/Button';
-import { PrinterIcon } from './icons/PrinterIcon';
-import { XMarkIcon } from './icons/XMarkIcon';
+import { Button } from './components/ui/Button';
+import { PrinterIcon } from './components/icons/PrinterIcon';
+import { XMarkIcon } from './components/icons/XMarkIcon';
 import { FixedPanelPosition, ShutterConfigType, WindowType } from './types';
-import { DownloadIcon } from './icons/DownloadIcon';
+import { DownloadIcon } from './components/icons/DownloadIcon';
 import html2pdf from 'html2pdf.js';
 
 interface PrintPreviewProps {
@@ -230,7 +228,7 @@ const PrintableMiteredFrame: React.FC<{
 const PrintableHandle: React.FC<{ config: HandleConfig | null, scale: number }> = ({ config, scale }) => {
     if (!config) return null;
     const handleWidth = 25; // mm
-    const handleHeight = 150; // mm
+    const handleHeight = config.length || 150; // mm
     const isVertical = config.orientation === 'vertical';
     const style: React.CSSProperties = {
         position: 'absolute',
@@ -656,8 +654,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
 
 const EditableSection: React.FC<{title: string, value: string, onChange: (value: string) => void}> = ({ title, value, onChange }) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    // FIX: Corrected a typo in the id attribute to ensure it is unique and valid.
-    const id = useMemo(() => `editable-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, [title]);
+    const id = useMemo(() => `editable-section-${title.toLowerCase().replace(/[\s&]+/g, '-').replace(/[^a-z0-9-]/g, 'x')}`, [title]);
 
     useEffect(() => {
         if (textareaRef.current) {

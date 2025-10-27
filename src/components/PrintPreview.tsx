@@ -1,4 +1,3 @@
-
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, HardwareItem } from '../types';
 import { Button } from './ui/Button';
@@ -655,7 +654,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
 
 const EditableSection: React.FC<{title: string, value: string, onChange: (value: string) => void}> = ({ title, value, onChange }) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const id = useMemo(() => title.toLowerCase().replace(/[^a-z0-9]+/g, '-'), [title]);
+    const id = useMemo(() => `editable-section-${title.toLowerCase().replace(/[\s&]+/g, '-').replace(/[^a-z0-9-]/g, 'x')}`, [title]);
 
     useEffect(() => {
         if (textareaRef.current) {

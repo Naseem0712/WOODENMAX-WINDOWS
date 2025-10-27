@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback } from 'react';
 import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType } from './types';
@@ -1125,7 +1126,6 @@ const App: React.FC = () => {
   }, []);
 
   const handleLaminatedConfigChange = useCallback((payload: Partial<LaminatedGlassConfig>) => {
-    // FIX: Corrected typo in action type from 'UPDATE_Laminated_CONFIG' to 'UPDATE_LAMINATED_CONFIG'.
     dispatch({ type: 'UPDATE_LAMINATED_CONFIG', payload });
   }, []);
   const handleDguConfigChange = useCallback((payload: Partial<DguGlassConfig>) => {

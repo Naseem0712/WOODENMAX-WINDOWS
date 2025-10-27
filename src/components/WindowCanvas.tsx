@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { WindowConfig, HandleConfig, CornerSideConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType } from '../types';
@@ -22,7 +21,7 @@ const DimensionLabel: React.FC<{ value: number; unit?: string, className?: strin
     </span>
 );
 
-const ShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' }> = ({ type }) => {
+const ShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | null }> = ({ type }) => {
     if (!type) return null;
     
     const baseStyle = "absolute inset-0 flex items-center justify-center text-white font-bold tracking-widest text-lg pointer-events-none";
@@ -181,19 +180,6 @@ const MiteredFrame: React.FC<{
     );
 });
 
-const ButtJointFrame: React.FC<{ width: number; height: number; top: number; bottom: number; left: number; right: number; scale: number; color: string; }> = React.memo(({ width, height, top, bottom, left, right, scale, color }) => {
-    const ts = top * scale; const bs = bottom * scale; const ls = left * scale; const rs = right * scale;
-    const h = height * scale;
-    return (
-        <>
-            <ProfilePiece color={color} style={{ top: 0, left: 0, width: width * scale, height: ts }} />
-            <ProfilePiece color={color} style={{ bottom: 0, left: 0, width: width * scale, height: bs }} />
-            <ProfilePiece color={color} style={{ top: ts, left: 0, width: ls, height: h - ts - bs }} />
-            <ProfilePiece color={color} style={{ top: ts, right: 0, width: rs, height: h - ts - bs }} />
-        </>
-    );
-});
-
 const SlidingShutter: React.FC<{
     config: WindowConfig;
     panelId: string;
@@ -320,7 +306,7 @@ const createWindowElements = (
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
-    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) {
+    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.ELEVATION_GLAZING) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
         profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
     }
@@ -438,16 +424,17 @@ const createWindowElements = (
                     currentY_pattern = 0;
                     for (let r = 0; r < validRowPattern.length; r++) {
                         let currentX_pattern = 0;
+                        const cellH = validRowPattern[r] * scaleY;
                         for (let c = 0; c < validColPattern.length; c++) {
                             const cellWidth = validColPattern[c] * scaleX;
-                            const cellHeight = validRowPattern[r] * scaleY;
+                            
                             const isDoor = doorPositions.some(p => p.row === r && p.col === c);
 
                             innerContent.push(
                                 <button key={`cell-btn-${r}-${c}`} 
                                         onClick={() => callbacks.onToggleElevationDoor(r, c)} 
                                         className="absolute hover:bg-white/20 z-20"
-                                        style={{ left: currentX_pattern * scale, top: currentY_pattern * scale, width: cellWidth * scale, height: cellHeight * scale }}
+                                        style={{ left: currentX_pattern * scale, top: currentY_pattern * scale, width: cellWidth * scale, height: cellH * scale }}
                                 />
                             );
 
@@ -455,21 +442,21 @@ const createWindowElements = (
                                 const doorInfo = doorPositions.find(p => p.row === r && p.col === c)!;
                                 
                                 innerContent.push(
-                                  <div key={`cell-door-${r}-${c}`} className="absolute" style={{left: currentX_pattern*scale, top: currentY_pattern*scale, width: cellWidth*scale, height: cellHeight*scale, zIndex: 15}}>
-                                    <MiteredFrame width={cellWidth} height={cellHeight} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
-                                    <GlassPanel panelId={`elevation-door-${r}-${c}`} config={config} style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellWidth - 2 * dims.casementShutter)*scale, height: (cellHeight - 2 * dims.casementShutter)*scale }} glassWidth={cellWidth - 2 * dims.casementShutter} glassHeight={cellHeight - 2 * dims.casementShutter} scale={scale}>
+                                  <div key={`cell-door-${r}-${c}`} className="absolute" style={{left: currentX_pattern*scale, top: currentY_pattern*scale, width: cellWidth*scale, height: cellH*scale, zIndex: 15}}>
+                                    <MiteredFrame width={cellWidth} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
+                                    <GlassPanel panelId={`elevation-door-${r}-${c}`} config={config} style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellWidth - 2 * dims.casementShutter)*scale, height: (cellH - 2 * dims.casementShutter)*scale }} glassWidth={cellWidth - 2 * dims.casementShutter} glassHeight={cellH - 2 * dims.casementShutter} scale={scale}>
                                       <ShutterIndicator type="hinged" />
                                     </GlassPanel>
                                   </div>
                                 );
 
                                  if (doorInfo.handle) {
-                                    handleElements.push(<div key={`handle-elev-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (currentX_pattern + cellWidth * doorInfo.handle.x / 100) * scale, top: (currentY_pattern + cellHeight * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} /></div>);
+                                    handleElements.push(<div key={`handle-elev-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (currentX_pattern + cellWidth * doorInfo.handle.x / 100) * scale, top: (currentY_pattern + cellH * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} /></div>);
                                 }
                             }
                             currentX_pattern += cellWidth;
                         }
-                        currentY_pattern += cellHeight;
+                        currentY_pattern += cellH;
                     }
                 }
                 break;
@@ -555,7 +542,6 @@ const createWindowElements = (
                                 const louvers: React.ReactNode[] = [];
                                 if (dims.louverBlade > 0) {
                                     const spacing = dims.louverBlade;
-                                    // FIX: Corrected variable name from `cellHeight` to `cellH`.
                                     const numLouvers = Math.ceil(cellH / spacing);
                                      for (let i=0; i < numLouvers; i++) {
                                        louvers.push(<ProfilePiece key={`louver-${i}`} color={profileColor} style={{left: 0, top: (i * spacing)*scale, width: cellW*scale, height: dims.louverBlade*scale }}/>)

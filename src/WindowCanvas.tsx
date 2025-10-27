@@ -1,12 +1,11 @@
-
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { WindowConfig, HandleConfig, CornerSideConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType } from './types';
-import { PlusIcon } from './icons/PlusIcon';
-import { MinusIcon } from './icons/MinusIcon';
-import { ArrowsPointingInIcon } from './icons/ArrowsPointingInIcon';
-import { TrashIcon } from './icons/TrashIcon';
-import { PhotoIcon } from './icons/PhotoIcon';
+import { PlusIcon } from './components/icons/PlusIcon';
+import { MinusIcon } from './components/icons/MinusIcon';
+import { ArrowsPointingInIcon } from './components/icons/ArrowsPointingInIcon';
+import { TrashIcon } from './components/icons/TrashIcon';
+import { PhotoIcon } from './components/icons/PhotoIcon';
 import html2pdf from 'html2pdf.js';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -23,7 +22,7 @@ const DimensionLabel: React.FC<{ value: number; unit?: string, className?: strin
     </span>
 );
 
-const ShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' }> = ({ type }) => {
+const ShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | null }> = ({ type }) => {
     if (!type) return null;
     
     const baseStyle = "absolute inset-0 flex items-center justify-center text-white font-bold tracking-widest text-lg pointer-events-none";
@@ -131,13 +130,32 @@ const MiteredFrame: React.FC<{
     const bs = (bottomSize ?? profileSize) * scale;
     const ls = (leftSize ?? profileSize) * scale;
     const rs = (rightSize ?? profileSize) * scale;
-
     const isTexture = color && !color.startsWith('#');
-    const backgroundStyle = isTexture ? { backgroundImage: `url(${color})`, backgroundRepeat: 'repeat' } : { backgroundColor: color };
+
+    // For solid colors, use CSS borders which create perfect mitered joints and are well-supported by html2canvas.
+    if (!isTexture) {
+        return (
+            <div style={{
+                position: 'absolute',
+                width: width * scale,
+                height: height * scale,
+                boxSizing: 'border-box',
+                borderStyle: 'solid',
+                borderColor: color,
+                borderTopWidth: ts,
+                borderBottomWidth: bs,
+                borderLeftWidth: ls,
+                borderRightWidth: rs,
+            }} />
+        );
+    }
+
+    // For textures, fall back to the clip-path method with improved texture orientation.
+    const backgroundStyle = { backgroundImage: `url(${color})`, backgroundRepeat: 'repeat' };
     const horizontalBgStyle = { backgroundSize: 'auto 100%' };
     const verticalBgStyle = { backgroundSize: '100% auto' };
 
-    const baseStyle: React.CSSProperties = {
+    const baseDivStyle: React.CSSProperties = {
         position: 'absolute',
         boxSizing: 'border-box',
         boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)',
@@ -152,27 +170,14 @@ const MiteredFrame: React.FC<{
     return (
         <div className="absolute" style={{ width: width * scale, height: height * scale }}>
             {/* Top */}
-            <div style={{...baseStyle, ...(isTexture && horizontalBgStyle), top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
+            <div style={{...baseDivStyle, ...horizontalBgStyle, top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
             {/* Bottom */}
-            <div style={{...baseStyle, ...(isTexture && horizontalBgStyle), bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
+            <div style={{...baseDivStyle, ...horizontalBgStyle, bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
             {/* Left */}
-            <div style={{...baseStyle, ...(isTexture && verticalBgStyle), top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
+            <div style={{...baseDivStyle, ...verticalBgStyle, top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
             {/* Right */}
-            <div style={{...baseStyle, ...(isTexture && verticalBgStyle), top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
+            <div style={{...baseDivStyle, ...verticalBgStyle, top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
         </div>
-    );
-});
-
-const ButtJointFrame: React.FC<{ width: number; height: number; top: number; bottom: number; left: number; right: number; scale: number; color: string; }> = React.memo(({ width, height, top, bottom, left, right, scale, color }) => {
-    const ts = top * scale; const bs = bottom * scale; const ls = left * scale; const rs = right * scale;
-    const h = height * scale;
-    return (
-        <>
-            <ProfilePiece color={color} style={{ top: 0, left: 0, width: width * scale, height: ts }} />
-            <ProfilePiece color={color} style={{ bottom: 0, left: 0, width: width * scale, height: bs }} />
-            <ProfilePiece color={color} style={{ top: ts, left: 0, width: ls, height: h - ts - bs }} />
-            <ProfilePiece color={color} style={{ top: ts, right: 0, width: rs, height: h - ts - bs }} />
-        </>
     );
 });
 
@@ -302,7 +307,7 @@ const createWindowElements = (
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
-    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) {
+    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.ELEVATION_GLAZING) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
         profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
     }
@@ -311,7 +316,7 @@ const createWindowElements = (
     if (rightFix) profileElements.push(<ProfilePiece key="divider-right" color={profileColor} style={{ top: frameOffset * scale, left: holeX2 * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffset) * scale }} />);
     
     const hDividerX = leftFix ? holeX1 : frameOffset;
-    const hDividerWidth = (rightFix ? w - frameOffset : w) - hDividerX;
+    const hDividerWidth = (rightFix ? holeX2 : w - frameOffset) - hDividerX;
   
     if (topFix) {
         profileElements.push(<ProfilePiece key="divider-top" color={profileColor} style={{ top: (holeY1 - dims.fixedFrame) * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
@@ -416,21 +421,21 @@ const createWindowElements = (
                     }
                     innerContent.push(<div key="profiles-wrapper" className="absolute inset-0">{profilesAndPlates}</div>);
 
-
                     // 4. Render Doors and Clickable Overlays
                     currentY_pattern = 0;
                     for (let r = 0; r < validRowPattern.length; r++) {
                         let currentX_pattern = 0;
+                        const cellH = validRowPattern[r] * scaleY;
                         for (let c = 0; c < validColPattern.length; c++) {
                             const cellWidth = validColPattern[c] * scaleX;
-                            const cellHeight = validRowPattern[r] * scaleY;
+                            
                             const isDoor = doorPositions.some(p => p.row === r && p.col === c);
 
                             innerContent.push(
                                 <button key={`cell-btn-${r}-${c}`} 
                                         onClick={() => callbacks.onToggleElevationDoor(r, c)} 
                                         className="absolute hover:bg-white/20 z-20"
-                                        style={{ left: currentX_pattern * scale, top: currentY_pattern * scale, width: cellWidth * scale, height: cellHeight * scale }}
+                                        style={{ left: currentX_pattern * scale, top: currentY_pattern * scale, width: cellWidth * scale, height: cellH * scale }}
                                 />
                             );
 
@@ -438,21 +443,21 @@ const createWindowElements = (
                                 const doorInfo = doorPositions.find(p => p.row === r && p.col === c)!;
                                 
                                 innerContent.push(
-                                  <div key={`cell-door-${r}-${c}`} className="absolute" style={{left: currentX_pattern*scale, top: currentY_pattern*scale, width: cellWidth*scale, height: cellHeight*scale, zIndex: 15}}>
-                                    <MiteredFrame width={cellWidth} height={cellHeight} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
-                                    <GlassPanel panelId={`elevation-door-${r}-${c}`} config={config} style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellWidth - 2 * dims.casementShutter)*scale, height: (cellHeight - 2 * dims.casementShutter)*scale }} glassWidth={cellWidth - 2 * dims.casementShutter} glassHeight={cellHeight - 2 * dims.casementShutter} scale={scale}>
+                                  <div key={`cell-door-${r}-${c}`} className="absolute" style={{left: currentX_pattern*scale, top: currentY_pattern*scale, width: cellWidth*scale, height: cellH*scale, zIndex: 15}}>
+                                    <MiteredFrame width={cellWidth} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
+                                    <GlassPanel panelId={`elevation-door-${r}-${c}`} config={config} style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellWidth - 2 * dims.casementShutter)*scale, height: (cellH - 2 * dims.casementShutter)*scale }} glassWidth={cellWidth - 2 * dims.casementShutter} glassHeight={cellH - 2 * dims.casementShutter} scale={scale}>
                                       <ShutterIndicator type="hinged" />
                                     </GlassPanel>
                                   </div>
                                 );
 
                                  if (doorInfo.handle) {
-                                    handleElements.push(<div key={`handle-elev-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (currentX_pattern + cellWidth * doorInfo.handle.x / 100) * scale, top: (currentY_pattern + cellHeight * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} /></div>);
+                                    handleElements.push(<div key={`handle-elev-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (currentX_pattern + cellWidth * doorInfo.handle.x / 100) * scale, top: (currentY_pattern + cellH * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} /></div>);
                                 }
                             }
                             currentX_pattern += cellWidth;
                         }
-                        currentY_pattern += cellHeight;
+                        currentY_pattern += cellH;
                     }
                 }
                 break;
@@ -538,7 +543,6 @@ const createWindowElements = (
                                 const louvers: React.ReactNode[] = [];
                                 if (dims.louverBlade > 0) {
                                     const spacing = dims.louverBlade;
-                                    // FIX: Corrected variable name from `cellHeight` to `cellH`.
                                     const numLouvers = Math.ceil(cellH / spacing);
                                      for (let i=0; i < numLouvers; i++) {
                                        louvers.push(<ProfilePiece key={`louver-${i}`} color={profileColor} style={{left: 0, top: (i * spacing)*scale, width: cellW*scale, height: dims.louverBlade*scale }}/>)
@@ -636,193 +640,3 @@ const createWindowElements = (
 
     return { profileElements, glassElements, handleElements, innerContent, innerAreaWidth, innerAreaHeight, holeX1, holeY1, geometry };
 };
-
-const RenderedWindow: React.FC<{
-    config: WindowConfig;
-    elements: ReturnType<typeof createWindowElements>;
-    scale: number;
-    showLabels?: boolean;
-}> = ({ config, elements, scale, showLabels = true }) => {
-    const { width, height, windowType } = config;
-    const numWidth = Number(width) || 0;
-    const numHeight = Number(height) || 0;
-
-
-    return (
-        <div className="relative shadow-lg" style={{ width: numWidth * scale, height: numHeight * scale }}>
-          {elements.glassElements}
-          {elements.profileElements}
-          
-          {elements.innerAreaWidth > 0 && elements.innerAreaHeight > 0 && (
-            <div className="absolute" style={{ top: elements.holeY1 * scale, left: elements.holeX1 * scale, width: elements.innerAreaWidth * scale, height: elements.innerAreaHeight * scale }}>
-                {elements.innerContent}
-                {elements.handleElements}
-            </div>
-          )}
-          
-          {showLabels && <>
-            <DimensionLabel value={numWidth} className="-top-8 left-1/2 -translate-x-1/2" />
-            <DimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 -left-16 rotate-[-90deg]" />
-            
-            {elements.geometry.topFix && <DimensionLabel value={elements.geometry.topFix.size} className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 text-cyan-200" style={{top: elements.geometry.topFix.size * scale / 2}}/>}
-            {elements.geometry.leftFix && <DimensionLabel value={elements.geometry.leftFix.size} className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 text-cyan-200" style={{top: (elements.geometry.holeY1 + ((numHeight - elements.geometry.holeY1 - elements.geometry.holeY2)/2)) * scale, left: elements.geometry.leftFix.size * scale / 2}}/>}
-          </>}
-        </div>
-    );
-};
-
-export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
-  const { config, onRemoveHorizontalDivider, onRemoveVerticalDivider, onToggleElevationDoor } = props;
-  const { width, height, series, profileColor, windowType } = config;
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const renderedWindowRef = useRef<HTMLDivElement>(null);
-  const [zoom, setZoom] = useState(1);
-  const [isExporting, setIsExporting] = useState(false);
-  
-  const numWidth = windowType === WindowType.CORNER 
-    ? (Number(config.leftWidth) || 0) + (Number(config.rightWidth) || 0) + (Number(config.cornerPostWidth) || 0)
-    : Number(width) || 0;
-  const numHeight = Number(height) || 0;
-
-
-  const dims = useMemo(() => ({
-    outerFrame: Number(series.dimensions.outerFrame) || 0, outerFrameVertical: Number(series.dimensions.outerFrameVertical) || 0, fixedFrame: Number(series.dimensions.fixedFrame) || 0, shutterHandle: Number(series.dimensions.shutterHandle) || 0, shutterInterlock: Number(series.dimensions.shutterInterlock) || 0, shutterTop: Number(series.dimensions.shutterTop) || 0, shutterBottom: Number(series.dimensions.shutterBottom) || 0, shutterMeeting: Number(series.dimensions.shutterMeeting) || 0, casementShutter: Number(series.dimensions.casementShutter) || 0, mullion: Number(series.dimensions.mullion) || 0, louverBlade: Number(series.dimensions.louverBlade) || 0, topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0
-  }), [series.dimensions]);
-
-  useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-        if (e.ctrlKey) {
-            e.preventDefault();
-            setZoom(prev => Math.max(0.2, Math.min(prev - e.deltaY * 0.001, 5)));
-        }
-    };
-    const currentRef = containerRef.current;
-    currentRef?.addEventListener('wheel', handleWheel, { passive: false });
-    return () => currentRef?.removeEventListener('wheel', handleWheel);
-  }, []);
-
-  const scale = useMemo(() => {
-    if (numWidth <= 0 || numHeight <= 0) return 1;
-    const containerWidth = containerRef.current?.clientWidth || window.innerWidth;
-    const containerHeight = containerRef.current?.clientHeight || window.innerHeight;
-    const fitScale = Math.min((containerWidth * 0.9) / numWidth, (containerHeight * 0.8) / numHeight, 10);
-    return fitScale * zoom;
-  }, [numWidth, numHeight, zoom]);
-
-  const canvasCallbacks = useMemo(() => ({
-    onRemoveHorizontalDivider,
-    onRemoveVerticalDivider,
-    onToggleElevationDoor,
-  }), [onRemoveHorizontalDivider, onRemoveVerticalDivider, onToggleElevationDoor]);
-
-    const handleExportPng = () => {
-        const element = renderedWindowRef.current;
-        if (!element || isExporting) return;
-
-        const windowElement = element.children[0] as HTMLElement;
-        if (!windowElement) return;
-
-        setIsExporting(true);
-
-        const opt = {
-            margin: 0,
-            html2canvas: {
-                scale: 4, // Use a fixed high scale for good resolution
-                backgroundColor: null,
-                logging: false,
-                useCORS: true,
-            },
-        };
-
-        html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((productCanvas: HTMLCanvasElement) => {
-            const padding = 100; // Generous padding for a nice border
-            
-            const newCanvas = document.createElement('canvas');
-            newCanvas.width = productCanvas.width + padding * 2;
-            newCanvas.height = productCanvas.height + padding * 2;
-            
-            const ctx = newCanvas.getContext('2d');
-            if (ctx) {
-                // Fill with white background
-                ctx.fillStyle = 'white';
-                ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
-
-                // Draw the product image with uniform padding
-                ctx.drawImage(productCanvas, padding, padding);
-            }
-
-            // Export the new canvas
-            const link = document.createElement('a');
-            link.download = `woodenmax-design-${Date.now()}.png`;
-            link.href = newCanvas.toDataURL('image/png');
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            setIsExporting(false);
-        }).catch((err: any) => {
-            console.error('Failed to export PNG:', err);
-            alert('Could not export image.');
-            setIsExporting(false);
-        });
-    };
-
-  if (numWidth <= 0 || numHeight <= 0) {
-    return ( <div className="w-full h-full flex items-center justify-center bg-transparent"> <p className="text-slate-500">Please enter valid dimensions to begin.</p> </div> );
-  }
-
-  return (
-    <div ref={containerRef} className="absolute inset-0 p-6 flex items-center justify-center bg-transparent overflow-auto">
-      <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none"> WoodenMax </div>
-       <div ref={renderedWindowRef} style={{ margin: 'auto' }}>
-            {windowType === WindowType.CORNER && config.leftConfig && config.rightConfig ? (
-                (() => {
-                    const leftW = Number(config.leftWidth) || 0;
-                    const rightW = Number(config.rightWidth) || 0;
-                    const postW = Number(config.cornerPostWidth) || 0;
-                    const totalW = leftW + rightW + postW;
-
-                    const cornerConfigLeft: WindowConfig = { ...config, ...config.leftConfig, width: leftW, windowType: config.leftConfig.windowType, fixedPanels: [] };
-                    const cornerConfigRight: WindowConfig = { ...config, ...config.rightConfig, width: rightW, windowType: config.rightConfig.windowType, fixedPanels: [] };
-                    
-                    const leftElements = createWindowElements(cornerConfigLeft, scale, dims, canvasCallbacks);
-                    const rightElements = createWindowElements(cornerConfigRight, scale, dims, canvasCallbacks);
-
-                    return (
-                        <div className="relative shadow-lg flex items-start" style={{ width: totalW * scale, height: numHeight * scale }}>
-                            <div className="relative flex-shrink-0">
-                                <RenderedWindow config={cornerConfigLeft} elements={leftElements} scale={scale} showLabels={false} />
-                                <DimensionLabel value={leftW} className="-top-8 left-1/2 -translate-x-1/2" />
-                            </div>
-                            <div className="relative flex-shrink-0" style={{width: postW * scale, height: numHeight * scale}}>
-                                <ProfilePiece color={profileColor} style={{ left: 0, top: 0, width: '100%', height: '100%' }} />
-                                <DimensionLabel value={postW} className="-top-8 left-1/2 -translate-x-1/2" />
-                            </div>
-                            <div className="relative flex-shrink-0">
-                                <RenderedWindow config={cornerConfigRight} elements={rightElements} scale={scale} showLabels={false} />
-                                <DimensionLabel value={rightW} className="-top-8 left-1/2 -translate-x-1/2" />
-                            </div>
-                            <DimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 -left-16 rotate-[-90deg]" />
-                        </div>
-                    )
-                })()
-            ) : (
-                <RenderedWindow config={config} elements={createWindowElements(config, scale, dims, canvasCallbacks)} scale={scale} />
-            )}
-        </div>
-      
-      <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 no-print">
-        <button onClick={handleExportPng} title="Export as PNG" disabled={isExporting} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg disabled:opacity-50 disabled:cursor-wait">
-            {isExporting ? <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <PhotoIcon className="w-6 h-6"/>}
-        </button>
-      </div>
-      
-      <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2 no-print">
-         <button onClick={() => setZoom(z => z * 1.2)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><PlusIcon className="w-6 h-6"/></button>
-         <button onClick={() => setZoom(1)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><ArrowsPointingInIcon className="w-5 h-5"/></button>
-         <button onClick={() => setZoom(z => z / 1.2)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><MinusIcon className="w-6 h-6"/></button>
-      </div>
-    </div>
-  );
-});
