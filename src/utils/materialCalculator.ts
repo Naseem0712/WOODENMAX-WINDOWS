@@ -1,3 +1,4 @@
+
 import type { WindowConfig, QuotationItem, ProfileDimensions, BOM, BOMSeries, BOMHardware, BOMProfile } from '../types';
 import { WindowType, ShutterConfigType, FixedPanelPosition } from '../types';
 
@@ -68,7 +69,7 @@ function calculateProfileUsage(config: WindowConfig): Map<keyof ProfileDimension
     const innerH = holeY2 - holeY1;
 
     // Outer Frame and Fixed Panels
-    if (config.windowType !== WindowType.GLASS_PARTITION && config.windowType !== WindowType.CORNER && config.windowType !== WindowType.ELEVATION_GLAZING) {
+    if (config.windowType !== WindowType.GLASS_PARTITION && config.windowType !== WindowType.CORNER) {
         if (dims.outerFrameVertical && Number(dims.outerFrameVertical) > 0) {
             add('outerFrame', w, w); // Horizontal pieces
             add('outerFrameVertical', h, h); // Vertical pieces
@@ -148,43 +149,6 @@ function calculateProfileUsage(config: WindowConfig): Map<keyof ProfileDimension
             }
             break;
         }
-        case WindowType.ELEVATION_GLAZING: {
-            if (!config.elevationGrid) break;
-
-            const { rowPattern, colPattern, doorPositions, floorHeight } = config.elevationGrid;
-            const validColPattern = colPattern.map(Number).filter(v => v > 0);
-            const validRowPattern = rowPattern.map(Number).filter(v => v > 0);
-            
-            const totalWidth = validColPattern.reduce((sum, v) => sum + v, 0);
-            const totalHeight = validRowPattern.reduce((sum, v) => sum + v, 0);
-
-            if (totalWidth === 0 || totalHeight === 0) break;
-
-            // Outer Frame
-            add('outerFrame', totalWidth, totalWidth);
-            add(dims.outerFrameVertical ? 'outerFrameVertical' : 'outerFrame', totalHeight, totalHeight);
-            
-            // Internal Mullions (Vertical)
-            const verticalMullionLength = (floorHeight && Number(floorHeight) > 0) ? Number(floorHeight) : totalHeight;
-            for (let i = 0; i < validColPattern.length - 1; i++) {
-                add('mullion', verticalMullionLength);
-            }
-            
-            // Internal Transoms (Horizontal)
-            for (let i = 0; i < validRowPattern.length - 1; i++) {
-                add('mullion', totalWidth);
-            }
-
-            // Door Profiles
-            for (const door of doorPositions) {
-                const doorWidth = validColPattern[door.col];
-                const doorHeight = validRowPattern[door.row];
-                if (doorWidth > 0 && doorHeight > 0) {
-                    add('casementShutter', doorWidth, doorWidth, doorHeight, doorHeight);
-                }
-            }
-            break;
-        }
     }
     return usage;
 }
@@ -243,7 +207,6 @@ export function generateBillOfMaterials(items: QuotationItem[]): BOM {
                         case WindowType.SLIDING: unitsPerWindow = config.shutterConfig === '2G' ? 2 : config.shutterConfig === '4G' ? 4 : 3; break;
                         case WindowType.CASEMENT: unitsPerWindow = config.doorPositions.length; break;
                         case WindowType.GLASS_PARTITION: unitsPerWindow = config.partitionPanels.types.filter(t => t.type !== 'fixed').length; break;
-                        case WindowType.ELEVATION_GLAZING: unitsPerWindow = config.elevationGrid?.doorPositions.length || 0; break;
                     }
                 }
             }

@@ -45,11 +45,6 @@ type ConfigAction =
   | { type: 'SET_PARTITION_HAS_TOP_CHANNEL'; payload: boolean }
   | { type: 'CYCLE_PARTITION_PANEL_FRAMING'; payload: number }
   | { type: 'SET_SIDE_CONFIG'; payload: { side: 'left' | 'right'; config: Partial<CornerSideConfig> } }
-  | { type: 'ADD_ELEVATION_PATTERN'; payload: { patternType: 'row' | 'col' } }
-  | { type: 'REMOVE_ELEVATION_PATTERN'; payload: { patternType: 'row' | 'col'; index: number } }
-  | { type: 'UPDATE_ELEVATION_PATTERN'; payload: { patternType: 'row' | 'col'; index: number; value: number | '' } }
-  | { type: 'UPDATE_ELEVATION_GRID_PROP'; payload: { prop: 'verticalMullionSize' | 'horizontalTransomSize' | 'pressurePlateSize' | 'floorHeight'; value: number | '' } }
-  | { type: 'TOGGLE_ELEVATION_GLAZING_DOOR', payload: { row: number, col: number } }
   | { type: 'UPDATE_LAMINATED_CONFIG'; payload: Partial<LaminatedGlassConfig> }
   | { type: 'UPDATE_DGU_CONFIG'; payload: Partial<DguGlassConfig> }
   | { type: 'RESET_DESIGN' };
@@ -337,19 +332,6 @@ const DEFAULT_GLASS_PARTITION_SERIES: ProfileSeries = {
   },
 };
 
-const DEFAULT_ELEVATION_GLAZING_SERIES: ProfileSeries = {
-  id: 'series-glazing-default',
-  name: 'Standard Structural Glazing',
-  type: WindowType.ELEVATION_GLAZING,
-  dimensions: { ...BASE_DIMENSIONS, outerFrame: 75, mullion: 50, casementShutter: 65 },
-  hardwareItems: DEFAULT_CASEMENT_HARDWARE,
-  glassOptions: {
-    thicknesses: [8, 10, 12, 15],
-    customThicknessAllowed: true,
-    specialTypes: ['dgu', 'laminated'],
-  },
-};
-
 const DEFAULT_CORNER_SERIES: ProfileSeries = {
     id: 'series-corner-default',
     name: 'Standard Corner Series',
@@ -431,15 +413,6 @@ const initialConfig: ConfigState = {
     doorPositions: [],
     ventilatorGrid: [],
     partitionPanels: { count: 2, types: [{ type: 'fixed' }, { type: 'sliding' }], hasTopChannel: true },
-    elevationGrid: {
-        rowPattern: [609.6, 1524, 609.6, 609.6], // 2ft, 5ft, 2ft, 2ft
-        colPattern: [1000, 1200, 1500], // 1m, 1.2m, 1.5m
-        verticalMullionSize: 50,
-        horizontalTransomSize: 50,
-        pressurePlateSize: 60,
-        doorPositions: [],
-        floorHeight: '',
-    },
     leftWidth: 1200,
     rightWidth: 1200,
     cornerPostWidth: 100,
@@ -452,7 +425,6 @@ const SERIES_MAP: Record<WindowType, ProfileSeries> = {
     [WindowType.CASEMENT]: DEFAULT_CASEMENT_SERIES,
     [WindowType.VENTILATOR]: DEFAULT_VENTILATOR_SERIES,
     [WindowType.GLASS_PARTITION]: DEFAULT_GLASS_PARTITION_SERIES,
-    [WindowType.ELEVATION_GLAZING]: DEFAULT_ELEVATION_GLAZING_SERIES,
     [WindowType.CORNER]: DEFAULT_CORNER_SERIES,
 };
 
@@ -553,21 +525,6 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             const { panelId, newConfig, side } = action.payload;
             const parts = panelId.split('-');
             const type = parts[0];
-
-            if (type === 'elevation') {
-                 if (!state.elevationGrid) return state;
-                 const row = parseInt(parts[1], 10);
-                 const col = parseInt(parts[2], 10);
-                 const newDoorPositions = state.elevationGrid.doorPositions.map(p => {
-                     if (p.row === row && p.col === col) {
-                         if (newConfig) return { ...p, handle: newConfig };
-                         const { handle, ...rest } = p;
-                         return rest;
-                     }
-                     return p;
-                 });
-                 return { ...state, elevationGrid: { ...state.elevationGrid, doorPositions: newDoorPositions } };
-            }
 
             const [configKey, config] = getSideConfig(side);
             let newSideConfig = { ...config };
@@ -696,42 +653,6 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             newTypes[index] = { ...newTypes[index], framing: currentFraming === 'none' ? 'full' : 'none' };
             return { ...state, partitionPanels: { ...state.partitionPanels, types: newTypes } };
         }
-        case 'ADD_ELEVATION_PATTERN': {
-            const { patternType } = action.payload;
-            if (!state.elevationGrid) return state;
-            const key = patternType === 'row' ? 'rowPattern' : 'colPattern';
-            const newPattern = [...state.elevationGrid[key], 1000];
-            return { ...state, elevationGrid: { ...state.elevationGrid, [key]: newPattern } };
-        }
-        case 'REMOVE_ELEVATION_PATTERN': {
-            const { patternType, index } = action.payload;
-            if (!state.elevationGrid) return state;
-            const key = patternType === 'row' ? 'rowPattern' : 'colPattern';
-            const newPattern = state.elevationGrid[key].filter((_, i) => i !== index);
-            return { ...state, elevationGrid: { ...state.elevationGrid, [key]: newPattern } };
-        }
-        case 'UPDATE_ELEVATION_PATTERN': {
-            const { patternType, index, value } = action.payload;
-            if (!state.elevationGrid) return state;
-            const key = patternType === 'row' ? 'rowPattern' : 'colPattern';
-            const newPattern = [...state.elevationGrid[key]];
-            newPattern[index] = value;
-            return { ...state, elevationGrid: { ...state.elevationGrid, [key]: newPattern } };
-        }
-        case 'UPDATE_ELEVATION_GRID_PROP': {
-            const { prop, value } = action.payload;
-            if (!state.elevationGrid) return state;
-            return { ...state, elevationGrid: { ...state.elevationGrid, [prop]: value } };
-        }
-        case 'TOGGLE_ELEVATION_GLAZING_DOOR': {
-             if (!state.elevationGrid) return state;
-            const { row, col } = action.payload;
-            const exists = state.elevationGrid.doorPositions.some(p => p.row === row && p.col === col);
-            const newDoorPositions = exists
-                ? state.elevationGrid.doorPositions.filter(p => p.row !== row || p.col !== col)
-                : [...state.elevationGrid.doorPositions, { row, col }];
-            return { ...state, elevationGrid: { ...state.elevationGrid, doorPositions: newDoorPositions } };
-        }
         case 'UPDATE_LAMINATED_CONFIG':
             return { ...state, laminatedGlassConfig: { ...state.laminatedGlassConfig, ...action.payload } };
         case 'UPDATE_DGU_CONFIG':
@@ -774,7 +695,6 @@ const getInitialConfig = (): ConfigState => {
           glassGrid: { ...initialConfig.glassGrid, ...(parsed.glassGrid || {}) },
           glassTexture: parsed.glassTexture || '',
           partitionPanels: { ...initialConfig.partitionPanels, ...(parsed.partitionPanels || {}) },
-          elevationGrid: { ...initialConfig.elevationGrid, ...(parsed.elevationGrid || {}) },
           laminatedGlassConfig: { ...initialConfig.laminatedGlassConfig, ...(parsed.laminatedGlassConfig || {}) },
           dguGlassConfig: { ...initialConfig.dguGlassConfig, ...(parsed.dguGlassConfig || {}) },
           leftConfig: { ...defaultCornerSideConfig, ...(parsed.leftConfig || {}) },
@@ -783,7 +703,6 @@ const getInitialConfig = (): ConfigState => {
 
       // Ensure critical arrays inside nested objects are present
       finalConfig.partitionPanels.types = finalConfig.partitionPanels.types || [];
-      finalConfig.elevationGrid.doorPositions = finalConfig.elevationGrid.doorPositions || [];
       finalConfig.leftConfig.slidingHandles = finalConfig.leftConfig.slidingHandles || [];
       finalConfig.leftConfig.doorPositions = finalConfig.leftConfig.doorPositions || [];
       finalConfig.leftConfig.ventilatorGrid = finalConfig.leftConfig.ventilatorGrid || [];
@@ -942,7 +861,7 @@ const App: React.FC = () => {
   const availableSeries = useMemo(() => {
     const allSeries = [
         DEFAULT_SLIDING_SERIES, DEFAULT_CASEMENT_SERIES, DEFAULT_VENTILATOR_SERIES, 
-        DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_ELEVATION_GLAZING_SERIES, DEFAULT_CORNER_SERIES, ...savedSeries
+        DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_CORNER_SERIES, ...savedSeries
     ];
     return allSeries.filter((s, index, self) => index === self.findIndex(t => t.id === s.id));
   }, [savedSeries]);
@@ -1136,19 +1055,6 @@ const App: React.FC = () => {
   const onSetPartitionHasTopChannel = useCallback((hasChannel: boolean) => dispatch({ type: 'SET_PARTITION_HAS_TOP_CHANNEL', payload: hasChannel }), []);
   const onCyclePartitionPanelFraming = useCallback((index: number) => dispatch({ type: 'CYCLE_PARTITION_PANEL_FRAMING', payload: index }), []);
   
-  const handleElevationGridChange = useCallback((action: 'add' | 'remove' | 'update' | 'update_prop', payload: any) => {
-    switch (action) {
-        case 'add': dispatch({ type: 'ADD_ELEVATION_PATTERN', payload }); break;
-        case 'remove': dispatch({ type: 'REMOVE_ELEVATION_PATTERN', payload }); break;
-        case 'update': dispatch({ type: 'UPDATE_ELEVATION_PATTERN', payload }); break;
-        case 'update_prop': dispatch({ type: 'UPDATE_ELEVATION_GRID_PROP', payload }); break;
-    }
-  }, []);
-
-  const handleToggleElevationDoor = useCallback((row: number, col: number) => {
-    dispatch({ type: 'TOGGLE_ELEVATION_GLAZING_DOOR', payload: { row, col } });
-  }, []);
-
   const handleLaminatedConfigChange = useCallback((payload: Partial<LaminatedGlassConfig>) => {
     dispatch({ type: 'UPDATE_LAMINATED_CONFIG', payload });
   }, []);
@@ -1183,8 +1089,6 @@ const App: React.FC = () => {
                     } else { // Hinge, lock, handle, etc., are for doors
                         panelCount = doorCells;
                     }
-                } else if (config.windowType === WindowType.ELEVATION_GLAZING) {
-                    panelCount = (config as WindowConfig).elevationGrid.doorPositions.length;
                 } else {
                      switch(config.windowType) {
                         case WindowType.SLIDING: panelCount = config.shutterConfig === '2G' ? 2 : config.shutterConfig === '4G' ? 4 : 3; break;
@@ -1205,16 +1109,26 @@ const App: React.FC = () => {
 
   const handleSaveToQuotation = useCallback(() => {
     const colorName = savedColors.find(c => c.value === windowConfig.profileColor)?.name;
+
+    const configForQuotation = JSON.parse(JSON.stringify(windowConfig));
+    // Strip large texture data to prevent storage issues and crashes
+    if (configForQuotation.profileColor && configForQuotation.profileColor.startsWith('data:image')) {
+        configForQuotation.profileColor = '#808080'; // Use a neutral grey for print/preview of textured items
+    }
+    if (configForQuotation.glassTexture) {
+        configForQuotation.glassTexture = '';
+    }
+
     const newItem: QuotationItem = {
         id: uuidv4(),
         title: windowTitle || 'Untitled Window',
-        config: JSON.parse(JSON.stringify(windowConfig)),
+        config: configForQuotation,
         quantity: Number(quantity) || 1,
         areaType,
         rate: Number(rate) || 0,
         hardwareCost: hardwareCostPerWindow,
         hardwareItems: JSON.parse(JSON.stringify(series.hardwareItems)),
-        profileColorName: colorName,
+        profileColorName: colorName || 'Custom Texture',
     };
     setQuotationItems(prev => [...prev, newItem]);
     alert(`"${newItem.title}" saved to quotation! You now have ${quotationItems.length + 1} item(s).`);
@@ -1222,10 +1136,20 @@ const App: React.FC = () => {
 
   const handleBatchSave = useCallback((items: BatchAddItem[]) => {
     const colorName = savedColors.find(c => c.value === windowConfig.profileColor)?.name;
+    
+    const baseConfigForQuotation = JSON.parse(JSON.stringify(windowConfig));
+    // Strip large texture data to prevent storage issues and crashes
+    if (baseConfigForQuotation.profileColor && baseConfigForQuotation.profileColor.startsWith('data:image')) {
+        baseConfigForQuotation.profileColor = '#808080'; // Use a neutral grey for print/preview of textured items
+    }
+    if (baseConfigForQuotation.glassTexture) {
+        baseConfigForQuotation.glassTexture = '';
+    }
+
     const newQuotationItems: QuotationItem[] = items
       .filter(item => Number(item.width) > 0 && Number(item.height) > 0)
       .map(item => {
-        const itemConfig = JSON.parse(JSON.stringify(windowConfig));
+        const itemConfig = JSON.parse(JSON.stringify(baseConfigForQuotation));
         itemConfig.width = Number(item.width);
         itemConfig.height = Number(item.height);
         
@@ -1240,7 +1164,7 @@ const App: React.FC = () => {
           rate: Number(item.rate) || 0,
           hardwareCost: hardwareCostPerWindow,
           hardwareItems: JSON.parse(JSON.stringify(series.hardwareItems)),
-          profileColorName: colorName,
+          profileColorName: colorName || 'Custom Texture',
         };
     });
 
@@ -1300,13 +1224,12 @@ const App: React.FC = () => {
     onCyclePartitionPanelType,
     onSetPartitionHasTopChannel,
     onCyclePartitionPanelFraming,
-    onElevationGridChange: handleElevationGridChange,
     onLaminatedConfigChange: handleLaminatedConfigChange,
     onDguConfigChange: handleDguConfigChange,
     onResetDesign: handleResetDesign,
     activeCornerSide,
     setActiveCornerSide
-  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleElevationGridChange, handleLaminatedConfigChange, handleDguConfigChange, handleResetDesign, activeCornerSide]);
+  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleLaminatedConfigChange, handleDguConfigChange, handleResetDesign, activeCornerSide]);
 
   const handleOpenConfigure = () => setActiveMobilePanel('configure');
   const handleOpenQuote = () => setActiveMobilePanel('quotation');
@@ -1349,7 +1272,7 @@ const App: React.FC = () => {
             <div className="relative flex-1 flex flex-col min-w-0">
                 {!isDesktopPanelOpen && ( <button onClick={() => setIsDesktopPanelOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex" aria-label="Expand panel"> <ChevronLeftIcon className="w-5 h-5 rotate-180" /> </button> )}
               <div className="flex-grow relative">
-                 <WindowCanvas key={canvasKey} config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} onToggleElevationDoor={handleToggleElevationDoor} />
+                 <WindowCanvas key={canvasKey} config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} onToggleElevationDoor={() => {}} />
               </div>
               <div className="flex-shrink-0 no-print hidden lg:block">
                   <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onBatchAdd={handleBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={handleViewQuotation} />

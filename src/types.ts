@@ -1,10 +1,12 @@
 
 
+
 export enum WindowType {
   SLIDING = 'sliding',
   CASEMENT = 'casement',
   VENTILATOR = 'ventilator',
   GLASS_PARTITION = 'glass_partition',
+  // FIX: Added 'ELEVATION_GLAZING' to support elevation glazing window type.
   ELEVATION_GLAZING = 'elevation_glazing',
   CORNER = 'corner',
 }
@@ -106,7 +108,7 @@ export enum GlassType {
   TINTED_BLUE = 'tinted-blue',
   CLEAR_SAPPHIRE = 'clear-sapphire',
   BROWN_TINTED = 'brown-tinted',
-  BLACK_TINTED = 'black-tinted',
+  BLACK_TINTED = 'black-tilted',
   TINTED_GREY = 'tinted-grey',
   VERTICAL_FLUTED = 'vertical-fluted',
 }
@@ -228,8 +230,9 @@ export interface WindowConfig {
     hasTopChannel: boolean;
   };
 
+  // FIX: Added optional 'elevationGrid' to support elevation glazing designs.
   // Elevation Glazing specific
-  elevationGrid: {
+  elevationGrid?: {
     rowPattern: (number | '')[];
     colPattern: (number | '')[];
     verticalMullionSize: number | '';

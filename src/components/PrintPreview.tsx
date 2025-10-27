@@ -415,8 +415,8 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
             {profileElements}
             {innerAreaWidth > 0 && innerAreaHeight > 0 && (
                 <div className="absolute" style={{ top: holeY1 * scale, left: holeX1 * scale, width: innerAreaWidth * scale, height: innerAreaHeight * scale }}>
-                    {/*// FIX: Refactor IIFE for sliding window rendering to avoid potential TypeScript type inference issues.*/}
-                    {windowType === WindowType.SLIDING && (() => {
+                    {/*// FIX: Refactored IIFE conditional rendering to use a ternary operator, preventing a boolean `false` from being rendered.*/}
+                    {windowType === WindowType.SLIDING ? (() => {
                         const { shutterConfig, fixedShutters, slidingHandles } = config;
                         const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;
                         const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
@@ -460,7 +460,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                 return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><PrintSlidingShutter panelId={`sliding-${i}`} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={leftProfile} rightProfile={rightProfile} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
                             });
                         }
-                    })()}
+                    })() : null}
                     
                     {windowType === WindowType.ELEVATION_GLAZING && (() => {
                         if (!config.elevationGrid) return null;

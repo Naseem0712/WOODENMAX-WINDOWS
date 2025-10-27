@@ -47,7 +47,6 @@ interface ControlsPanelProps {
   onCyclePartitionPanelType: (index: number) => void;
   onSetPartitionHasTopChannel: (hasChannel: boolean) => void;
   onCyclePartitionPanelFraming: (index: number) => void;
-  onElevationGridChange: (action: 'add' | 'remove' | 'update' | 'update_prop', payload: any) => void;
   onLaminatedConfigChange: (payload: Partial<LaminatedGlassConfig>) => void;
   onDguConfigChange: (payload: Partial<DguGlassConfig>) => void;
   onResetDesign: () => void;
@@ -82,7 +81,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
     onHardwareChange, onAddHardware, onRemoveHardware,
     toggleDoorPosition, onVentilatorCellClick,
     savedColors, setSavedColors, onUpdateHandle,
-    onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onElevationGridChange,
+    onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming,
     onLaminatedConfigChange, onDguConfigChange,
     onResetDesign,
     activeCornerSide, setActiveCornerSide
@@ -123,22 +122,6 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
             break;
         case WindowType.GLASS_PARTITION:
             for(let i=0; i<config.partitionPanels.count; i++) panels.push({ id: `partition-${i}`, name: `Panel ${i+1}`});
-            break;
-            case WindowType.ELEVATION_GLAZING:
-            if (config.elevationGrid) {
-                const rows = config.elevationGrid.rowPattern.length;
-                const cols = config.elevationGrid.colPattern.length;
-                    for(let r=0; r<rows; r++) {
-                    for(let c=0; c<cols; c++) {
-                        const isDoor = config.elevationGrid.doorPositions.some(p => p.row === r && p.col === c);
-                        if (isDoor) {
-                            panels.push({ id: `elevation-door-${r}-${c}`, name: `Door (R${r+1},C${c+1})` });
-                        } else {
-                            panels.push({ id: `elevation-${r}-${c}`, name: `Panel (R${r+1},C${c+1})` });
-                        }
-                    }
-                }
-            }
             break;
     }
     config.fixedPanels.forEach(p => panels.push({id: `fixed-${p.position}`, name: `Fixed ${p.position}`}));
@@ -228,9 +211,6 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         case WindowType.GLASS_PARTITION:
             config.partitionPanels.types.forEach((p, i) => { if (p.type !== 'fixed') { panels.push({ id: `partition-${i}`, label: `Panel ${i + 1} (${p.type})` }); } });
             break;
-        case WindowType.ELEVATION_GLAZING:
-            config.elevationGrid?.doorPositions.forEach(p => { panels.push({ id: `elevation-${p.row}-${p.col}`, label: `Door (R${p.row + 1}, C${p.col + 1})` }); });
-            break;
     }
     if (selectedPanelId && !panels.some(p => p.id === selectedPanelId)) {
         setSelectedPanelId(panels[0]?.id || '');
@@ -250,7 +230,6 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         case 'casement': return displayConfig.doorPositions.find(p => p.row === parseInt(parts[1], 10) && p.col === parseInt(parts[2], 10))?.handle || null;
         case 'ventilator': return displayConfig.ventilatorGrid[parseInt(parts[1], 10)]?.[parseInt(parts[2], 10)]?.handle || null;
         case 'partition': return config.partitionPanels.types[parseInt(parts[1], 10)]?.handle || null;
-        case 'elevation': return config.elevationGrid?.doorPositions.find(p => p.row === parseInt(parts[1], 10) && p.col === parseInt(parts[2], 10))?.handle || null;
         default: return null;
     }
   }, [selectedPanelId, displayConfig, config]);
@@ -333,7 +312,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
 
       <CollapsibleCard title="Design Type" isOpen={openCard === 'Design Type'} onToggle={() => handleToggleCard('Design Type')}>
           <div className="grid grid-cols-3 bg-slate-700 rounded-md p-1 gap-1">
-              {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.ELEVATION_GLAZING, WindowType.CORNER].map(type => {
+              {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.CORNER].map(type => {
                   const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                   const isActive = (isCorner && type === WindowType.CORNER) || (!isCorner && windowType === type);
                   return <button key={type} onClick={() => setConfig('windowType', type)} className={`p-2 text-xs font-semibold rounded capitalize ${isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>{typeLabel}</button>
@@ -368,51 +347,6 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
               <option value={WindowType.VENTILATOR}>Ventilator</option>
             </Select>
          </CollapsibleCard>
-      )}
-
-      {activeWindowType === WindowType.ELEVATION_GLAZING && config.elevationGrid && (
-        <CollapsibleCard title="Elevation Grid Pattern" isOpen={openCard === 'Elevation Grid Pattern'} onToggle={() => handleToggleCard('Elevation Grid Pattern')}>
-           <p className="text-xs text-slate-400 mb-4">Click on a glass panel in the canvas to turn it into an operable door.</p>
-          <div className="grid grid-cols-2 gap-4">
-              <DimensionInput id={`${idPrefix}elevation-v-mullion`} name="elevation-v-mullion" label="Vertical Mullion Size" value_mm={config.elevationGrid.verticalMullionSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'verticalMullionSize', value: v })} />
-              <DimensionInput id={`${idPrefix}elevation-h-transom`} name="elevation-h-transom" label="Horizontal Transom Size" value_mm={config.elevationGrid.horizontalTransomSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'horizontalTransomSize', value: v })} />
-          </div>
-          <DimensionInput id={`${idPrefix}elevation-pressure-plate`} name="elevation-pressure-plate" label="Pressure/Cover Plate Size" value_mm={config.elevationGrid.pressurePlateSize} onChange_mm={v => onElevationGridChange('update_prop', { prop: 'pressurePlateSize', value: v })} />
-          <div className="mt-4 pt-4 border-t border-slate-700">
-             <DimensionInput 
-                id={`${idPrefix}elevation-floor-height`}
-                name="elevation-floor-height"
-                label="Floor to Floor Height (Optional)" 
-                value_mm={config.elevationGrid.floorHeight} 
-                onChange_mm={v => onElevationGridChange('update_prop', { prop: 'floorHeight', value: v })} 
-                placeholder="For vertical profile calc."
-            />
-          </div>
-          <div className="mt-4 pt-4 border-t border-slate-700">
-              <h4 className="text-base font-semibold text-slate-200 mb-2">Vertical Pattern (Columns)</h4>
-              <div className="space-y-2">
-                  {config.elevationGrid.colPattern.map((width, index) => (
-                      <div key={index} className="flex items-end gap-2">
-                          <DimensionInput id={`${idPrefix}elevation-col-${index}`} name={`elevation-col-${index}`} label={`Width ${index + 1}`} value_mm={width} onChange_mm={v => onElevationGridChange('update', { patternType: 'col', index, value: v })} className="flex-grow" />
-                          <Button variant="danger" onClick={() => onElevationGridChange('remove', { patternType: 'col', index })} className="p-2 h-10 w-10 flex-shrink-0"><TrashIcon className="w-5 h-5"/></Button>
-                      </div>
-                  ))}
-              </div>
-              <Button variant="secondary" className="w-full mt-2" onClick={() => onElevationGridChange('add', { patternType: 'col' })}><PlusIcon className="w-4 h-4 mr-2" /> Add Column Width</Button>
-          </div>
-           <div className="mt-4 pt-4 border-t border-slate-700">
-              <h4 className="text-base font-semibold text-slate-200 mb-2">Horizontal Pattern (Rows)</h4>
-              <div className="space-y-2">
-                  {config.elevationGrid.rowPattern.map((height, index) => (
-                       <div key={index} className="flex items-end gap-2">
-                          <DimensionInput id={`${idPrefix}elevation-row-${index}`} name={`elevation-row-${index}`} label={`Height ${index + 1}`} value_mm={height} onChange_mm={v => onElevationGridChange('update', { patternType: 'row', index, value: v })} className="flex-grow" />
-                          <Button variant="danger" onClick={() => onElevationGridChange('remove', { patternType: 'row', index })} className="p-2 h-10 w-10 flex-shrink-0"><TrashIcon className="w-5 h-5"/></Button>
-                      </div>
-                  ))}
-              </div>
-              <Button variant="secondary" className="w-full mt-2" onClick={() => onElevationGridChange('add', { patternType: 'row' })}><PlusIcon className="w-4 h-4 mr-2" /> Add Row Height</Button>
-          </div>
-        </CollapsibleCard>
       )}
 
       {activeWindowType === WindowType.SLIDING && (
@@ -664,7 +598,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         </div>
       </CollapsibleCard>
       
-      {windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.ELEVATION_GLAZING && (
+      {windowType !== WindowType.GLASS_PARTITION && (
           <CollapsibleCard title="Fixed Panels" isOpen={openCard === 'Fixed Panels'} onToggle={() => handleToggleCard('Fixed Panels')}>
           <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.TOP)}><PlusIcon className="w-4 h-4 mr-2"/> Top</Button>
