@@ -853,7 +853,21 @@ const App: React.FC = () => {
   }), [windowConfigState, series]);
 
   // --- PERSISTENCE EFFECTS ---
-  useEffect(() => { window.localStorage.setItem('woodenmax-current-config', JSON.stringify(windowConfigState)); }, [windowConfigState]);
+  useEffect(() => {
+    try {
+        const stateToSave = { ...windowConfigState };
+        if (stateToSave.profileColor && stateToSave.profileColor.startsWith('data:image')) {
+            stateToSave.profileColor = '#374151'; // Reset to default to avoid storage errors
+        }
+        if (stateToSave.glassTexture) {
+            stateToSave.glassTexture = ''; // Do not persist texture data
+        }
+        window.localStorage.setItem('woodenmax-current-config', JSON.stringify(stateToSave));
+    } catch (error) {
+        console.error("Could not save current config to localStorage:", error);
+    }
+  }, [windowConfigState]);
+
   useEffect(() => { window.localStorage.setItem('woodenmax-quotation-items', JSON.stringify(quotationItems)); }, [quotationItems]);
   useEffect(() => {
     window.localStorage.setItem('woodenmax-quotation-panel-title', windowTitle);
@@ -876,7 +890,14 @@ const App: React.FC = () => {
       window.localStorage.setItem('aluminium-window-profiles', JSON.stringify(userSaved));
   }, [savedSeries]);
   useEffect(() => { window.localStorage.setItem('aluminium-window-last-series', JSON.stringify(series)); }, [series]);
-  useEffect(() => { window.localStorage.setItem('aluminium-window-colors', JSON.stringify(savedColors)); }, [savedColors]);
+  useEffect(() => {
+    try {
+        const colorsToSave = savedColors.filter(c => c.type === 'color');
+        window.localStorage.setItem('aluminium-window-colors', JSON.stringify(colorsToSave));
+    } catch (error) {
+        console.error("Could not save colors to localStorage:", error);
+    }
+  }, [savedColors]);
   useEffect(() => { window.localStorage.setItem('woodenmax-quotation-settings', JSON.stringify(quotationSettings)); }, [quotationSettings]);
   
   const SERIES_MAP_MEMO = useMemo(() => SERIES_MAP, []);

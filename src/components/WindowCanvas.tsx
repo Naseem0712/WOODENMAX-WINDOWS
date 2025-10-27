@@ -295,10 +295,10 @@ const createWindowElements = (
     }
 ) => {
     const { width, height, series, fixedPanels, profileColor, windowType } = config;
+    const w = Number(width) || 0;
     const numHeight = Number(height) || 0;
 
     const geometry = (() => {
-        const w = Number(width) || 0;
         const topFix = fixedPanels.find(p => p.position === FixedPanelPosition.TOP);
         const bottomFix = fixedPanels.find(p => p.position === FixedPanelPosition.BOTTOM);
         const leftFix = fixedPanels.find(p => p.position === FixedPanelPosition.LEFT);
@@ -317,7 +317,6 @@ const createWindowElements = (
     const glassElements: React.ReactNode[] = [];
     const handleElements: React.ReactNode[] = [];
     const { topFix, bottomFix, leftFix, rightFix, frameOffset, holeX1, holeY1, holeX2, holeY2 } = geometry;
-    const w = Number(width) || 0;
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
@@ -370,49 +369,52 @@ const createWindowElements = (
                     const validColPattern = colPattern.map(Number).filter(v => v > 0);
                     const validRowPattern = rowPattern.map(Number).filter(v => v > 0);
                     
-                    const totalGridWidth = validColPattern.reduce((a, b) => a + b, 0);
-                    const totalGridHeight = validRowPattern.reduce((a, b) => a + b, 0);
+                    const totalPatternWidth = validColPattern.reduce((a, b) => a + b, 0) || 1;
+                    const totalPatternHeight = validRowPattern.reduce((a, b) => a + b, 0) || 1;
+                    
+                    const scaleX = innerAreaWidth / totalPatternWidth;
+                    const scaleY = innerAreaHeight / totalPatternHeight;
 
                     const profilesAndPlates: React.ReactNode[] = [];
 
                     // 1. Render glass panels first, cell by cell
-                    let currentY_cell = 0;
+                    let currentY_pattern = 0;
                     for (let r = 0; r < validRowPattern.length; r++) {
-                        let currentX_cell = 0;
+                        let currentX_pattern = 0;
                         for (let c = 0; c < validColPattern.length; c++) {
                             const isDoor = doorPositions.some(p => p.row === r && p.col === c);
                             if (!isDoor) {
-                                const cellWidth = validColPattern[c];
-                                const cellHeight = validRowPattern[r];
+                                const cellWidth = validColPattern[c] * scaleX;
+                                const cellHeight = validRowPattern[r] * scaleY;
                                 innerContent.push(
                                     <GlassPanel 
                                         key={`cell-glass-${r}-${c}`} 
                                         panelId={`elevation-${r}-${c}`}
                                         config={config}
-                                        style={{ left: currentX_cell * scale, top: currentY_cell * scale, width: cellWidth * scale, height: cellHeight * scale }} 
+                                        style={{ left: currentX_pattern * scale, top: currentY_pattern * scale, width: cellWidth * scale, height: cellHeight * scale }} 
                                         glassWidth={cellWidth} 
                                         glassHeight={cellHeight} 
                                         scale={scale}
                                     />
                                 );
                             }
-                            currentX_cell += validColPattern[c];
+                            currentX_pattern += validColPattern[c] * scaleX;
                         }
-                        currentY_cell += validRowPattern[r];
+                        currentY_pattern += validRowPattern[r] * scaleY;
                     }
 
                     // 2. Then render profiles at the seams
                     // Transoms (Horizontal)
                     let currentY_profile = 0;
                     for (let r = 0; r < validRowPattern.length - 1; r++) {
-                        currentY_profile += validRowPattern[r];
-                        profilesAndPlates.push(<ProfilePiece key={`htransom-${r}`} color={profileColor} style={{ left: 0, top: (currentY_profile - hTransom / 2) * scale, width: totalGridWidth * scale, height: hTransom * scale, zIndex: 1 }} />);
+                        currentY_profile += validRowPattern[r] * scaleY;
+                        profilesAndPlates.push(<ProfilePiece key={`htransom-${r}`} color={profileColor} style={{ left: 0, top: (currentY_profile - hTransom / 2) * scale, width: innerAreaWidth * scale, height: hTransom * scale, zIndex: 1 }} />);
                     }
                     // Mullions (Vertical)
                     let currentX_profile = 0;
                     for (let c = 0; c < validColPattern.length - 1; c++) {
-                        currentX_profile += validColPattern[c];
-                        profilesAndPlates.push(<ProfilePiece key={`vmullion-${c}`} color={profileColor} style={{ top: 0, left: (currentX_profile - vMullion / 2) * scale, width: vMullion * scale, height: totalGridHeight * scale, zIndex: 1 }} />);
+                        currentX_profile += validColPattern[c] * scaleX;
+                        profilesAndPlates.push(<ProfilePiece key={`vmullion-${c}`} color={profileColor} style={{ top: 0, left: (currentX_profile - vMullion / 2) * scale, width: vMullion * scale, height: innerAreaHeight * scale, zIndex: 1 }} />);
                     }
 
                     // 3. Pressure Plates on top
@@ -420,33 +422,32 @@ const createWindowElements = (
                         // Horizontal plates
                         currentY_profile = 0;
                         for (let r = 0; r < validRowPattern.length - 1; r++) {
-                            currentY_profile += validRowPattern[r];
-                            profilesAndPlates.push(<ProfilePiece key={`hplate-${r}`} color="#6B7280" style={{ zIndex: 2, left: 0, top: (currentY_profile - pressurePlate / 2) * scale, width: totalGridWidth * scale, height: pressurePlate * scale }} />);
+                            currentY_profile += validRowPattern[r] * scaleY;
+                            profilesAndPlates.push(<ProfilePiece key={`hplate-${r}`} color="#6B7280" style={{ zIndex: 2, left: 0, top: (currentY_profile - pressurePlate / 2) * scale, width: innerAreaWidth * scale, height: pressurePlate * scale }} />);
                         }
                         // Vertical plates
                         currentX_profile = 0;
                         for (let c = 0; c < validColPattern.length - 1; c++) {
-                            currentX_profile += validColPattern[c];
-                            profilesAndPlates.push(<ProfilePiece key={`vplate-${c}`} color="#6B7280" style={{ zIndex: 2, top: 0, left: (currentX_profile - pressurePlate / 2) * scale, width: pressurePlate * scale, height: totalGridHeight * scale }} />);
+                            currentX_profile += validColPattern[c] * scaleX;
+                            profilesAndPlates.push(<ProfilePiece key={`vplate-${c}`} color="#6B7280" style={{ zIndex: 2, top: 0, left: (currentX_profile - pressurePlate / 2) * scale, width: pressurePlate * scale, height: innerAreaHeight * scale }} />);
                         }
                     }
                     innerContent.push(<div key="profiles-wrapper" className="absolute inset-0">{profilesAndPlates}</div>);
 
-
                     // 4. Render Doors and Clickable Overlays
-                    currentY_cell = 0;
+                    currentY_pattern = 0;
                     for (let r = 0; r < validRowPattern.length; r++) {
-                        let currentX_cell = 0;
+                        let currentX_pattern = 0;
                         for (let c = 0; c < validColPattern.length; c++) {
-                            const cellWidth = validColPattern[c];
-                            const cellHeight = validRowPattern[r];
+                            const cellWidth = validColPattern[c] * scaleX;
+                            const cellHeight = validRowPattern[r] * scaleY;
                             const isDoor = doorPositions.some(p => p.row === r && p.col === c);
 
                             innerContent.push(
                                 <button key={`cell-btn-${r}-${c}`} 
                                         onClick={() => callbacks.onToggleElevationDoor(r, c)} 
                                         className="absolute hover:bg-white/20 z-20"
-                                        style={{ left: currentX_cell * scale, top: currentY_cell * scale, width: cellWidth * scale, height: cellHeight * scale }}
+                                        style={{ left: currentX_pattern * scale, top: currentY_pattern * scale, width: cellWidth * scale, height: cellHeight * scale }}
                                 />
                             );
 
@@ -454,7 +455,7 @@ const createWindowElements = (
                                 const doorInfo = doorPositions.find(p => p.row === r && p.col === c)!;
                                 
                                 innerContent.push(
-                                  <div key={`cell-door-${r}-${c}`} className="absolute" style={{left: currentX_cell*scale, top: currentY_cell*scale, width: cellWidth*scale, height: cellHeight*scale, zIndex: 15}}>
+                                  <div key={`cell-door-${r}-${c}`} className="absolute" style={{left: currentX_pattern*scale, top: currentY_pattern*scale, width: cellWidth*scale, height: cellHeight*scale, zIndex: 15}}>
                                     <MiteredFrame width={cellWidth} height={cellHeight} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
                                     <GlassPanel panelId={`elevation-door-${r}-${c}`} config={config} style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellWidth - 2 * dims.casementShutter)*scale, height: (cellHeight - 2 * dims.casementShutter)*scale }} glassWidth={cellWidth - 2 * dims.casementShutter} glassHeight={cellHeight - 2 * dims.casementShutter} scale={scale}>
                                       <ShutterIndicator type="hinged" />
@@ -463,12 +464,12 @@ const createWindowElements = (
                                 );
 
                                  if (doorInfo.handle) {
-                                    handleElements.push(<div key={`handle-elev-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (currentX_cell + cellWidth * doorInfo.handle.x / 100) * scale, top: (currentY_cell + cellHeight * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} /></div>);
+                                    handleElements.push(<div key={`handle-elev-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (currentX_pattern + cellWidth * doorInfo.handle.x / 100) * scale, top: (currentY_pattern + cellHeight * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} /></div>);
                                 }
                             }
-                            currentX_cell += cellWidth;
+                            currentX_pattern += cellWidth;
                         }
-                        currentY_cell += validRowPattern[r];
+                        currentY_pattern += cellHeight;
                     }
                 }
                 break;
@@ -554,6 +555,7 @@ const createWindowElements = (
                                 const louvers: React.ReactNode[] = [];
                                 if (dims.louverBlade > 0) {
                                     const spacing = dims.louverBlade;
+                                    // FIX: Corrected variable name from `cellHeight` to `cellH`.
                                     const numLouvers = Math.ceil(cellH / spacing);
                                      for (let i=0; i < numLouvers; i++) {
                                        louvers.push(<ProfilePiece key={`louver-${i}`} color={profileColor} style={{left: 0, top: (i * spacing)*scale, width: cellW*scale, height: dims.louverBlade*scale }}/>)
@@ -701,8 +703,8 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   
   const numWidth = windowType === WindowType.CORNER 
     ? (Number(config.leftWidth) || 0) + (Number(config.rightWidth) || 0) + (Number(config.cornerPostWidth) || 0)
-    : (windowType === WindowType.ELEVATION_GLAZING && config.elevationGrid ? config.elevationGrid.colPattern.map(Number).filter(v => v > 0).reduce((s,v) => s+v, 0) : Number(width)) || 0;
-  const numHeight = (windowType === WindowType.ELEVATION_GLAZING && config.elevationGrid ? config.elevationGrid.rowPattern.map(Number).filter(v => v > 0).reduce((s,v) => s+v, 0) : Number(height)) || 0;
+    : Number(width) || 0;
+  const numHeight = Number(height) || 0;
 
 
   const dims = useMemo(() => ({
