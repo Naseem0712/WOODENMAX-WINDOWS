@@ -306,7 +306,7 @@ const createWindowElements = (
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
-    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.ELEVATION_GLAZING) {
+    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
         profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
     }
@@ -591,9 +591,19 @@ const createWindowElements = (
             }
             case WindowType.GLASS_PARTITION: {
                 const { partitionPanels } = config;
-                const panelWidth = innerAreaWidth / partitionPanels.count;
-                const overlap = 25;
-                
+                const gap = 5; // mm
+
+                const numGaps = partitionPanels.types.slice(0, -1).reduce((acc, current, index) => {
+                    const next = partitionPanels.types[index + 1];
+                    if ((current.type === 'sliding' || current.type === 'hinged') && (next.type === 'sliding' || next.type === 'hinged')) {
+                        return acc + 1;
+                    }
+                    return acc;
+                }, 0);
+
+                const totalContentWidth = innerAreaWidth - (numGaps * gap);
+                const panelWidth = totalContentWidth / partitionPanels.count;
+
                 if (partitionPanels.hasTopChannel) {
                   innerContent.push(<ProfilePiece key="track-top" color={profileColor} style={{ top: 0, left: 0, width: innerAreaWidth * scale, height: dims.topTrack * scale }} />);
                   innerContent.push(<ProfilePiece key="track-bottom" color={profileColor} style={{ bottom: 0, left: 0, width: innerAreaWidth * scale, height: dims.bottomTrack * scale }} />);
@@ -601,20 +611,17 @@ const createWindowElements = (
                 
                 const panelAreaY = partitionPanels.hasTopChannel ? dims.topTrack : 0;
                 const panelAreaHeight = innerAreaHeight - (partitionPanels.hasTopChannel ? dims.topTrack + dims.bottomTrack : 0);
-
+                
+                let currentX = 0;
                 for (let i=0; i < partitionPanels.count; i++) {
                     const panelId = `partition-${i}`;
                     const panelConfig = partitionPanels.types[i];
                     if (!panelConfig) continue;
                     const { type, handle, framing } = panelConfig;
 
+                    const panelX = currentX;
+                    const currentPanelWidth = panelWidth;
                     const zIndex = type === 'sliding' ? 10 + i : 5;
-                    let panelX = i * (panelWidth);
-                    let currentPanelWidth = panelWidth;
-                    if (type === 'sliding') {
-                        panelX = i * (panelWidth - overlap);
-                        currentPanelWidth += overlap;
-                    }
                     
                     if (handle) {
                         handleElements.push(<div key={`handle-part-${i}`} style={{ position: 'absolute', zIndex: 30, left: (panelX + currentPanelWidth * handle.x / 100) * scale, top: (panelAreaY + panelAreaHeight * handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handle} scale={scale} color={profileColor} /></div>);
@@ -631,6 +638,15 @@ const createWindowElements = (
                           </GlassPanel>
                         </div>
                     );
+
+                    currentX += panelWidth;
+                    // Add gap for the next panel if needed
+                    if (i < partitionPanels.count - 1) {
+                        const nextPanelConfig = partitionPanels.types[i+1];
+                        if ((type === 'sliding' || type === 'hinged') && (nextPanelConfig.type === 'sliding' || nextPanelConfig.type === 'hinged')) {
+                            currentX += gap;
+                        }
+                    }
                 }
                 break;
             }
@@ -735,31 +751,65 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
         const opt = {
             margin: 0,
             html2canvas: {
-                scale: 4, // Use a fixed high scale for good resolution
-                backgroundColor: null,
+                scale: 4, // High resolution capture
+                backgroundColor: null, // Transparent background
                 logging: false,
                 useCORS: true,
             },
         };
 
         html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((productCanvas: HTMLCanvasElement) => {
-            const padding = 100; // Generous padding for a nice border
-            
+            const FINAL_WIDTH = 2000;
+            const FINAL_HEIGHT = 2000;
+            const PADDING = 100;
+
             const newCanvas = document.createElement('canvas');
-            newCanvas.width = productCanvas.width + padding * 2;
-            newCanvas.height = productCanvas.height + padding * 2;
+            newCanvas.width = FINAL_WIDTH;
+            newCanvas.height = FINAL_HEIGHT;
             
             const ctx = newCanvas.getContext('2d');
-            if (ctx) {
-                // Fill with white background
-                ctx.fillStyle = 'white';
-                ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
-
-                // Draw the product image with uniform padding
-                ctx.drawImage(productCanvas, padding, padding);
+            if (!ctx) {
+                setIsExporting(false);
+                return;
             }
 
-            // Export the new canvas
+            // 1. Fill with white background
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
+
+            // 2. Calculate scale and position to fit and center the product image
+            const canvasAspectRatio = productCanvas.width / productCanvas.height;
+            const targetWidth = FINAL_WIDTH - PADDING * 2;
+            const targetHeight = FINAL_HEIGHT - PADDING * 2;
+
+            let drawWidth = targetWidth;
+            let drawHeight = targetWidth / canvasAspectRatio;
+
+            if (drawHeight > targetHeight) {
+                drawHeight = targetHeight;
+                drawWidth = targetHeight * canvasAspectRatio;
+            }
+
+            const drawX = (FINAL_WIDTH - drawWidth) / 2;
+            const drawY = (FINAL_HEIGHT - drawHeight) / 2;
+            
+            // 3. Draw the product image
+            ctx.drawImage(productCanvas, drawX, drawY, drawWidth, drawHeight);
+
+            // 4. Add Watermark
+            ctx.save();
+            ctx.translate(newCanvas.width / 2, newCanvas.height / 2);
+            ctx.rotate(-Math.PI / 4); // Rotate 45 degrees
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            ctx.font = 'bold 200px Arial';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.25)'; // 25% transparent black
+            
+            ctx.fillText('WoodenMax', 0, 0);
+            ctx.restore();
+
+            // 5. Export the new canvas
             const link = document.createElement('a');
             link.download = `woodenmax-design-${Date.now()}.png`;
             link.href = newCanvas.toDataURL('image/png');

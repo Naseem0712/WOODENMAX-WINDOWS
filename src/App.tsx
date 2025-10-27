@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback } from 'react';
 import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType } from './types';
@@ -624,18 +623,43 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             return { ...state, ...newSideConfig };
         }
         case 'SET_WINDOW_TYPE': {
-          const newType = action.payload;
-          const newState: ConfigState = { ...state, windowType: newType };
-          if (newType === WindowType.GLASS_PARTITION || newType === WindowType.ELEVATION_GLAZING) {
-            newState.fixedPanels = [];
-          }
-           if (newType === WindowType.CORNER) {
-              newState.leftConfig = state.leftConfig || defaultCornerSideConfig;
-              newState.rightConfig = state.rightConfig || defaultCornerSideConfig;
-              newState.leftWidth = state.leftWidth || 1200;
-              newState.rightWidth = state.rightWidth || 1200;
-          }
-          return newState;
+            const newType = action.payload;
+
+            // Preserve essential properties that should carry over between designs
+            const preservedState = {
+                width: state.width,
+                height: state.height,
+                profileColor: state.profileColor,
+                glassType: state.glassType,
+                glassThickness: state.glassThickness,
+                glassSpecialType: state.glassSpecialType,
+                laminatedGlassConfig: state.laminatedGlassConfig,
+                dguGlassConfig: state.dguGlassConfig,
+                glassGrid: state.glassGrid,
+                customGlassName: state.customGlassName,
+                glassTexture: state.glassTexture,
+                // For corner windows, we need to preserve their specific dimensions and configs
+                leftWidth: state.leftWidth,
+                rightWidth: state.rightWidth,
+                cornerPostWidth: state.cornerPostWidth,
+                leftConfig: state.leftConfig,
+                rightConfig: state.rightConfig,
+            };
+
+            // Start with a clean slate from initialConfig, apply preserved state, then set new type
+            const newState: ConfigState = {
+                ...initialConfig,
+                ...preservedState,
+                windowType: newType,
+            };
+
+            // Special handling for corner windows to ensure side configs exist if they were null
+            if (newType === WindowType.CORNER) {
+                newState.leftConfig = state.leftConfig || defaultCornerSideConfig;
+                newState.rightConfig = state.rightConfig || defaultCornerSideConfig;
+            }
+
+            return newState;
         }
         case 'SET_PARTITION_PANEL_COUNT': {
           const count = action.payload;

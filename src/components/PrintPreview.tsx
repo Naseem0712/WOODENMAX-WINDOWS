@@ -415,11 +415,20 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
             {profileElements}
             {innerAreaWidth > 0 && innerAreaHeight > 0 && (
                 <div className="absolute" style={{ top: holeY1 * scale, left: holeX1 * scale, width: innerAreaWidth * scale, height: innerAreaHeight * scale }}>
+                    {/*// FIX: Refactor IIFE for sliding window rendering to avoid potential TypeScript type inference issues.*/}
                     {windowType === WindowType.SLIDING && (() => {
                         const { shutterConfig, fixedShutters, slidingHandles } = config;
                         const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;
-                        const numShutters = is4G ? 4 : (shutterConfig === ShutterConfigType.TWO_GLASS ? 2 : 3);
                         const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
+
+                        let numShutters: number;
+                        switch (shutterConfig) {
+                            case ShutterConfigType.FOUR_GLASS: numShutters = 4; break;
+                            case ShutterConfigType.TWO_GLASS: numShutters = 2; break;
+                            case ShutterConfigType.THREE_GLASS: numShutters = 3; break;
+                            case ShutterConfigType.TWO_GLASS_ONE_MESH: numShutters = 3; break;
+                            default: numShutters = 0;
+                        }
 
                         if (is4G) {
                             const shutterWidth = (innerAreaWidth + (2 * dims.shutterInterlock) + dims.shutterMeeting) / 4;
@@ -586,8 +595,19 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
 
                     {windowType === WindowType.GLASS_PARTITION && (() => {
                         const { partitionPanels } = config;
-                        const panelWidth = innerAreaWidth / partitionPanels.count;
-                        const overlap = 25; 
+                        const gap = 5; // mm
+
+                        const numGaps = partitionPanels.types.slice(0, -1).reduce((acc, current, index) => {
+                            const next = partitionPanels.types[index + 1];
+                            if ((current.type === 'sliding' || current.type === 'hinged') && (next.type === 'sliding' || next.type === 'hinged')) {
+                                return acc + 1;
+                            }
+                            return acc;
+                        }, 0);
+
+                        const totalContentWidth = innerAreaWidth - (numGaps * gap);
+                        const panelWidth = totalContentWidth / partitionPanels.count;
+                        
                         const panels: React.ReactNode[] = [];
                         
                         if (partitionPanels.hasTopChannel) {
@@ -596,19 +616,17 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                         }
                         const panelAreaY = partitionPanels.hasTopChannel ? dims.topTrack : 0;
                         const panelAreaHeight = innerAreaHeight - (partitionPanels.hasTopChannel ? dims.topTrack + dims.bottomTrack : 0);
-
+                        
+                        let currentX = 0;
                         for (let i=0; i < partitionPanels.count; i++) {
                             const panelConfig = partitionPanels.types[i];
                             if (!panelConfig) continue;
                             const { type, handle, framing } = panelConfig;
                             
+                            const panelX = currentX;
+                            const currentPanelWidth = panelWidth;
                             const zIndex = type === 'sliding' ? 10 + i : 5;
-                            let panelX = i * (panelWidth);
-                            let currentPanelWidth = panelWidth;
-                            if (type === 'sliding') {
-                                panelX = i * (panelWidth - overlap);
-                                currentPanelWidth += overlap;
-                            }
+
                              if (handle) {
                                 handleElements.push(<div key={`handle-part-${i}`} style={{ position: 'absolute', zIndex: 30, left: (panelX + currentPanelWidth * handle.x / 100) * scale, top: (panelAreaY + panelAreaHeight * handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><PrintableHandle config={handle} scale={scale} /></div>);
                             }
@@ -634,6 +652,15 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                   </GlassPanel>
                                 </div>
                             );
+
+                            currentX += panelWidth;
+                            // Add gap for the next panel if needed
+                            if (i < partitionPanels.count - 1) {
+                                const nextPanelConfig = partitionPanels.types[i+1];
+                                if ((type === 'sliding' || type === 'hinged') && (nextPanelConfig.type === 'sliding' || nextPanelConfig.type === 'hinged')) {
+                                    currentX += gap;
+                                }
+                            }
                         }
                         return <>{panels}</>;
                     })()}
