@@ -106,7 +106,9 @@ export enum GlassType {
   TINTED_BLUE = 'tinted-blue',
   CLEAR_SAPPHIRE = 'clear-sapphire',
   BROWN_TINTED = 'brown-tinted',
-  BLACK_TINTED = 'black-tented',
+  BLACK_TINTED = 'black-tinted',
+  TINTED_GREY = 'tinted-grey',
+  VERTICAL_FLUTED = 'vertical-fluted',
 }
 
 export enum AreaType {
@@ -118,6 +120,7 @@ export interface HandleConfig {
   x: number; // 0-100 percentage
   y: number; // 0-100 percentage
   orientation: 'vertical' | 'horizontal';
+  length?: number;
 }
 
 export type VentilatorCellType = 'glass' | 'louvers' | 'door' | 'exhaust_fan';

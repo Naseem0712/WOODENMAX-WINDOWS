@@ -313,7 +313,9 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
   const glassTypeOptions = [
     { value: GlassType.CLEAR, label: "Clear" },
     { value: GlassType.FROSTED, label: "Frosted" },
+    { value: GlassType.VERTICAL_FLUTED, label: "Vertical Fluted" },
     { value: GlassType.TINTED_BLUE, label: "Tinted Blue" },
+    { value: GlassType.TINTED_GREY, label: "Tinted Grey" },
     { value: GlassType.CLEAR_SAPPHIRE, label: "Clear Sapphire" },
     { value: GlassType.BROWN_TINTED, label: "Brown Tinted" },
     { value: GlassType.BLACK_TINTED, label: "Black Tinted" },
@@ -509,13 +511,14 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
               {selectedPanelId && (
                   <div className="p-2 bg-slate-700 rounded-md space-y-3">
                       <label className="flex items-center space-x-2 cursor-pointer">
-                          <input type="checkbox" id={`${idPrefix}handle-enable`} name="handle-enable" checked={!!currentHandle} onChange={e => onUpdateHandle(selectedPanelId, e.target.checked ? { x: 50, y: 50, orientation: 'vertical' } : null)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
+                          <input type="checkbox" id={`${idPrefix}handle-enable`} name="handle-enable" checked={!!currentHandle} onChange={e => onUpdateHandle(selectedPanelId, e.target.checked ? { x: 50, y: 50, orientation: 'vertical', length: 150 } : null)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
                           <span className="text-sm text-slate-200">Enable Handle</span>
                       </label>
                       {currentHandle && (
                           <div className="space-y-3">
                               <Slider id={`${idPrefix}handle-pos-x`} name="handle-pos-x" label={`Horizontal Position: ${currentHandle.x}%`} value={currentHandle.x} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, x: parseInt(e.target.value)})}/>
                               <Slider id={`${idPrefix}handle-pos-y`} name="handle-pos-y" label={`Vertical Position: ${currentHandle.y}%`} value={currentHandle.y} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, y: parseInt(e.target.value)})}/>
+                              <Slider id={`${idPrefix}handle-length`} name="handle-length" label={`Length: ${currentHandle.length || 150}mm`} value={currentHandle.length || 150} min={50} max={500} step={10} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, length: parseInt(e.target.value)})}/>
                                <div className="grid grid-cols-2 gap-2">
                                 <Button variant={currentHandle.orientation === 'vertical' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, {...currentHandle, orientation: 'vertical'})}>Vertical</Button>
                                 <Button variant={currentHandle.orientation === 'horizontal' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, {...currentHandle, orientation: 'horizontal'})}>Horizontal</Button>
