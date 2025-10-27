@@ -1,5 +1,3 @@
-
-
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, HardwareItem } from '../types';
 import { Button } from './ui/Button';
@@ -85,11 +83,8 @@ const PrintShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | '
 
 const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => {
     const isTexture = color && !color.startsWith('#');
-    const isHorizontal = (style.width as number) > (style.height as number);
-
     const backgroundStyle = isTexture ? {
         backgroundImage: `url(${color})`,
-        backgroundSize: isHorizontal ? 'auto 100%' : '100% auto',
         backgroundRepeat: 'repeat',
     } : { backgroundColor: color };
 
@@ -183,8 +178,6 @@ const PrintableMiteredFrame: React.FC<{
 
     const isTexture = color && !color.startsWith('#');
     const backgroundStyle = isTexture ? { backgroundImage: `url(${color})`, backgroundRepeat: 'repeat' } : { backgroundColor: color };
-    const horizontalBgStyle = { backgroundSize: 'auto 100%' };
-    const verticalBgStyle = { backgroundSize: '100% auto' };
 
     const baseStyle: React.CSSProperties = {
         position: 'absolute',
@@ -200,13 +193,13 @@ const PrintableMiteredFrame: React.FC<{
     return (
         <div className="absolute" style={{ width: width * scale, height: height * scale }}>
             {/* Top */}
-            <div style={{...baseStyle, ...(isTexture && horizontalBgStyle), top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
+            <div style={{...baseStyle, top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
             {/* Bottom */}
-            <div style={{...baseStyle, ...(isTexture && horizontalBgStyle), bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
+            <div style={{...baseStyle, bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
             {/* Left */}
-            <div style={{...baseStyle, ...(isTexture && verticalBgStyle), top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
+            <div style={{...baseStyle, top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
             {/* Right */}
-            <div style={{...baseStyle, ...(isTexture && verticalBgStyle), top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
+            <div style={{...baseStyle, top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
         </div>
     );
 };
@@ -249,8 +242,8 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         );
     }
 
-    const containerWidthPx = 120; // max width in pixels
-    const containerHeightPx = 160; // max height in pixels
+    const containerWidthPx = 150; // max width in pixels
+    const containerHeightPx = 200; // max height in pixels
     const numWidth = Number(config.width) || 1;
     let numHeight = Number(config.height) || 1;
     
@@ -271,6 +264,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         shutterMeeting: Number(series.dimensions.shutterMeeting) || 0, casementShutter: Number(series.dimensions.casementShutter) || 0,
         mullion: Number(series.dimensions.mullion) || 0, louverBlade: Number(series.dimensions.louverBlade) || 0,
         topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0, 
+        // FIX: Added 'glassGridProfile' to the ProfileDimensions type to resolve this error.
         glassGridProfile: Number(config.glassGrid?.barThickness) || Number(series.dimensions.glassGridProfile) || 0,
     };
 

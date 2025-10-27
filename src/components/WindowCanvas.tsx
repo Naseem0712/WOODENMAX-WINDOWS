@@ -70,11 +70,8 @@ const Handle: React.FC<{ config: HandleConfig, scale: number, color: string }> =
 
 const ProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = React.memo(({ style, color }) => {
     const isTexture = color && !color.startsWith('#');
-    const isHorizontal = (style.width as number) > (style.height as number);
-
     const backgroundStyle = isTexture ? {
         backgroundImage: `url(${color})`,
-        backgroundSize: isHorizontal ? 'auto 100%' : '100% auto',
         backgroundRepeat: 'repeat',
     } : { backgroundColor: color };
     
@@ -133,8 +130,6 @@ const MiteredFrame: React.FC<{
 
     const isTexture = color && !color.startsWith('#');
     const backgroundStyle = isTexture ? { backgroundImage: `url(${color})`, backgroundRepeat: 'repeat' } : { backgroundColor: color };
-    const horizontalBgStyle = { backgroundSize: 'auto 100%' };
-    const verticalBgStyle = { backgroundSize: '100% auto' };
 
     const baseStyle: React.CSSProperties = {
         position: 'absolute',
@@ -151,13 +146,13 @@ const MiteredFrame: React.FC<{
     return (
         <div className="absolute" style={{ width: width * scale, height: height * scale }}>
             {/* Top */}
-            <div style={{...baseStyle, ...(isTexture && horizontalBgStyle), top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
+            <div style={{...baseStyle, top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
             {/* Bottom */}
-            <div style={{...baseStyle, ...(isTexture && horizontalBgStyle), bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
+            <div style={{...baseStyle, bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
             {/* Left */}
-            <div style={{...baseStyle, ...(isTexture && verticalBgStyle), top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
+            <div style={{...baseStyle, top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
             {/* Right */}
-            <div style={{...baseStyle, ...(isTexture && verticalBgStyle), top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
+            <div style={{...baseStyle, top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
         </div>
     );
 });
@@ -719,7 +714,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
         const opt = {
             margin: 0,
             html2canvas: {
-                scale: 4, // Use a fixed high scale for good resolution while preserving aspect ratio
+                scale: 4, // Use a fixed high scale for good resolution
                 backgroundColor: null,
                 logging: false,
                 useCORS: true,
@@ -739,7 +734,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
                 ctx.fillStyle = 'white';
                 ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
 
-                // Draw the product image centered onto the new canvas
+                // Draw the product image with uniform padding
                 ctx.drawImage(productCanvas, padding, padding);
             }
 
