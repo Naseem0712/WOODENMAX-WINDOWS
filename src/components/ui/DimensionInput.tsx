@@ -129,8 +129,9 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
         />
         {!controlledUnit && (
           <div className="absolute inset-y-0 right-0 flex items-center">
+              <label htmlFor={`${id}-unit-select`} className="sr-only">Units</label>
               <select
-                  aria-label="Units"
+                  id={`${id}-unit-select`}
                   name={`${id}-unit`}
                   value={unit}
                   onChange={handleUnitChange}
@@ -147,13 +148,13 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
       {onWeightChange && onLengthChange && (
         <div className="grid grid-cols-2 gap-2 mt-1">
             <div className="relative">
+                <label htmlFor={`${id}-weight`} className="sr-only">Weight for {label}</label>
                 <input
                     type="number"
                     inputMode="decimal"
                     placeholder="Weight"
                     id={`${id}-weight`}
                     name={`${id}-weight`}
-                    aria-label={`Weight for ${label}`}
                     value={weightValue}
                     onChange={e => onWeightChange(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full pl-3 pr-12 py-1 bg-slate-700 border border-slate-600 rounded-md text-white text-xs focus:ring-1 focus:ring-indigo-500"
@@ -162,13 +163,13 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
                 <span className="absolute inset-y-0 right-0 flex items-center pr-2 text-xs text-slate-400 pointer-events-none">kg/m</span>
             </div>
              <div className="relative">
+                <label htmlFor={`${id}-length`} className="sr-only">Length for {label}</label>
                 <input
                     type="number"
                     inputMode="decimal"
                     placeholder="Length"
                     id={`${id}-length`}
                     name={`${id}-length`}
-                    aria-label={`Length for ${label}`}
                     value={lengthValue}
                     onChange={e => onLengthChange(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full pl-3 pr-5 py-1 bg-slate-700 border border-slate-600 rounded-md text-white text-xs focus:ring-1 focus:ring-indigo-500"

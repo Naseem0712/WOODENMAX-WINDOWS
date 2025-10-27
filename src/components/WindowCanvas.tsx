@@ -373,20 +373,23 @@ const createWindowElements = (
                     for (let r = 0; r < validRowPattern.length; r++) {
                         let currentX_cell = 0;
                         for (let c = 0; c < validColPattern.length; c++) {
-                            const cellWidth = validColPattern[c];
-                            const cellHeight = validRowPattern[r];
-                            innerContent.push(
-                                <GlassPanel 
-                                    key={`cell-glass-${r}-${c}`} 
-                                    panelId={`elevation-${r}-${c}`}
-                                    config={config}
-                                    style={{ left: currentX_cell * scale, top: currentY_cell * scale, width: cellWidth * scale, height: cellHeight * scale }} 
-                                    glassWidth={cellWidth} 
-                                    glassHeight={cellHeight} 
-                                    scale={scale}
-                                />
-                            );
-                            currentX_cell += cellWidth;
+                            const isDoor = doorPositions.some(p => p.row === r && p.col === c);
+                            if (!isDoor) {
+                                const cellWidth = validColPattern[c];
+                                const cellHeight = validRowPattern[r];
+                                innerContent.push(
+                                    <GlassPanel 
+                                        key={`cell-glass-${r}-${c}`} 
+                                        panelId={`elevation-${r}-${c}`}
+                                        config={config}
+                                        style={{ left: currentX_cell * scale, top: currentY_cell * scale, width: cellWidth * scale, height: cellHeight * scale }} 
+                                        glassWidth={cellWidth} 
+                                        glassHeight={cellHeight} 
+                                        scale={scale}
+                                    />
+                                );
+                            }
+                            currentX_cell += validColPattern[c];
                         }
                         currentY_cell += validRowPattern[r];
                     }

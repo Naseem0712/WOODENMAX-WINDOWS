@@ -203,7 +203,10 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
 
         <div className="flex-grow overflow-y-auto p-6 custom-scrollbar">
             <div className="space-y-4">
-              <Input id="quotation-title" name="quotation-title" label="" value={settings.title} onChange={e => setSettings({...settings, title: e.target.value})} className="mb-4 text-2xl font-bold !bg-transparent border-0 focus:ring-0 p-0" />
+              <div className="mb-4">
+                  <label htmlFor="quotation-title" className="sr-only">Quotation Title</label>
+                  <input id="quotation-title" name="quotation-title" value={settings.title} onChange={e => setSettings({...settings, title: e.target.value})} className="w-full text-2xl font-bold !bg-transparent border-0 focus:ring-0 p-0 text-white" />
+              </div>
               <div className="grid md:grid-cols-2 gap-4">
                   <Section title="Your Company Details">
                       <div className="flex gap-4 items-center">

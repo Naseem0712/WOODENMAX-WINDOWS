@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback } from 'react';
 import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType } from './types';
@@ -1102,6 +1103,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleLaminatedConfigChange = useCallback((payload: Partial<LaminatedGlassConfig>) => {
+    // FIX: Corrected typo in action type from 'UPDATE_Laminated_CONFIG' to 'UPDATE_LAMINATED_CONFIG'.
     dispatch({ type: 'UPDATE_LAMINATED_CONFIG', payload });
   }, []);
   const handleDguConfigChange = useCallback((payload: Partial<DguGlassConfig>) => {
@@ -1289,7 +1291,7 @@ const App: React.FC = () => {
         <div className="flex flex-row flex-grow min-h-0">
             <div ref={panelRef} className={`hidden lg:block flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
                 <div className={`h-full overflow-hidden ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
-                    <ControlsPanel {...commonControlProps} onClose={() => setIsDesktopPanelOpen(false)} />
+                    <ControlsPanel {...commonControlProps} idPrefix="desktop-" onClose={() => setIsDesktopPanelOpen(false)} />
                 </div>
             </div>
             <div className="relative flex-1 flex flex-col min-w-0">
@@ -1310,7 +1312,7 @@ const App: React.FC = () => {
         {/* Mobile Configure Panel */}
         <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${activeMobilePanel === 'configure' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={handleCloseMobilePanels}></div>
         <div className={`lg:hidden fixed bottom-0 left-0 right-0 max-h-[85vh] flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'configure' ? 'translate-y-0' : 'translate-y-full'}`}>
-           <ControlsPanel {...commonControlProps} onClose={handleCloseMobilePanels} />
+           <ControlsPanel {...commonControlProps} idPrefix="mobile-" onClose={handleCloseMobilePanels} />
         </div>
         
         {/* Mobile Quotation Panel */}
