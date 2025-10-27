@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { WindowConfig, HandleConfig, CornerSideConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType } from './types';
@@ -270,16 +271,21 @@ const createWindowElements = (
     }
 ) => {
     const { width, height, series, fixedPanels, profileColor, windowType } = config;
-    const numHeight = Number(height) || 0;
+    let w = Number(config.width) || 0;
+    let numHeight = Number(height) || 0;
+
+    if (windowType === WindowType.ELEVATION_GLAZING && config.elevationGrid) {
+        w = config.elevationGrid.colPattern.map(Number).filter(v => v > 0).reduce((s, v) => s + v, 0);
+        numHeight = config.elevationGrid.rowPattern.map(Number).filter(v => v > 0).reduce((s, v) => s + v, 0);
+    }
 
     const geometry = (() => {
-        const w = Number(width) || 0;
         const topFix = fixedPanels.find(p => p.position === FixedPanelPosition.TOP);
         const bottomFix = fixedPanels.find(p => p.position === FixedPanelPosition.BOTTOM);
         const leftFix = fixedPanels.find(p => p.position === FixedPanelPosition.LEFT);
         const rightFix = fixedPanels.find(p => p.position === FixedPanelPosition.RIGHT);
 
-        const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.ELEVATION_GLAZING) ? dims.outerFrame : 0;
+        const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) ? dims.outerFrame : 0;
         const holeX1 = leftFix ? leftFix.size : frameOffset;
         const holeY1 = topFix ? topFix.size : frameOffset;
         const holeX2 = rightFix ? w - rightFix.size : w - frameOffset;
@@ -292,7 +298,6 @@ const createWindowElements = (
     const glassElements: React.ReactNode[] = [];
     const handleElements: React.ReactNode[] = [];
     const { topFix, bottomFix, leftFix, rightFix, frameOffset, holeX1, holeY1, holeX2, holeY2 } = geometry;
-    const w = Number(width) || 0;
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
@@ -350,25 +355,28 @@ const createWindowElements = (
 
                     const profilesAndPlates: React.ReactNode[] = [];
 
-                    // 1. Render glass panels first, cell by cell
+                    // 1. Render glass panels first, only for non-door cells
                     let currentY_cell = 0;
                     for (let r = 0; r < validRowPattern.length; r++) {
                         let currentX_cell = 0;
                         for (let c = 0; c < validColPattern.length; c++) {
-                            const cellWidth = validColPattern[c];
-                            const cellHeight = validRowPattern[r];
-                            innerContent.push(
-                                <GlassPanel 
-                                    key={`cell-glass-${r}-${c}`} 
-                                    panelId={`elevation-${r}-${c}`}
-                                    config={config}
-                                    style={{ left: currentX_cell * scale, top: currentY_cell * scale, width: cellWidth * scale, height: cellHeight * scale }} 
-                                    glassWidth={cellWidth} 
-                                    glassHeight={cellHeight} 
-                                    scale={scale}
-                                />
-                            );
-                            currentX_cell += cellWidth;
+                            const isDoor = doorPositions.some(p => p.row === r && p.col === c);
+                            if (!isDoor) {
+                                const cellWidth = validColPattern[c];
+                                const cellHeight = validRowPattern[r];
+                                innerContent.push(
+                                    <GlassPanel 
+                                        key={`cell-glass-${r}-${c}`} 
+                                        panelId={`elevation-${r}-${c}`}
+                                        config={config}
+                                        style={{ left: currentX_cell * scale, top: currentY_cell * scale, width: cellWidth * scale, height: cellHeight * scale }} 
+                                        glassWidth={cellWidth} 
+                                        glassHeight={cellHeight} 
+                                        scale={scale}
+                                    />
+                                );
+                            }
+                            currentX_cell += validColPattern[c];
                         }
                         currentY_cell += validRowPattern[r];
                     }
@@ -719,7 +727,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
         const opt = {
             margin: 0,
             html2canvas: {
-                scale: 4, // Use a fixed high scale for good resolution while preserving aspect ratio
+                scale: 4, // Use a fixed high scale for good resolution
                 backgroundColor: null,
                 logging: false,
                 useCORS: true,
@@ -728,12 +736,10 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
 
         html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((productCanvas: HTMLCanvasElement) => {
             const padding = 100; // Generous padding for a nice border
-            const maxDim = Math.max(productCanvas.width, productCanvas.height);
-            const newCanvasSize = maxDim + padding * 2;
             
             const newCanvas = document.createElement('canvas');
-            newCanvas.width = newCanvasSize;
-            newCanvas.height = newCanvasSize;
+            newCanvas.width = productCanvas.width + padding * 2;
+            newCanvas.height = productCanvas.height + padding * 2;
             
             const ctx = newCanvas.getContext('2d');
             if (ctx) {
@@ -741,12 +747,8 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
                 ctx.fillStyle = 'white';
                 ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
 
-                // Calculate center position
-                const x = (newCanvas.width - productCanvas.width) / 2;
-                const y = (newCanvas.height - productCanvas.height) / 2;
-
-                // Draw the product image centered onto the new canvas
-                ctx.drawImage(productCanvas, x, y);
+                // Draw the product image with uniform padding
+                ctx.drawImage(productCanvas, padding, padding);
             }
 
             // Export the new canvas

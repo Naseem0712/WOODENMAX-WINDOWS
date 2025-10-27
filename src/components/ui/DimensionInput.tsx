@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 
-type Unit = 'mm' | 'cm' | 'in' | 'ft-in';
+export type Unit = 'mm' | 'cm' | 'in' | 'ft-in';
 
 interface DimensionInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> {
   label: string;
@@ -117,7 +118,7 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
           id={id}
           type="text"
           inputMode="decimal"
-          className="w-full pl-3 pr-20 py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          className={`w-full pl-3 ${controlledUnit ? 'pr-3' : 'pr-20'} py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
           value={displayValue}
           onChange={handleInputChange}
           onFocus={(e) => {

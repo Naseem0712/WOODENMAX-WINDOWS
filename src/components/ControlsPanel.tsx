@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType } from '../types';
@@ -6,7 +7,7 @@ import { Input } from './ui/Input';
 import { Select } from './ui/Select';
 import { PlusIcon } from './icons/PlusIcon';
 import { TrashIcon } from './icons/TrashIcon';
-import { DimensionInput } from './ui/DimensionInput';
+import { DimensionInput, type Unit } from './ui/DimensionInput';
 import { v4 as uuidv4 } from 'uuid';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { CollapsibleCard } from './ui/CollapsibleCard';
@@ -101,6 +102,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
 
   // Georgian Bars Logic
   const [activeGeorgianPanelId, setActiveGeorgianPanelId] = useState('default');
+  const [georgianUnit, setGeorgianUnit] = useState<Unit>('mm');
+
   const availableGeorgianPanels = useMemo(() => {
     const panels: { id: string, name: string }[] = [];
     switch(windowType) {
@@ -619,7 +622,15 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
       </CollapsibleCard>
 
       <CollapsibleCard title="Georgian Bars" isOpen={openCard === 'Georgian Bars'} onToggle={() => handleToggleCard('Georgian Bars')}>
-        <DimensionInput id={`${idPrefix}georgian-bar-thickness`} name="georgian-bar-thickness" label="Bar Thickness" value_mm={glassGrid.barThickness} onChange_mm={v => setConfig('glassGrid', {...glassGrid, barThickness: v === '' ? 0 : v})} />
+        <div className="grid grid-cols-2 gap-4">
+            <DimensionInput id={`${idPrefix}georgian-bar-thickness`} name="georgian-bar-thickness" label="Bar Thickness" value_mm={glassGrid.barThickness} onChange_mm={v => setConfig('glassGrid', {...glassGrid, barThickness: v === '' ? 0 : v})} controlledUnit={georgianUnit} />
+            <Select id={`${idPrefix}georgian-unit-select`} label="Unit" value={georgianUnit} onChange={e => setGeorgianUnit(e.target.value as Unit)}>
+                <option value="mm">mm</option>
+                <option value="cm">cm</option>
+                <option value="in">in</option>
+                <option value="ft-in">ft-in</option>
+            </Select>
+        </div>
         <label className="flex items-center space-x-2 cursor-pointer mt-4">
               <input type="checkbox" id={`${idPrefix}georgian-apply-all`} name="georgian-apply-all" checked={glassGrid.applyToAll} onChange={handleApplyToAllChange} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
               <span className="text-sm text-slate-200">Apply to all panels</span>
@@ -635,16 +646,16 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
                 <h4 className="text-base font-semibold text-slate-200 mb-2">Horizontal Bars</h4>
                 <div className="grid grid-cols-3 gap-2">
                     <Input id={`${idPrefix}georgian-h-count`} name="georgian-h-count" label="Count" type="number" value={activeGeorgianPattern.horizontal.count} onChange={e => handleGeorgianPatternChange('horizontal', 'count', parseInt(e.target.value) || 0)} />
-                    <DimensionInput id={`${idPrefix}georgian-h-offset`} name="georgian-h-offset" label="Offset" value_mm={activeGeorgianPattern.horizontal.offset} onChange_mm={v => handleGeorgianPatternChange('horizontal', 'offset', v === '' ? 0 : v)} />
-                    <DimensionInput id={`${idPrefix}georgian-h-gap`} name="georgian-h-gap" label="Gap" value_mm={activeGeorgianPattern.horizontal.gap} onChange_mm={v => handleGeorgianPatternChange('horizontal', 'gap', v === '' ? 0 : v)} />
+                    <DimensionInput id={`${idPrefix}georgian-h-offset`} name="georgian-h-offset" label="Offset" value_mm={activeGeorgianPattern.horizontal.offset} onChange_mm={v => handleGeorgianPatternChange('horizontal', 'offset', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+                    <DimensionInput id={`${idPrefix}georgian-h-gap`} name="georgian-h-gap" label="Gap" value_mm={activeGeorgianPattern.horizontal.gap} onChange_mm={v => handleGeorgianPatternChange('horizontal', 'gap', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
                 </div>
             </div>
              <div>
                 <h4 className="text-base font-semibold text-slate-200 mb-2">Vertical Bars</h4>
                 <div className="grid grid-cols-3 gap-2">
                     <Input id={`${idPrefix}georgian-v-count`} name="georgian-v-count" label="Count" type="number" value={activeGeorgianPattern.vertical.count} onChange={e => handleGeorgianPatternChange('vertical', 'count', parseInt(e.target.value) || 0)} />
-                    <DimensionInput id={`${idPrefix}georgian-v-offset`} name="georgian-v-offset" label="Offset" value_mm={activeGeorgianPattern.vertical.offset} onChange_mm={v => handleGeorgianPatternChange('vertical', 'offset', v === '' ? 0 : v)} />
-                    <DimensionInput id={`${idPrefix}georgian-v-gap`} name="georgian-v-gap" label="Gap" value_mm={activeGeorgianPattern.vertical.gap} onChange_mm={v => handleGeorgianPatternChange('vertical', 'gap', v === '' ? 0 : v)} />
+                    <DimensionInput id={`${idPrefix}georgian-v-offset`} name="georgian-v-offset" label="Offset" value_mm={activeGeorgianPattern.vertical.offset} onChange_mm={v => handleGeorgianPatternChange('vertical', 'offset', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+                    <DimensionInput id={`${idPrefix}georgian-v-gap`} name="georgian-v-gap" label="Gap" value_mm={activeGeorgianPattern.vertical.gap} onChange_mm={v => handleGeorgianPatternChange('vertical', 'gap', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
                 </div>
             </div>
         </div>
