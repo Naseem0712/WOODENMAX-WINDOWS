@@ -1,3 +1,5 @@
+
+
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, HardwareItem } from '../types';
 import { Button } from './ui/Button';
@@ -247,8 +249,8 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         );
     }
 
-    const containerWidthPx = 150; // max width in pixels
-    const containerHeightPx = 200; // max height in pixels
+    const containerWidthPx = 120; // max width in pixels
+    const containerHeightPx = 160; // max height in pixels
     const numWidth = Number(config.width) || 1;
     let numHeight = Number(config.height) || 1;
     
@@ -756,6 +758,16 @@ const getItemDetails = (item: QuotationItem) => {
     return { panelCounts, hardwareDetails, relevantHardware };
 }
 
+const getColorName = (item: QuotationItem) => {
+    if (item.profileColorName) {
+        return item.profileColorName;
+    }
+    if (item.config.profileColor && item.config.profileColor.startsWith('data:image')) {
+        return "Custom Texture";
+    }
+    return item.config.profileColor;
+};
+
 
 export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, items, settings, setSettings }) => {
     
@@ -911,7 +923,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                             <td className="p-2 align-top text-center">{index + 1}</td>
                                             
                                             {item.config.windowType !== WindowType.ELEVATION_GLAZING ? (
-                                                <td className="p-2 align-top w-[25%]" style={{ width: '150px' }}>
+                                                <td className="p-2 align-top w-[25%]">
                                                     <PrintableWindow config={item.config} />
                                                 </td>
                                             ) : null}
@@ -927,7 +939,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                         <tr><td className='pr-2 font-semibold'>Size:</td><td>{item.config.windowType === 'elevation_glazing' && item.config.elevationGrid ? `${item.config.elevationGrid.colPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)} x ${item.config.elevationGrid.rowPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)}` : `${item.config.width} x ${item.config.height}`} mm</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Color:</td><td>{item.profileColorName || item.config.profileColor}</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Color:</td><td>{getColorName(item)}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Glass:</td><td>{glassDescription}</td></tr>
                                                         {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
                                                         {relevantHardware.length > 0 && (
