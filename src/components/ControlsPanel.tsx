@@ -560,4 +560,153 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         )}
         {config.glassSpecialType === 'dgu' && config.dguGlassConfig && (
             <div className="p-3 bg-slate-900/50 rounded-md mt-4 space-y-3">
-                <h4 className
+                <h4 className="text-base font-semibold text-slate-200">DGU Glass Details</h4>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                    <Input id={`${idPrefix}dgu-g1-thickness`} name="dgu-g1-thickness" label="Glass 1 Thickness" type="number" inputMode="decimal" value={config.dguGlassConfig.glass1Thickness} onChange={e => onDguConfigChange({ glass1Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                    <Select id={`${idPrefix}dgu-g1-type`} name="dgu-g1-type" label="Glass 1 Type" value={config.dguGlassConfig.glass1Type} onChange={e => onDguConfigChange({ glass1Type: e.target.value as GlassType })}>
+                        {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </Select>
+                    <Input id={`${idPrefix}dgu-air-gap`} name="dgu-air-gap" label="Air Gap" type="number" inputMode="decimal" value={config.dguGlassConfig.airGap} onChange={e => onDguConfigChange({ airGap: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                    <div />
+                    <Input id={`${idPrefix}dgu-g2-thickness`} name="dgu-g2-thickness" label="Glass 2 Thickness" type="number" inputMode="decimal" value={config.dguGlassConfig.glass2Thickness} onChange={e => onDguConfigChange({ glass2Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                    <Select id={`${idPrefix}dgu-g2-type`} name="dgu-g2-type" label="Glass 2 Type" value={config.dguGlassConfig.glass2Type} onChange={e => onDguConfigChange({ glass2Type: e.target.value as GlassType })}>
+                        {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </Select>
+                </div>
+                <label className="flex items-center space-x-2 cursor-pointer pt-2">
+                    <input type="checkbox" id={`${idPrefix}dgu-is-toughened`} name="dgu-is-toughened" checked={config.dguGlassConfig.isToughened} onChange={e => onDguConfigChange({ isToughened: e.target.checked })} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                    <span className="text-sm text-slate-200">Toughened / Tempered Glass</span>
+                </label>
+            </div>
+        )}
+        <div className="grid grid-cols-2 gap-4 mt-4">
+            <Select id={`${idPrefix}appearance-glass-thickness`} name="appearance-glass-thickness" label="Glass Thickness" value={isCustomThickness ? 'custom' : config.glassThickness} onChange={handleThicknessChange}>
+                <option value="">Default</option>
+                {series.glassOptions.thicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
+                {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
+            </Select>
+            {isCustomThickness && <Input id={`${idPrefix}appearance-glass-thickness-custom`} name="appearance-glass-thickness-custom" label="Custom Thickness" type="number" inputMode="decimal" value={config.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))} unit="mm" />}
+        </div>
+        {isCustomThickness && <Input id={`${idPrefix}custom-glass-name`} name="custom-glass-name" label="Custom Glass Name (Optional)" type="text" placeholder="e.g., Saint-Gobain Sun Ban" value={config.customGlassName} onChange={e => setConfig('customGlassName', e.target.value)} />}
+        <div className='mt-4 pt-4 border-t border-slate-700'>
+             <h4 className="text-base font-semibold text-slate-200 mb-2">Glass Texture</h4>
+             <Button variant="secondary" className="w-full" onClick={() => glassTextureUploadRef.current?.click()}> <UploadIcon className="w-4 h-4 mr-2" /> Upload Texture </Button>
+             <input type="file" ref={glassTextureUploadRef} onChange={handleGlassTextureUpload} className="hidden" accept="image/*" />
+             {config.glassTexture && <Button variant="danger" className="w-full mt-2" onClick={() => setConfig('glassTexture', '')}> Remove Texture </Button>}
+        </div>
+        <div className='mt-4 pt-4 border-t border-slate-700'>
+            <h4 className="text-base font-semibold text-slate-200 mb-2">Profile Color / Texture</h4>
+            <div className="flex flex-wrap gap-2">
+                {savedColors.map(color => (
+                    <button key={color.id} onClick={() => setConfig('profileColor', color.value)} onContextMenu={(e) => { e.preventDefault(); if (window.confirm(`Delete color "${color.name}"?`)) { handleDeleteColor(color.id); } }} className="relative group w-12 h-12 rounded-md border-2" style={{ borderColor: config.profileColor === color.value ? '#4f46e5' : 'transparent', background: color.type === 'color' ? color.value : `url(${color.value})`, backgroundSize: 'cover' }}>
+                        <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{color.name}</span>
+                    </button>
+                ))}
+                <button onClick={handleInitiateAddPreset} className="w-12 h-12 rounded-md border-2 border-dashed border-slate-500 flex items-center justify-center hover:bg-slate-600"> <PlusIcon className="w-6 h-6 text-slate-400" /> </button>
+            </div>
+             {isAddingPreset && (
+              <div className="mt-2 p-3 bg-slate-600 rounded-md space-y-2">
+                  <Input id={`${idPrefix}new-preset-name`} name="new-preset-name" label="Preset Name" value={newPreset.name} onChange={e => setNewPreset({...newPreset, name: e.target.value})}/>
+                  <div className='flex gap-2 items-end'>
+                    <Input id={`${idPrefix}new-preset-value`} name="new-preset-value" label="Color Value" type="color" value={newPreset.value} onChange={e => setNewPreset({...newPreset, value: e.target.value, type: 'color'})} className='p-1 h-10'/>
+                    <Button variant="secondary" className="h-10" onClick={() => profileTextureUploadRef.current?.click()}><UploadIcon className='w-4 h-4'/></Button>
+                    <input type="file" ref={profileTextureUploadRef} onChange={e => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setNewPreset({...newPreset, value: reader.result as string, type: 'texture'}); reader.readAsDataURL(file); } }} className="hidden" accept="image/*" />
+                  </div>
+                  <div className="flex gap-2"> <Button onClick={handleAddPreset} className="flex-grow">Save</Button> <Button variant="secondary" onClick={() => setIsAddingPreset(false)} className="flex-grow">Cancel</Button> </div>
+              </div>
+            )}
+        </div>
+      </CollapsibleCard>
+
+      <CollapsibleCard title="Georgian Bars" isOpen={openCard === 'Georgian Bars'} onToggle={() => handleToggleCard('Georgian Bars')}>
+        <DimensionInput id={`${idPrefix}georgian-bar-thickness`} name="georgian-bar-thickness" label="Bar Thickness" value_mm={glassGrid.barThickness} onChange_mm={v => setConfig('glassGrid', {...glassGrid, barThickness: v === '' ? 0 : v})} />
+        <label className="flex items-center space-x-2 cursor-pointer mt-4">
+              <input type="checkbox" id={`${idPrefix}georgian-apply-all`} name="georgian-apply-all" checked={glassGrid.applyToAll} onChange={handleApplyToAllChange} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
+              <span className="text-sm text-slate-200">Apply to all panels</span>
+        </label>
+        {!glassGrid.applyToAll && availableGeorgianPanels.length > 0 && (
+          <Select id={`${idPrefix}georgian-panel-select`} name="georgian-panel-select" label="Target Panel" value={activeGeorgianPanelId} onChange={e => setActiveGeorgianPanelId(e.target.value)}>
+             <option value="default">Default Pattern</option>
+             {availableGeorgianPanels.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select>
+        )}
+        <div className="mt-4 pt-4 border-t border-slate-700 space-y-4">
+            <div>
+                <h4 className="text-base font-semibold text-slate-200 mb-2">Horizontal Bars</h4>
+                <div className="grid grid-cols-3 gap-2">
+                    <Input id={`${idPrefix}georgian-h-count`} name="georgian-h-count" label="Count" type="number" value={activeGeorgianPattern.horizontal.count} onChange={e => handleGeorgianPatternChange('horizontal', 'count', parseInt(e.target.value) || 0)} />
+                    <DimensionInput id={`${idPrefix}georgian-h-offset`} name="georgian-h-offset" label="Offset" value_mm={activeGeorgianPattern.horizontal.offset} onChange_mm={v => handleGeorgianPatternChange('horizontal', 'offset', v === '' ? 0 : v)} />
+                    <DimensionInput id={`${idPrefix}georgian-h-gap`} name="georgian-h-gap" label="Gap" value_mm={activeGeorgianPattern.horizontal.gap} onChange_mm={v => handleGeorgianPatternChange('horizontal', 'gap', v === '' ? 0 : v)} />
+                </div>
+            </div>
+             <div>
+                <h4 className="text-base font-semibold text-slate-200 mb-2">Vertical Bars</h4>
+                <div className="grid grid-cols-3 gap-2">
+                    <Input id={`${idPrefix}georgian-v-count`} name="georgian-v-count" label="Count" type="number" value={activeGeorgianPattern.vertical.count} onChange={e => handleGeorgianPatternChange('vertical', 'count', parseInt(e.target.value) || 0)} />
+                    <DimensionInput id={`${idPrefix}georgian-v-offset`} name="georgian-v-offset" label="Offset" value_mm={activeGeorgianPattern.vertical.offset} onChange_mm={v => handleGeorgianPatternChange('vertical', 'offset', v === '' ? 0 : v)} />
+                    <DimensionInput id={`${idPrefix}georgian-v-gap`} name="georgian-v-gap" label="Gap" value_mm={activeGeorgianPattern.vertical.gap} onChange_mm={v => handleGeorgianPatternChange('vertical', 'gap', v === '' ? 0 : v)} />
+                </div>
+            </div>
+        </div>
+      </CollapsibleCard>
+      
+      {windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.ELEVATION_GLAZING && (
+          <CollapsibleCard title="Fixed Panels" isOpen={openCard === 'Fixed Panels'} onToggle={() => handleToggleCard('Fixed Panels')}>
+          <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.TOP)}><PlusIcon className="w-4 h-4 mr-2"/> Top</Button>
+              <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.BOTTOM)}><PlusIcon className="w-4 h-4 mr-2"/> Bottom</Button>
+              <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.LEFT)}><PlusIcon className="w-4 h-4 mr-2"/> Left</Button>
+              <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.RIGHT)}><PlusIcon className="w-4 h-4 mr-2"/> Right</Button>
+          </div>
+          {fixedPanels.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
+              {fixedPanels.map(panel => (
+                <div key={panel.id} className="flex items-end gap-2">
+                  <DimensionInput id={`${idPrefix}fixed-panel-${panel.id}`} name={`fixed-panel-${panel.id}`} label={`Fixed Panel ${panel.position}`} value_mm={panel.size} onChange_mm={v => updateFixedPanelSize(panel.id, v === '' ? 0 : v)} />
+                  <Button variant="danger" onClick={() => removeFixedPanel(panel.id)} className="p-2 h-10 w-10 flex-shrink-0"><TrashIcon className="w-5 h-5"/></Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CollapsibleCard>
+      )}
+
+      <CollapsibleCard title="Profile Series" isOpen={openCard === 'Profile Series'} onToggle={() => handleToggleCard('Profile Series')}>
+        <SearchableSelect id={`${idPrefix}series-select`} label="Select Series" options={seriesOptions} value={series.id} onChange={onSeriesSelect} />
+        <div className="flex gap-2 mt-2">
+            <Button variant="secondary" className="w-full" onClick={handleInitiateSave}>Save as New...</Button>
+            {!isDefaultSeries && <Button variant="danger" className="w-full" onClick={() => onSeriesDelete(series.id)}>Delete</Button>}
+        </div>
+        {isSavingSeries && (
+          <div className="mt-2 p-3 bg-slate-600 rounded-md space-y-2">
+            <Input id={`${idPrefix}new-series-name`} name="new-series-name" label="New Series Name" value={newSeriesName} onChange={e => setNewSeriesName(e.target.value)} />
+            <div className="flex gap-2"> <Button onClick={handleConfirmSave} className="flex-grow">Save</Button> <Button variant="secondary" onClick={() => setIsSavingSeries(false)} className="flex-grow">Cancel</Button> </div>
+          </div>
+        )}
+        <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
+          <h4 className="text-base font-semibold text-slate-200">Profile Dimensions</h4>
+          {Object.keys(series.dimensions).map(key => {
+            const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+            return (
+                <DimensionInput key={key} id={`${idPrefix}dim-${key}`} name={`dim-${key}`} label={label} value_mm={series.dimensions[key as keyof typeof series.dimensions]} onChange_mm={v => handleDimensionChange(key as keyof ProfileSeries['dimensions'], v)} weightValue={series.weights?.[key as keyof ProfileDimensions]} onWeightChange={v => handleProfileDetailChange('weights', key as keyof ProfileDimensions, v)} lengthValue={series.lengths?.[key as keyof ProfileDimensions]} onLengthChange={v => handleProfileDetailChange('lengths', key as keyof ProfileDimensions, v)} />
+            )
+          })}
+        </div>
+        <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
+          <h4 className="text-base font-semibold text-slate-200">Hardware Items</h4>
+          {series.hardwareItems.map(item => (
+            <div key={item.id} className="bg-slate-900/50 p-3 rounded-md grid grid-cols-12 gap-2">
+              <div className="col-span-12"><Input id={`${idPrefix}hw-${item.id}-name`} name={`hw-${item.id}-name`} label="Name" value={item.name} onChange={e => onHardwareChange(item.id, 'name', e.target.value)} /></div>
+              <div className="col-span-4"><Input id={`${idPrefix}hw-${item.id}-qty`} name={`hw-${item.id}-qty`} label="Qty" type="number" value={item.qtyPerShutter} onChange={e => onHardwareChange(item.id, 'qtyPerShutter', e.target.value === '' ? '' : Number(e.target.value))} /></div>
+              <div className="col-span-5"><Input id={`${idPrefix}hw-${item.id}-rate`} name={`hw-${item.id}-rate`} label="Rate" type="number" value={item.rate} onChange={e => onHardwareChange(item.id, 'rate', e.target.value === '' ? '' : Number(e.target.value))} /></div>
+              <div className="col-span-3 flex items-end"><Button variant="danger" onClick={() => onRemoveHardware(item.id)} className="p-2 h-10 w-full"><TrashIcon className="w-5 h-5"/></Button></div>
+              <div className="col-span-12"><Select id={`${idPrefix}hw-${item.id}-unit`} name={`hw-${item.id}-unit`} label="Unit" value={item.unit} onChange={e => onHardwareChange(item.id, 'unit', e.target.value as HardwareItem['unit'])}><option value="per_shutter_or_door">Per Shutter/Door</option><option value="per_window">Per Window</option></Select></div>
+            </div>
+          ))}
+          <Button variant="secondary" className="w-full" onClick={onAddHardware}><PlusIcon className="w-4 h-4 mr-2"/> Add Hardware Item</Button>
+        </div>
+      </CollapsibleCard>
+
+    </div>
+  );
+});
