@@ -296,7 +296,7 @@ const createWindowElements = (
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
-    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) {
+    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.ELEVATION_GLAZING) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
         profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
     }
@@ -728,12 +728,10 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
 
         html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((productCanvas: HTMLCanvasElement) => {
             const padding = 100; // Generous padding for a nice border
-            const maxDim = Math.max(productCanvas.width, productCanvas.height);
-            const newCanvasSize = maxDim + padding * 2;
             
             const newCanvas = document.createElement('canvas');
-            newCanvas.width = newCanvasSize;
-            newCanvas.height = newCanvasSize;
+            newCanvas.width = productCanvas.width + padding * 2;
+            newCanvas.height = productCanvas.height + padding * 2;
             
             const ctx = newCanvas.getContext('2d');
             if (ctx) {
@@ -741,12 +739,8 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
                 ctx.fillStyle = 'white';
                 ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
 
-                // Calculate center position
-                const x = (newCanvas.width - productCanvas.width) / 2;
-                const y = (newCanvas.height - productCanvas.height) / 2;
-
                 // Draw the product image centered onto the new canvas
-                ctx.drawImage(productCanvas, x, y);
+                ctx.drawImage(productCanvas, padding, padding);
             }
 
             // Export the new canvas

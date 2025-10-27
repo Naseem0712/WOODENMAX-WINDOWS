@@ -796,9 +796,9 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
     const opt = {
         margin: 0,
         filename: `Quotation-${settings.customer.name || 'WoodenMax'}-${quoteNumber}.pdf`,
-        image: { type: 'jpeg' as const, quality: 0.98 },
+        image: { type: 'jpeg' as const, quality: 0.95 },
         html2canvas: {
-            scale: 2,
+            scale: 1.5,
             logging: false,
             useCORS: true,
             backgroundColor: '#ffffff',
