@@ -1,4 +1,3 @@
-
 import React, { useRef, useState, useEffect } from 'react';
 import type { QuotationItem, QuotationSettings, BOM } from '../types';
 import { Button } from './ui/Button';
@@ -12,7 +11,8 @@ import { DownloadIcon } from './icons/DownloadIcon';
 import { generateBillOfMaterials } from '../utils/materialCalculator';
 import { MaterialSummaryModal } from './MaterialSummaryModal';
 import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
-import { AdjustmentsIcon } from './icons/AdjustmentsIcon';
+import { PencilIcon } from './icons/PencilIcon';
+import { TrashIcon } from './icons/TrashIcon';
 
 interface QuotationListModalProps {
   isOpen: boolean;
@@ -207,7 +207,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
             <div className="space-y-4">
               <div className="mb-4">
                   <label htmlFor="quotation-title" className="sr-only">Quotation Title</label>
-                  <input id="quotation-title" name="quotation-title" value={settings.title} onChange={e => setSettings({...settings, title: e.target.value})} className="w-full text-2xl font-bold !bg-transparent border-0 focus:ring-0 p-0 text-white" />
+                  <input id="quotation-title" name="quotation-title" value={settings.title} onChange={e => setSettings({...settings, title: e.target.value})} className="w-full text-2xl font-bold bg-transparent border-0 border-b-2 border-slate-700 hover:border-slate-500 focus:ring-0 focus:border-indigo-500 p-1 text-white transition-colors" />
               </div>
               <div className="grid md:grid-cols-2 gap-4">
                   <Section title="Your Company Details">
@@ -269,11 +269,11 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
                                           </div>
                                       </div>
                                       <div className="flex items-center gap-2">
-                                        <Button variant="secondary" onClick={() => onEdit(item.id)} className="p-2 h-9 w-9 flex-shrink-0 no-print">
-                                          <AdjustmentsIcon className="w-4 h-4" />
+                                        <Button variant="secondary" onClick={() => onEdit(item.id)} className="p-2 h-9 w-9 flex-shrink-0 no-print" aria-label={`Edit ${item.title}`}>
+                                          <PencilIcon className="w-4 h-4" />
                                         </Button>
-                                        <Button variant="danger" onClick={() => onRemove(item.id)} className="p-2 h-9 w-9 flex-shrink-0 no-print">
-                                            <XMarkIcon className="w-4 h-4"/>
+                                        <Button variant="danger" onClick={() => onRemove(item.id)} className="p-2 h-9 w-9 flex-shrink-0 no-print" aria-label={`Delete ${item.title}`}>
+                                            <TrashIcon className="w-4 h-4"/>
                                         </Button>
                                       </div>
                                   </div>
@@ -294,7 +294,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
                           <Input id="bank-ac-number" name="bank-ac-number" label="A/C Number" type="text" inputMode="numeric" value={settings.bankDetails.accountNumber} onChange={e => handleSettingsChange('bankDetails', 'accountNumber', e.target.value)} />
                       </div>
                       <div className="grid grid-cols-3 gap-4">
-                          <Input id="bank-ifsc" name="bank-ifsc" label="IFSC Code" value={settings.bankDetails.ifsc} onChange={e => handleSettingsChange('bankDetails', 'ifsc', e.target.value)} />
+                          <Input id="bank-ifsc" name="bank-ifsc" label="IFSC Code" value={settings.bankDetails.ifsc} onChange={e => handleSettingsChange('bankDetails', 'ifsc', e.target.value.toUpperCase())} />
                           <Input id="bank-branch" name="bank-branch" label="Branch" value={settings.bankDetails.branch} onChange={e => handleSettingsChange('bankDetails', 'branch', e.target.value)} />
                           <Select id="bank-ac-type" name="bank-ac-type" label="A/C Type" value={settings.bankDetails.accountType} onChange={e => handleSettingsChange('bankDetails', 'accountType', e.target.value as 'savings' | 'current')}>
                               <option value="current">Current</option>
@@ -316,7 +316,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
                 </div>
                 <div className="flex gap-2 items-center">
                     <div className="w-32"><Input id="discount-amount" name="discount-amount" label="Discount" type="number" inputMode="decimal" value={settings.financials.discount} onChange={e => handleSettingsChange('financials', 'discount', e.target.value === '' ? '' : Number(e.target.value))}/></div>
-                    <Select id="discount-type" name="discount-type" label="" aria-label="Discount Type" value={settings.financials.discountType} onChange={e => handleSettingsChange('financials', 'discountType', e.target.value as 'percentage' | 'fixed')} className="mt-5 !bg-slate-900 border-slate-700">
+                    <Select id="discount-type" name="discount-type" label="" aria-label="Discount Type" value={settings.financials.discountType} onChange={e => handleSettingsChange('financials', 'discountType', e.target.value as 'percentage' | 'fixed')} className="mt-5">
                         <option value="percentage">%</option>
                         <option value="fixed">₹</option>
                     </Select>
