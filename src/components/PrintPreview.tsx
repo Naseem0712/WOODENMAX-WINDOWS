@@ -266,13 +266,9 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     const containerWidthPx = 150; // max width in pixels
     const containerHeightPx = 200; // max height in pixels
     const numWidth = Number(config.width) || 1;
-    let numHeight = Number(config.height) || 1;
+    const numHeight = Number(config.height) || 1;
     
-    let effectiveWidth = numWidth;
-    if (config.windowType === WindowType.ELEVATION_GLAZING && config.elevationGrid) {
-        effectiveWidth = config.elevationGrid.colPattern.map(Number).filter(v => v > 0).reduce((s, v) => s + v, 0) || 1;
-        numHeight = config.elevationGrid.rowPattern.map(Number).filter(v => v > 0).reduce((s, v) => s + v, 0) || 1;
-    }
+    const effectiveWidth = numWidth;
     const scale = externalScale || Math.min(containerWidthPx / effectiveWidth, containerHeightPx / numHeight);
 
     const { series, fixedPanels, profileColor, windowType, glassTexture } = config;
@@ -332,12 +328,12 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     }
     
     // Outer frame
-    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.ELEVATION_GLAZING) {
+    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
         profileElements.push(<PrintableMiteredFrame key="outer-frame" width={effectiveWidth} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
     }
     
-    const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.ELEVATION_GLAZING) ? dims.outerFrame : 0;
+    const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) ? dims.outerFrame : 0;
     const holeX1 = leftFix ? leftFixSize : frameOffset;
     const holeY1 = topFix ? topFixSize : frameOffset;
     const holeX2 = rightFix ? numWidth - rightFixSize : numWidth - frameOffset;
@@ -415,7 +411,6 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
             {profileElements}
             {innerAreaWidth > 0 && innerAreaHeight > 0 && (
                 <div className="absolute" style={{ top: holeY1 * scale, left: holeX1 * scale, width: innerAreaWidth * scale, height: innerAreaHeight * scale }}>
-                    {/*// FIX: Refactored IIFE conditional rendering to use a ternary operator, preventing a boolean `false` from being rendered.*/}
                     {windowType === WindowType.SLIDING ? (() => {
                         const { shutterConfig, fixedShutters, slidingHandles } = config;
                         const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;
@@ -461,83 +456,6 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                             });
                         }
                     })() : null}
-                    
-                    {windowType === WindowType.ELEVATION_GLAZING && (() => {
-                        if (!config.elevationGrid) return null;
-
-                        const { rowPattern, colPattern, doorPositions, verticalMullionSize, horizontalTransomSize } = config.elevationGrid;
-                        const vMullion = Number(verticalMullionSize) || 0;
-                        const hTransom = Number(horizontalTransomSize) || 0;
-
-                        const validColPattern = colPattern.map(Number).filter(v => v > 0);
-                        const validRowPattern = rowPattern.map(Number).filter(v => v > 0);
-
-                        const elements: React.ReactNode[] = [];
-                        
-                        const uniqueColWidthsLabeled = new Set<number>();
-                        let currentX_label = 0;
-                        validColPattern.forEach((colWidth) => {
-                            if (!uniqueColWidthsLabeled.has(colWidth)) {
-                                labelElements.push( <PrintDimensionLabel key={`h-label-${colWidth}`} value={colWidth} className="-top-4 text-[5pt]" style={{ left: (currentX_label + colWidth / 2) * scale, transform: 'translateX(-50%)' }} /> );
-                                uniqueColWidthsLabeled.add(colWidth);
-                            }
-                            currentX_label += colWidth;
-                        });
-
-                        const uniqueRowHeightsLabeled = new Set<number>();
-                        let currentY_label = 0;
-                        validRowPattern.forEach((rowHeight) => {
-                             if (!uniqueRowHeightsLabeled.has(rowHeight)) {
-                                labelElements.push( <PrintDimensionLabel key={`v-label-${rowHeight}`} value={rowHeight} className="-left-1 text-[5pt] rotate-[-90deg]" style={{ top: (currentY_label + rowHeight / 2) * scale, transform: 'translateY(-50%) translateX(-100%)', transformOrigin: 'left center' }} /> );
-                                uniqueRowHeightsLabeled.add(rowHeight);
-                            }
-                            currentY_label += rowHeight;
-                        });
-
-                        let currentY_cell = 0;
-                        validRowPattern.forEach((rowHeight, r) => {
-                            let currentX_cell = 0;
-                            validColPattern.forEach((colWidth, c) => {
-                                elements.push( <GlassPanel key={`cell-glass-${r}-${c}`} panelId={`elevation-${r}-${c}`} style={{left: currentX_cell * scale, top: currentY_cell * scale, width: colWidth*scale, height: rowHeight*scale}} glassWidthPx={colWidth*scale} glassHeightPx={rowHeight*scale}/>);
-                                currentX_cell += colWidth;
-                            });
-                            currentY_cell += rowHeight;
-                        });
-
-                        let accumulatedX = 0;
-                        for (let c = 0; c < validColPattern.length - 1; c++) {
-                            accumulatedX += validColPattern[c];
-                            elements.push(<PrintProfilePiece key={`vmullion-${c}`} color={profileColor} style={{ left: (accumulatedX - vMullion / 2) * scale, top: 0, width: vMullion * scale, height: numHeight * scale }} />);
-                        }
-                        let accumulatedY = 0;
-                        for (let r = 0; r < validRowPattern.length - 1; r++) {
-                            accumulatedY += validRowPattern[r];
-                            elements.push(<PrintProfilePiece key={`hmullion-${r}`} color={profileColor} style={{ left: 0, top: (accumulatedY - hTransom / 2) * scale, width: effectiveWidth * scale, height: hTransom * scale }} />);
-                        }
-                        
-                        currentY_cell = 0;
-                        validRowPattern.forEach((rowHeight, r) => {
-                            let currentX_cell = 0;
-                            validColPattern.forEach((colWidth, c) => {
-                                const isDoor = doorPositions.some(p => p.row === r && p.col === c);
-                                if (isDoor) {
-                                    const doorFrameSize = Number(dims.casementShutter) || 0;
-                                    elements.push(
-                                        <div key={`door-${r}-${c}`} className="absolute" style={{ left: currentX_cell * scale, top: currentY_cell * scale, width: colWidth * scale, height: rowHeight * scale, zIndex: 15 }}>
-                                            <PrintableMiteredFrame width={colWidth} height={rowHeight} profileSize={doorFrameSize} scale={scale} color={profileColor} />
-                                            <GlassPanel panelId={`elevation-door-${r}-${c}`} style={{ left: doorFrameSize * scale, top: doorFrameSize * scale, width: (colWidth - 2 * doorFrameSize) * scale, height: (rowHeight - 2 * doorFrameSize) * scale }} glassWidthPx={(colWidth - 2 * doorFrameSize) * scale} glassHeightPx={(rowHeight - 2 * doorFrameSize) * scale}>
-                                                <PrintShutterIndicator type="door" />
-                                            </GlassPanel>
-                                        </div>
-                                    );
-                                }
-                                currentX_cell += colWidth;
-                            });
-                            currentY_cell += rowHeight;
-                        });
-
-                        return <>{elements}</>;
-                    })()}
 
                     {(windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) && (() => {
                         const { verticalDividers, horizontalDividers, doorPositions, ventilatorGrid } = config;
@@ -667,7 +585,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                     {handleElements}
                 </div>
             )}
-            {config.windowType !== WindowType.CORNER && config.windowType !== WindowType.ELEVATION_GLAZING && (
+            {config.windowType !== WindowType.CORNER && (
                 <>
                     <PrintDimensionLabel value={effectiveWidth} className="top-0 -translate-y-full left-1/2 -translate-x-1/2 -mt-1" />
                     <PrintDimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 left-0 -translate-x-full -ml-2 rotate-[-90deg]" />
@@ -754,8 +672,6 @@ const getItemDetails = (item: QuotationItem) => {
             const typeName = cell.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
             panelCounts[typeName] = (panelCounts[typeName] || 0) + 1;
         });
-    } else if (windowType === WindowType.ELEVATION_GLAZING && config.elevationGrid) {
-        panelCounts['Operable Door'] = config.elevationGrid.doorPositions.length;
     }
 
 
@@ -775,7 +691,6 @@ const getItemDetails = (item: QuotationItem) => {
                     case WindowType.SLIDING: unitsPerWindow = shutterConfig === '2G' ? 2 : shutterConfig === '4G' ? 4 : 3; break;
                     case WindowType.CASEMENT: unitsPerWindow = doorPositions.length; break;
                     case WindowType.GLASS_PARTITION: unitsPerWindow = config.partitionPanels.types.filter(t => t.type !== 'fixed').length; break;
-                    case WindowType.ELEVATION_GLAZING: unitsPerWindow = config.elevationGrid?.doorPositions.length || 0; break;
                 }
             }
         }
@@ -963,21 +878,16 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                         <tr key={item.id} className="border-b border-gray-300 print-item">
                                             <td className="p-2 align-top text-center">{index + 1}</td>
                                             
-                                            {item.config.windowType !== WindowType.ELEVATION_GLAZING ? (
-                                                <td className="p-2 align-top w-[25%]">
-                                                    <PrintableWindow config={item.config} />
-                                                </td>
-                                            ) : null}
+                                            <td className="p-2 align-top w-[25%]">
+                                                <PrintableWindow config={item.config} />
+                                            </td>
                                             
-                                            <td 
-                                                className="p-2 align-top"
-                                                colSpan={item.config.windowType === WindowType.ELEVATION_GLAZING ? 2 : 1}
-                                            >
+                                            <td className="p-2 align-top">
                                                 <p className="font-bold print-window-title">{item.title}</p>
                                                 <table className="w-full text-[7pt] mt-1 details-table">
                                                     <tbody>
                                                         <tr><td className='pr-2 font-semibold'>Series:</td><td>{item.config.series.name}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Size:</td><td>{item.config.windowType === 'elevation_glazing' && item.config.elevationGrid ? `${item.config.elevationGrid.colPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)} x ${item.config.elevationGrid.rowPattern.map(Number).filter(v=>v>0).reduce((s,v)=>s+v, 0)}` : `${item.config.width} x ${item.config.height}`} mm</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Size:</td><td>{`${item.config.width} x ${item.config.height}`} mm</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Color:</td><td>{getColorName(item)}</td></tr>

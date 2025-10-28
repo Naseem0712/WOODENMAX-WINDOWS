@@ -313,7 +313,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
 
       <CollapsibleCard title="Design Type" isOpen={openCard === 'Design Type'} onToggle={() => handleToggleCard('Design Type')}>
           <div className="grid grid-cols-3 bg-slate-700 rounded-md p-1 gap-1">
-              {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.ELEVATION_GLAZING, WindowType.CORNER].map(type => {
+              {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.CORNER].map(type => {
                   const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                   const isActive = (isCorner && type === WindowType.CORNER) || (!isCorner && windowType === type);
                   return <button key={type} onClick={() => setConfig('windowType', type)} className={`p-2 text-xs font-semibold rounded capitalize ${isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>{typeLabel}</button>

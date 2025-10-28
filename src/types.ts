@@ -7,8 +7,6 @@ export enum WindowType {
   CASEMENT = 'casement',
   VENTILATOR = 'ventilator',
   GLASS_PARTITION = 'glass_partition',
-  // FIX: Added 'ELEVATION_GLAZING' to support elevation glazing window type.
-  ELEVATION_GLAZING = 'elevation_glazing',
   CORNER = 'corner',
 }
 
@@ -230,18 +228,6 @@ export interface WindowConfig {
     count: number; 
     types: PartitionPanelConfig[]; 
     hasTopChannel: boolean;
-  };
-
-  // FIX: Added optional 'elevationGrid' to support elevation glazing designs.
-  // Elevation Glazing specific
-  elevationGrid?: {
-    rowPattern: (number | '')[];
-    colPattern: (number | '')[];
-    verticalMullionSize: number | '';
-    horizontalTransomSize: number | '';
-    pressurePlateSize: number | '';
-    doorPositions: { row: number; col: number; handle?: HandleConfig }[];
-    floorHeight?: number | '';
   };
   
   // Corner specific

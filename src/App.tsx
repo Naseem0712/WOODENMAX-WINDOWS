@@ -334,21 +334,6 @@ const DEFAULT_GLASS_PARTITION_SERIES: ProfileSeries = {
   },
 };
 
-const DEFAULT_ELEVATION_GLAZING_HARDWARE: HardwareItem[] = [
-  { id: uuidv4(), name: 'Anchor Fastener', qtyPerShutter: 4, rate: 100, unit: 'per_window' },
-  { id: uuidv4(), name: 'Pressure Plate Screw', qtyPerShutter: 10, rate: 10, unit: 'per_window' },
-  { id: uuidv4(), name: 'Cover Cap', qtyPerShutter: 10, rate: 15, unit: 'per_window' },
-];
-
-const DEFAULT_ELEVATION_GLAZING_SERIES: ProfileSeries = {
-    id: 'series-elevation-default',
-    name: 'Standard Elevation Glazing',
-    type: WindowType.ELEVATION_GLAZING,
-    dimensions: { ...BASE_DIMENSIONS, mullion: 100 }, // Mullion can represent the main grid profiles
-    hardwareItems: DEFAULT_ELEVATION_GLAZING_HARDWARE,
-    glassOptions: DEFAULT_GLASS_OPTIONS,
-};
-
 const DEFAULT_CORNER_SERIES: ProfileSeries = {
     id: 'series-corner-default',
     name: 'Standard Corner Series',
@@ -430,14 +415,6 @@ const initialConfig: ConfigState = {
     doorPositions: [],
     ventilatorGrid: [],
     partitionPanels: { count: 2, types: [{ type: 'fixed' }, { type: 'sliding' }], hasTopChannel: true },
-    elevationGrid: {
-        rowPattern: [2400],
-        colPattern: [1200, 1200],
-        verticalMullionSize: 80,
-        horizontalTransomSize: 80,
-        pressurePlateSize: 20,
-        doorPositions: [],
-    },
     leftWidth: 1200,
     rightWidth: 1200,
     cornerPostWidth: 100,
@@ -450,8 +427,6 @@ const SERIES_MAP: Record<WindowType, ProfileSeries> = {
     [WindowType.CASEMENT]: DEFAULT_CASEMENT_SERIES,
     [WindowType.VENTILATOR]: DEFAULT_VENTILATOR_SERIES,
     [WindowType.GLASS_PARTITION]: DEFAULT_GLASS_PARTITION_SERIES,
-    // FIX: Added ELEVATION_GLAZING to the series map to resolve a TypeScript error.
-    [WindowType.ELEVATION_GLAZING]: DEFAULT_ELEVATION_GLAZING_SERIES,
     [WindowType.CORNER]: DEFAULT_CORNER_SERIES,
 };
 
@@ -911,7 +886,7 @@ const App: React.FC = () => {
   const availableSeries = useMemo(() => {
     const allSeries = [
         DEFAULT_SLIDING_SERIES, DEFAULT_CASEMENT_SERIES, DEFAULT_VENTILATOR_SERIES, 
-        DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_ELEVATION_GLAZING_SERIES, DEFAULT_CORNER_SERIES, ...savedSeries
+        DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_CORNER_SERIES, ...savedSeries
     ];
     return allSeries.filter((s, index, self) => index === self.findIndex(t => t.id === s.id));
   }, [savedSeries]);
