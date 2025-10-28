@@ -953,4 +953,34 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         <EditableSection title="Description" value={settings.description} onChange={(val) => setSettings({...settings, description: val})} />
                         <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} />
                         
-                        <div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs" style={{breakBefore: '
+                        <div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs" style={{breakBefore: 'avoid'}}>
+                            <div className="flex-grow">
+                                <h3 className="font-bold text-sm mb-1">Bank Details</h3>
+                                <p><strong>A/C Name:</strong> {settings.bankDetails.name}</p>
+                                <p><strong>A/C No:</strong> {settings.bankDetails.accountNumber}</p>
+                                <p><strong>IFSC:</strong> {settings.bankDetails.ifsc}</p>
+                                <p><strong>Branch:</strong> {settings.bankDetails.branch}</p>
+                                <p><strong>A/C Type:</strong> {settings.bankDetails.accountType}</p>
+                            </div>
+                            <div className="w-1/3 text-center self-end">
+                                <div className="border-t-2 border-black pt-2 mt-16">
+                                    Authorised Signature
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="print-footer-container">
+                        <div className="print-footer">
+                            <div className="text-right text-[7pt] self-end">
+                                Page <span className="page-counter"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {/* --- End of Printable Content --- */}
+            </div>
+        </div>
+    </div>
+  );
+};
