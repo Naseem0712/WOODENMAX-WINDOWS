@@ -1,8 +1,8 @@
 
 
-
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback, lazy, Suspense } from 'react';
-import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig, BatchAddItem } from './types';
+// FIX: Import `GlassGridConfig` type to resolve 'Cannot find name' errors.
+import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
@@ -874,6 +874,20 @@ const App: React.FC = () => {
   }, [savedColors]);
   useEffect(() => { window.localStorage.setItem('woodenmax-quotation-settings', JSON.stringify(quotationSettings)); }, [quotationSettings]);
   
+  useEffect(() => {
+    // Lock body scroll when any modal or mobile panel is open
+    if (activeMobilePanel !== 'none' || isQuotationModalOpen || isBatchAddModalOpen || isContentModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    // Cleanup function to ensure scroll is restored on component unmount
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [activeMobilePanel, isQuotationModalOpen, isBatchAddModalOpen, isContentModalOpen]);
+
   const SERIES_MAP_MEMO = useMemo(() => SERIES_MAP, []);
 
   useEffect(() => {

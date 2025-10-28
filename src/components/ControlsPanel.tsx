@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType } from '../types';
@@ -12,7 +11,6 @@ import { DimensionInput, type Unit } from './ui/DimensionInput';
 import { v4 as uuidv4 } from 'uuid';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { CollapsibleCard } from './ui/CollapsibleCard';
-import { RefreshIcon } from './icons/RefreshIcon';
 import { SearchableSelect } from './ui/SearchableSelect';
 import { UploadIcon } from './icons/UploadIcon';
 
@@ -306,7 +304,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
       <div className="flex justify-between items-center pb-2 border-b border-slate-700">
         <h2 className="text-2xl font-bold text-white">Configuration</h2>
         <div className="flex items-center gap-2">
-            <button onClick={onResetDesign} className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white" aria-label="Reset design" title="Reset Design"> <RefreshIcon className="w-6 h-6" /> </button>
+            <button onClick={onResetDesign} className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white" aria-label="Reset design" title="Reset Design"> <TrashIcon className="w-6 h-6" /> </button>
             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white" aria-label="Close panel"> <XMarkIcon className="w-6 h-6" /> </button>
         </div>
       </div>

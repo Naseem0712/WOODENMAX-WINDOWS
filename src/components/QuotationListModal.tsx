@@ -1,8 +1,8 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import type { QuotationItem, QuotationSettings, BOM } from '../types';
 import { Button } from './ui/Button';
 import { XMarkIcon } from './icons/XMarkIcon';
-import { TrashIcon } from './icons/TrashIcon';
 import { Input } from './ui/Input';
 import { PrinterIcon } from './icons/PrinterIcon';
 import { UploadIcon } from './icons/UploadIcon';
@@ -12,7 +12,7 @@ import { DownloadIcon } from './icons/DownloadIcon';
 import { generateBillOfMaterials } from '../utils/materialCalculator';
 import { MaterialSummaryModal } from './MaterialSummaryModal';
 import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
-import { PencilIcon } from './icons/PencilIcon';
+import { AdjustmentsIcon } from './icons/AdjustmentsIcon';
 
 interface QuotationListModalProps {
   isOpen: boolean;
@@ -270,10 +270,10 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
                                       </div>
                                       <div className="flex items-center gap-2">
                                         <Button variant="secondary" onClick={() => onEdit(item.id)} className="p-2 h-9 w-9 flex-shrink-0 no-print">
-                                          <PencilIcon className="w-4 h-4" />
+                                          <AdjustmentsIcon className="w-4 h-4" />
                                         </Button>
                                         <Button variant="danger" onClick={() => onRemove(item.id)} className="p-2 h-9 w-9 flex-shrink-0 no-print">
-                                            <TrashIcon className="w-4 h-4"/>
+                                            <XMarkIcon className="w-4 h-4"/>
                                         </Button>
                                       </div>
                                   </div>
@@ -316,7 +316,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
                 </div>
                 <div className="flex gap-2 items-center">
                     <div className="w-32"><Input id="discount-amount" name="discount-amount" label="Discount" type="number" inputMode="decimal" value={settings.financials.discount} onChange={e => handleSettingsChange('financials', 'discount', e.target.value === '' ? '' : Number(e.target.value))}/></div>
-                    <Select id="discount-type" name="discount-type" label="" aria-label="Discount Type" value={settings.financials.discountType} onChange={e => handleSettingsChange('financials', 'discountType', e.target.value as 'percentage' | 'fixed')} className="mt-5">
+                    <Select id="discount-type" name="discount-type" label="" aria-label="Discount Type" value={settings.financials.discountType} onChange={e => handleSettingsChange('financials', 'discountType', e.target.value as 'percentage' | 'fixed')} className="mt-5 !bg-slate-900 border-slate-700">
                         <option value="percentage">%</option>
                         <option value="fixed">₹</option>
                     </Select>
