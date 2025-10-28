@@ -1,22 +1,25 @@
 
 
-import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback } from 'react';
-import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig } from './types';
+
+import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback, lazy, Suspense } from 'react';
+import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig, BatchAddItem } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
+// FIX: Import QuotationPanel to resolve 'Cannot find name' errors.
+import { QuotationPanel } from './components/QuotationPanel';
 import { v4 as uuidv4 } from 'uuid';
 import { ChevronLeftIcon } from './components/icons/ChevronLeftIcon';
-import { QuotationPanel } from './components/QuotationPanel';
-import { QuotationListModal } from './components/QuotationListModal';
 import { Logo } from './components/icons/Logo';
 import { Button } from './components/ui/Button';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import { AdjustmentsIcon } from './components/icons/AdjustmentsIcon';
 import { ListBulletIcon } from './components/icons/ListBulletIcon';
 import { DocumentTextIcon } from './components/icons/DocumentTextIcon';
-import { BatchAddModal, type BatchAddItem } from './components/BatchAddModal';
-import { ContentModal } from './components/ContentModal';
+
+const QuotationListModal = lazy(() => import('./components/QuotationListModal').then(module => ({ default: module.QuotationListModal })));
+const BatchAddModal = lazy(() => import('./components/BatchAddModal').then(module => ({ default: module.BatchAddModal })));
+const ContentModal = lazy(() => import('./components/ContentModal').then(module => ({ default: module.ContentModal })));
 
 interface BeforeInstallPromptEvent extends Event {
     readonly platforms: Array<string>;
@@ -1304,12 +1307,26 @@ const App: React.FC = () => {
     setIsBatchAddModalOpen(true);
     handleCloseMobilePanels();
   };
+  
+  const loadingFallback = <div className="fixed inset-0 bg-slate-900 bg-opacity-80 flex items-center justify-center z-[100] no-print"><div className="text-white">Loading...</div></div>;
 
   return (
     <>
-      <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} onEdit={handleEditItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} />
-      <BatchAddModal isOpen={isBatchAddModalOpen} onClose={() => setIsBatchAddModalOpen(false)} baseConfig={windowConfig} baseRate={rate} onSave={handleBatchSave} />
-      <ContentModal isOpen={isContentModalOpen} onClose={() => setIsContentModalOpen(false)} />
+      {isQuotationModalOpen && (
+          <Suspense fallback={loadingFallback}>
+              <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} onEdit={handleEditItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} />
+          </Suspense>
+      )}
+      {isBatchAddModalOpen && (
+          <Suspense fallback={loadingFallback}>
+              <BatchAddModal isOpen={isBatchAddModalOpen} onClose={() => setIsBatchAddModalOpen(false)} baseConfig={windowConfig} baseRate={rate} onSave={handleBatchSave} />
+          </Suspense>
+      )}
+      {isContentModalOpen && (
+          <Suspense fallback={loadingFallback}>
+              <ContentModal isOpen={isContentModalOpen} onClose={() => setIsContentModalOpen(false)} />
+          </Suspense>
+      )}
       
       <div className={`flex flex-col h-screen font-sans bg-slate-900 overflow-hidden ${isPreviewing ? 'hidden' : ''}`}>
         <header className="bg-slate-800 p-3 flex items-center shadow-md z-40 no-print">

@@ -266,10 +266,9 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     const containerWidthPx = 150; // max width in pixels
     const containerHeightPx = 200; // max height in pixels
     const numWidth = Number(config.width) || 1;
-    let numHeight = Number(config.height) || 1;
+    const numHeight = Number(config.height) || 1;
     
-    let effectiveWidth = numWidth;
-    // FIX: Removed block for 'ELEVATION_GLAZING' as it's not a defined window type.
+    const effectiveWidth = numWidth;
     const scale = externalScale || Math.min(containerWidthPx / effectiveWidth, containerHeightPx / numHeight);
 
     const { series, fixedPanels, profileColor, windowType, glassTexture } = config;
@@ -320,8 +319,9 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         }
         return child;
       });
+
       return (
-        <div className="absolute" style={panelStyle}>
+        <div className="absolute overflow-hidden" style={panelStyle}>
             <PrintGlassGrid config={config} panelId={panelId} width={glassWidthPx / scale} height={glassHeightPx / scale} scale={scale} />
             {childrenWithProps}
         </div> 
@@ -329,13 +329,11 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     }
     
     // Outer frame
-    // FIX: Removed check for 'ELEVATION_GLAZING' as it's not a defined window type.
     if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
         profileElements.push(<PrintableMiteredFrame key="outer-frame" width={effectiveWidth} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
     }
     
-    // FIX: Removed check for 'ELEVATION_GLAZING' as it's not a defined window type.
     const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) ? dims.outerFrame : 0;
     const holeX1 = leftFix ? leftFixSize : frameOffset;
     const holeY1 = topFix ? topFixSize : frameOffset;
@@ -414,8 +412,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
             {profileElements}
             {innerAreaWidth > 0 && innerAreaHeight > 0 && (
                 <div className="absolute" style={{ top: holeY1 * scale, left: holeX1 * scale, width: innerAreaWidth * scale, height: innerAreaHeight * scale }}>
-                    {/*// FIX: Refactor IIFE for sliding window rendering to avoid potential TypeScript type inference issues.*/}
-                    {windowType === WindowType.SLIDING && (() => {
+                    {windowType === WindowType.SLIDING ? (() => {
                         const { shutterConfig, fixedShutters, slidingHandles } = config;
                         const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;
                         const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
@@ -459,9 +456,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                 return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><PrintSlidingShutter panelId={`sliding-${i}`} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={leftProfile} rightProfile={rightProfile} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
                             });
                         }
-                    })()}
-                    
-                    {/* FIX: Removed block for 'ELEVATION_GLAZING' as it's not a defined window type. */}
+                    })() : null}
 
                     {(windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) && (() => {
                         const { verticalDividers, horizontalDividers, doorPositions, ventilatorGrid } = config;
@@ -679,7 +674,6 @@ const getItemDetails = (item: QuotationItem) => {
             panelCounts[typeName] = (panelCounts[typeName] || 0) + 1;
         });
     }
-    // FIX: Removed block for 'ELEVATION_GLAZING' as it's not a defined window type.
 
 
     const hardwareDetails: { name: string, qty: number, rate: number, total: number }[] = [];
@@ -698,7 +692,6 @@ const getItemDetails = (item: QuotationItem) => {
                     case WindowType.SLIDING: unitsPerWindow = shutterConfig === '2G' ? 2 : shutterConfig === '4G' ? 4 : 3; break;
                     case WindowType.CASEMENT: unitsPerWindow = doorPositions.length; break;
                     case WindowType.GLASS_PARTITION: unitsPerWindow = config.partitionPanels.types.filter(t => t.type !== 'fixed').length; break;
-                    // FIX: Removed case for 'ELEVATION_GLAZING' as it's not a defined window type.
                 }
             }
         }
@@ -886,21 +879,15 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                         <tr key={item.id} className="border-b border-gray-300 print-item">
                                             <td className="p-2 align-top text-center">{index + 1}</td>
                                             
-                                            {/* FIX: Removed conditional rendering for 'ELEVATION_GLAZING' as it's not a defined window type. */}
                                             <td className="p-2 align-top w-[25%]">
                                                 <PrintableWindow config={item.config} />
                                             </td>
                                             
-                                            <td 
-                                                className="p-2 align-top"
-                                                // FIX: Removed conditional colSpan for 'ELEVATION_GLAZING'.
-                                                colSpan={1}
-                                            >
+                                            <td className="p-2 align-top">
                                                 <p className="font-bold print-window-title">{item.title}</p>
                                                 <table className="w-full text-[7pt] mt-1 details-table">
                                                     <tbody>
                                                         <tr><td className='pr-2 font-semibold'>Series:</td><td>{item.config.series.name}</td></tr>
-                                                        {/* FIX: Removed conditional size calculation for 'ELEVATION_GLAZING'. */}
                                                         <tr><td className='pr-2 font-semibold'>Size:</td><td>{`${item.config.width} x ${item.config.height}`} mm</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
@@ -965,7 +952,8 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         <EditableSection title="Description" value={settings.description} onChange={(val) => setSettings({...settings, description: val})} />
                         <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} />
                         
-                        <div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs" style={{breakBefore: 'avoid'}}>
+{/* FIX: Corrected corrupted style property 'breakBefore'. */}
+<div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs" style={{breakBefore: 'avoid'}}>
                             <div className="flex-grow">
                                 <h3 className="font-bold text-sm mb-1">Bank Details</h3>
                                 <p><strong>A/C Name:</strong> {settings.bankDetails.name}</p>

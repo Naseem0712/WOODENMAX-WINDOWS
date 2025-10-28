@@ -8,7 +8,6 @@ import { MinusIcon } from './icons/MinusIcon';
 import { ArrowsPointingInIcon } from './icons/ArrowsPointingInIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { PhotoIcon } from './icons/PhotoIcon';
-import html2pdf from 'html2pdf.js';
 
 interface WindowCanvasProps {
   config: WindowConfig;
@@ -650,70 +649,72 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
             },
         };
 
-        html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((productCanvas: HTMLCanvasElement) => {
-            const FINAL_WIDTH = 2000;
-            const FINAL_HEIGHT = 2000;
-            const PADDING = 100;
+        import('html2pdf.js').then(({ default: html2pdf }) => {
+            html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((productCanvas: HTMLCanvasElement) => {
+                const FINAL_WIDTH = 2000;
+                const FINAL_HEIGHT = 2000;
+                const PADDING = 100;
 
-            const newCanvas = document.createElement('canvas');
-            newCanvas.width = FINAL_WIDTH;
-            newCanvas.height = FINAL_HEIGHT;
-            
-            const ctx = newCanvas.getContext('2d');
-            if (!ctx) {
+                const newCanvas = document.createElement('canvas');
+                newCanvas.width = FINAL_WIDTH;
+                newCanvas.height = FINAL_HEIGHT;
+                
+                const ctx = newCanvas.getContext('2d');
+                if (!ctx) {
+                    setIsExporting(false);
+                    return;
+                }
+
+                // 1. Fill with white background
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
+
+                // 2. Calculate scale and position to fit and center the product image
+                const canvasAspectRatio = productCanvas.width / productCanvas.height;
+                const targetWidth = FINAL_WIDTH - PADDING * 2;
+                const targetHeight = FINAL_HEIGHT - PADDING * 2;
+
+                let drawWidth = targetWidth;
+                let drawHeight = targetWidth / canvasAspectRatio;
+
+                if (drawHeight > targetHeight) {
+                    drawHeight = targetHeight;
+                    drawWidth = targetHeight * canvasAspectRatio;
+                }
+
+                const drawX = (FINAL_WIDTH - drawWidth) / 2;
+                const drawY = (FINAL_HEIGHT - drawHeight) / 2;
+                
+                // 3. Draw the product image
+                ctx.drawImage(productCanvas, drawX, drawY, drawWidth, drawHeight);
+
+                // 4. Add Watermark
+                ctx.save();
+                ctx.translate(newCanvas.width / 2, newCanvas.height / 2);
+                ctx.rotate(-Math.PI / 4); // Rotate 45 degrees
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                ctx.font = 'bold 200px Arial';
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.12)'; // 12% transparent black
+                
+                ctx.fillText('WoodenMax', 0, 0);
+                ctx.restore();
+
+                // 5. Export the new canvas
+                const link = document.createElement('a');
+                link.download = `woodenmax-design-${Date.now()}.png`;
+                link.href = newCanvas.toDataURL('image/png');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
                 setIsExporting(false);
-                return;
-            }
-
-            // 1. Fill with white background
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
-
-            // 2. Calculate scale and position to fit and center the product image
-            const canvasAspectRatio = productCanvas.width / productCanvas.height;
-            const targetWidth = FINAL_WIDTH - PADDING * 2;
-            const targetHeight = FINAL_HEIGHT - PADDING * 2;
-
-            let drawWidth = targetWidth;
-            let drawHeight = targetWidth / canvasAspectRatio;
-
-            if (drawHeight > targetHeight) {
-                drawHeight = targetHeight;
-                drawWidth = targetHeight * canvasAspectRatio;
-            }
-
-            const drawX = (FINAL_WIDTH - drawWidth) / 2;
-            const drawY = (FINAL_HEIGHT - drawHeight) / 2;
-            
-            // 3. Draw the product image
-            ctx.drawImage(productCanvas, drawX, drawY, drawWidth, drawHeight);
-
-            // 4. Add Watermark
-            ctx.save();
-            ctx.translate(newCanvas.width / 2, newCanvas.height / 2);
-            ctx.rotate(-Math.PI / 4); // Rotate 45 degrees
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            ctx.font = 'bold 200px Arial';
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.12)'; // 12% transparent black
-            
-            ctx.fillText('WoodenMax', 0, 0);
-            ctx.restore();
-
-            // 5. Export the new canvas
-            const link = document.createElement('a');
-            link.download = `woodenmax-design-${Date.now()}.png`;
-            link.href = newCanvas.toDataURL('image/png');
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            setIsExporting(false);
-        }).catch((err: any) => {
-            console.error('Failed to export PNG:', err);
-            alert('Could not export image.');
-            setIsExporting(false);
+            }).catch((err: any) => {
+                console.error('Failed to export PNG:', err);
+                alert('Could not export image.');
+                setIsExporting(false);
+            });
         });
     };
 

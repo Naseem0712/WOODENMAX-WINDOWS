@@ -1,5 +1,12 @@
 
-
+export interface BatchAddItem {
+  id: string;
+  title: string;
+  width: number | '';
+  height: number | '';
+  quantity: number | '';
+  rate: number | '';
+}
 
 
 export enum WindowType {

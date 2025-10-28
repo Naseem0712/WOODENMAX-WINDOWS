@@ -5,7 +5,6 @@ import { PrinterIcon } from './icons/PrinterIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { FixedPanelPosition, ShutterConfigType, WindowType } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
-import html2pdf from 'html2pdf.js';
 
 interface PrintPreviewProps {
   isOpen: boolean;
@@ -780,14 +779,16 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
         pagebreak: { mode: ['css', 'legacy'] }
     };
 
-    html2pdf().from(element).set(opt).save().then(() => {
-        setIsExporting(false);
-        element.classList.remove('pdf-export-mode');
-    }).catch((err: any) => {
-        console.error("PDF export failed", err);
-        setIsExporting(false);
-        element.classList.remove('pdf-export-mode');
-        alert("Sorry, there was an error exporting the PDF.");
+    import('html2pdf.js').then(({ default: html2pdf }) => {
+        html2pdf().from(element).set(opt).save().then(() => {
+            setIsExporting(false);
+            element.classList.remove('pdf-export-mode');
+        }).catch((err: any) => {
+            console.error("PDF export failed", err);
+            setIsExporting(false);
+            element.classList.remove('pdf-export-mode');
+            alert("Sorry, there was an error exporting the PDF.");
+        });
     });
   };
   
@@ -952,34 +953,4 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         <EditableSection title="Description" value={settings.description} onChange={(val) => setSettings({...settings, description: val})} />
                         <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} />
                         
-                        <div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs" style={{breakBefore: 'avoid'}}>
-                            <div className="flex-grow">
-                                <h3 className="font-bold text-sm mb-1">Bank Details</h3>
-                                <p><strong>A/C Name:</strong> {settings.bankDetails.name}</p>
-                                <p><strong>A/C No:</strong> {settings.bankDetails.accountNumber}</p>
-                                <p><strong>IFSC:</strong> {settings.bankDetails.ifsc}</p>
-                                <p><strong>Branch:</strong> {settings.bankDetails.branch}</p>
-                                <p><strong>A/C Type:</strong> {settings.bankDetails.accountType}</p>
-                            </div>
-                            <div className="w-1/3 text-center self-end">
-                                <div className="border-t-2 border-black pt-2 mt-16">
-                                    Authorised Signature
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="print-footer-container">
-                        <div className="print-footer">
-                            <div className="text-right text-[7pt] self-end">
-                                Page <span className="page-counter"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {/* --- End of Printable Content --- */}
-            </div>
-        </div>
-    </div>
-  );
-};
+                        <div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs" style={{breakBefore: '
