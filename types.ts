@@ -106,6 +106,7 @@ export enum GlassType {
   TINTED_BLUE = 'tinted-blue',
   CLEAR_SAPPHIRE = 'clear-sapphire',
   BROWN_TINTED = 'brown-tinted',
+  // FIX: Corrected typo from 'black-tilted' to 'black-tinted'.
   BLACK_TINTED = 'black-tinted',
   TINTED_GREY = 'tinted-grey',
   VERTICAL_FLUTED = 'vertical-fluted',

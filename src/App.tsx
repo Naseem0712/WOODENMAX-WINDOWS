@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback } from 'react';
 import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType } from './types';
@@ -47,6 +48,7 @@ type ConfigAction =
   | { type: 'SET_SIDE_CONFIG'; payload: { side: 'left' | 'right'; config: Partial<CornerSideConfig> } }
   | { type: 'UPDATE_LAMINATED_CONFIG'; payload: Partial<LaminatedGlassConfig> }
   | { type: 'UPDATE_DGU_CONFIG'; payload: Partial<DguGlassConfig> }
+  | { type: 'LOAD_CONFIG'; payload: ConfigState }
   | { type: 'RESET_DESIGN' };
 
 const BASE_DIMENSIONS = {
@@ -332,6 +334,21 @@ const DEFAULT_GLASS_PARTITION_SERIES: ProfileSeries = {
   },
 };
 
+const DEFAULT_ELEVATION_GLAZING_HARDWARE: HardwareItem[] = [
+  { id: uuidv4(), name: 'Anchor Fastener', qtyPerShutter: 4, rate: 100, unit: 'per_window' },
+  { id: uuidv4(), name: 'Pressure Plate Screw', qtyPerShutter: 10, rate: 10, unit: 'per_window' },
+  { id: uuidv4(), name: 'Cover Cap', qtyPerShutter: 10, rate: 15, unit: 'per_window' },
+];
+
+const DEFAULT_ELEVATION_GLAZING_SERIES: ProfileSeries = {
+    id: 'series-elevation-default',
+    name: 'Standard Elevation Glazing',
+    type: WindowType.ELEVATION_GLAZING,
+    dimensions: { ...BASE_DIMENSIONS, mullion: 100 }, // Mullion can represent the main grid profiles
+    hardwareItems: DEFAULT_ELEVATION_GLAZING_HARDWARE,
+    glassOptions: DEFAULT_GLASS_OPTIONS,
+};
+
 const DEFAULT_CORNER_SERIES: ProfileSeries = {
     id: 'series-corner-default',
     name: 'Standard Corner Series',
@@ -413,6 +430,14 @@ const initialConfig: ConfigState = {
     doorPositions: [],
     ventilatorGrid: [],
     partitionPanels: { count: 2, types: [{ type: 'fixed' }, { type: 'sliding' }], hasTopChannel: true },
+    elevationGrid: {
+        rowPattern: [2400],
+        colPattern: [1200, 1200],
+        verticalMullionSize: 80,
+        horizontalTransomSize: 80,
+        pressurePlateSize: 20,
+        doorPositions: [],
+    },
     leftWidth: 1200,
     rightWidth: 1200,
     cornerPostWidth: 100,
@@ -425,6 +450,8 @@ const SERIES_MAP: Record<WindowType, ProfileSeries> = {
     [WindowType.CASEMENT]: DEFAULT_CASEMENT_SERIES,
     [WindowType.VENTILATOR]: DEFAULT_VENTILATOR_SERIES,
     [WindowType.GLASS_PARTITION]: DEFAULT_GLASS_PARTITION_SERIES,
+    // FIX: Added ELEVATION_GLAZING to the series map to resolve a TypeScript error.
+    [WindowType.ELEVATION_GLAZING]: DEFAULT_ELEVATION_GLAZING_SERIES,
     [WindowType.CORNER]: DEFAULT_CORNER_SERIES,
 };
 
@@ -657,6 +684,28 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             return { ...state, laminatedGlassConfig: { ...state.laminatedGlassConfig, ...action.payload } };
         case 'UPDATE_DGU_CONFIG':
             return { ...state, dguGlassConfig: { ...state.dguGlassConfig, ...action.payload } };
+        case 'LOAD_CONFIG': {
+            const parsed = action.payload;
+            const finalConfig: ConfigState = {
+              ...initialConfig,
+              ...parsed,
+              glassGrid: { ...initialConfig.glassGrid, ...(parsed.glassGrid || {}) },
+              glassTexture: parsed.glassTexture || '',
+              partitionPanels: { ...initialConfig.partitionPanels, ...(parsed.partitionPanels || {}) },
+              laminatedGlassConfig: { ...initialConfig.laminatedGlassConfig, ...(parsed.laminatedGlassConfig || {}) },
+              dguGlassConfig: { ...initialConfig.dguGlassConfig, ...(parsed.dguGlassConfig || {}) },
+              leftConfig: { ...defaultCornerSideConfig, ...(parsed.leftConfig || {}) },
+              rightConfig: { ...defaultCornerSideConfig, ...(parsed.rightConfig || {}) },
+            };
+            finalConfig.partitionPanels.types = finalConfig.partitionPanels.types || [];
+            finalConfig.leftConfig.slidingHandles = finalConfig.leftConfig.slidingHandles || [];
+            finalConfig.leftConfig.doorPositions = finalConfig.leftConfig.doorPositions || [];
+            finalConfig.leftConfig.ventilatorGrid = finalConfig.leftConfig.ventilatorGrid || [];
+            finalConfig.rightConfig.slidingHandles = finalConfig.rightConfig.slidingHandles || [];
+            finalConfig.rightConfig.doorPositions = finalConfig.rightConfig.doorPositions || [];
+            finalConfig.rightConfig.ventilatorGrid = finalConfig.rightConfig.ventilatorGrid || [];
+            return finalConfig;
+        }
         case 'RESET_DESIGN': {
              return {
                 ...initialConfig,
@@ -779,6 +828,7 @@ const App: React.FC = () => {
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isBatchAddModalOpen, setIsBatchAddModalOpen] = useState(false);
   const [isContentModalOpen, setIsContentModalOpen] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   const [quotationSettings, setQuotationSettings] = useState<QuotationSettings>(() => {
       try {
@@ -861,7 +911,7 @@ const App: React.FC = () => {
   const availableSeries = useMemo(() => {
     const allSeries = [
         DEFAULT_SLIDING_SERIES, DEFAULT_CASEMENT_SERIES, DEFAULT_VENTILATOR_SERIES, 
-        DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_CORNER_SERIES, ...savedSeries
+        DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_ELEVATION_GLAZING_SERIES, DEFAULT_CORNER_SERIES, ...savedSeries
     ];
     return allSeries.filter((s, index, self) => index === self.findIndex(t => t.id === s.id));
   }, [savedSeries]);
@@ -1200,6 +1250,63 @@ const App: React.FC = () => {
     dispatch({ type: 'SET_SIDE_CONFIG', payload: { side: activeCornerSide, config } });
   }, [activeCornerSide]);
   
+  const handleEditItem = useCallback((id: string) => {
+    const itemToEdit = quotationItems.find(item => item.id === id);
+    if (itemToEdit) {
+        const { series, ...configState } = itemToEdit.config;
+        dispatch({ type: 'LOAD_CONFIG', payload: configState });
+        setSeries(series);
+        setWindowTitle(itemToEdit.title);
+        setQuantity(itemToEdit.quantity);
+        setRate(itemToEdit.rate);
+        setAreaType(itemToEdit.areaType);
+        setEditingItemId(id);
+        setIsQuotationModalOpen(false);
+        setActiveMobilePanel('none');
+    }
+  }, [quotationItems]);
+
+  const handleUpdateQuotationItem = useCallback(() => {
+    if (!editingItemId) return;
+
+    const colorName = savedColors.find(c => c.value === windowConfig.profileColor)?.name;
+    const configForQuotation = JSON.parse(JSON.stringify(windowConfig));
+    if (configForQuotation.profileColor && configForQuotation.profileColor.startsWith('data:image')) {
+        configForQuotation.profileColor = '#808080';
+    }
+    if (configForQuotation.glassTexture) {
+        configForQuotation.glassTexture = '';
+    }
+
+    const updatedItem: QuotationItem = {
+        id: editingItemId,
+        title: windowTitle || 'Untitled Window',
+        config: configForQuotation,
+        quantity: Number(quantity) || 1,
+        areaType,
+        rate: Number(rate) || 0,
+        hardwareCost: hardwareCostPerWindow,
+        hardwareItems: JSON.parse(JSON.stringify(series.hardwareItems)),
+        profileColorName: colorName || 'Custom Texture',
+    };
+
+    setQuotationItems(prev => prev.map(item => item.id === editingItemId ? updatedItem : item));
+    
+    setEditingItemId(null);
+    alert(`"${updatedItem.title}" updated successfully!`);
+  }, [editingItemId, savedColors, windowConfig, windowTitle, quantity, areaType, rate, hardwareCostPerWindow, series.hardwareItems]);
+
+  const handleCancelEdit = useCallback(() => {
+    if (window.confirm("Are you sure you want to cancel editing? Any changes will be lost.")) {
+        setEditingItemId(null);
+        dispatch({ type: 'RESET_DESIGN' });
+        setWindowTitle('Window 1');
+        setQuantity(1);
+        setRate(550);
+        setAreaType(AreaType.SQFT);
+    }
+  }, []);
+
   const commonControlProps = useMemo(() => ({
     config: windowConfig,
     setConfig,
@@ -1247,7 +1354,7 @@ const App: React.FC = () => {
 
   return (
     <>
-      <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} />
+      <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} onEdit={handleEditItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} />
       <BatchAddModal isOpen={isBatchAddModalOpen} onClose={() => setIsBatchAddModalOpen(false)} baseConfig={windowConfig} baseRate={rate} onSave={handleBatchSave} />
       <ContentModal isOpen={isContentModalOpen} onClose={() => setIsContentModalOpen(false)} />
       
@@ -1275,7 +1382,7 @@ const App: React.FC = () => {
                  <WindowCanvas key={canvasKey} config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} onToggleElevationDoor={() => {}} />
               </div>
               <div className="flex-shrink-0 no-print hidden lg:block">
-                  <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onBatchAdd={handleBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={handleViewQuotation} />
+                  <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onUpdate={handleUpdateQuotationItem} onCancelEdit={handleCancelEdit} editingItemId={editingItemId} onBatchAdd={handleBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={handleViewQuotation} />
               </div>
               <div className="lg:hidden p-2 bg-slate-800 border-t-2 border-slate-700 grid grid-cols-2 gap-2 no-print">
                   <Button onClick={handleOpenConfigure} variant="secondary" className="h-12"> <AdjustmentsIcon className="w-5 h-5 mr-2" /> Configure </Button>
@@ -1292,7 +1399,7 @@ const App: React.FC = () => {
         {/* Mobile Quotation Panel */}
         <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${activeMobilePanel === 'quotation' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={handleCloseMobilePanels}></div>
         <div className={`lg:hidden fixed bottom-0 left-0 right-0 flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'quotation' ? 'translate-y-0' : 'translate-y-full'}`}>
-            <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onBatchAdd={handleBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={handleViewQuotation} onClose={handleCloseMobilePanels} />
+            <QuotationPanel width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onUpdate={handleUpdateQuotationItem} onCancelEdit={handleCancelEdit} editingItemId={editingItemId} onBatchAdd={handleBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={handleViewQuotation} onClose={handleCloseMobilePanels} />
         </div>
       </div>
     </>
