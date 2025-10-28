@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { WindowConfig, HandleConfig, CornerSideConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType } from '../types';
@@ -262,9 +263,19 @@ const GlassPanel: React.FC<{
         delete panelStyle.backgroundColor;
         delete panelStyle.opacity;
     }
+    
+    const reflectionElement = (
+      <div 
+        className="absolute inset-0 w-full h-full pointer-events-none" 
+        style={{
+          background: 'linear-gradient(to top left, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 40%, rgba(255, 255, 255, 0) 60%)'
+        }}
+      />
+    );
 
     return ( 
-      <div className="absolute" style={panelStyle}>
+      <div className="absolute overflow-hidden" style={panelStyle}>
+        {!glassTexture && reflectionElement}
         <GlassGrid config={config} panelId={panelId} width={glassWidth} height={glassHeight} scale={scale} />
         {children}
       </div> 

@@ -825,6 +825,8 @@ const App: React.FC = () => {
   useEffect(() => {
     try {
         const stateToSave = { ...windowConfigState };
+        // Don't save large texture data to local storage for the *current* config to avoid errors
+        // but it will be saved to quotation items for printing
         if (stateToSave.profileColor && stateToSave.profileColor.startsWith('data:image')) {
             stateToSave.profileColor = '#374151'; // Reset to default to avoid storage errors
         }
@@ -1134,15 +1136,7 @@ const App: React.FC = () => {
 
   const handleSaveToQuotation = useCallback(() => {
     const colorName = savedColors.find(c => c.value === windowConfig.profileColor)?.name;
-
     const configForQuotation = JSON.parse(JSON.stringify(windowConfig));
-    // Strip large texture data to prevent storage issues and crashes
-    if (configForQuotation.profileColor && configForQuotation.profileColor.startsWith('data:image')) {
-        configForQuotation.profileColor = '#808080'; // Use a neutral grey for print/preview of textured items
-    }
-    if (configForQuotation.glassTexture) {
-        configForQuotation.glassTexture = '';
-    }
 
     const newItem: QuotationItem = {
         id: uuidv4(),
@@ -1153,7 +1147,7 @@ const App: React.FC = () => {
         rate: Number(rate) || 0,
         hardwareCost: hardwareCostPerWindow,
         hardwareItems: JSON.parse(JSON.stringify(series.hardwareItems)),
-        profileColorName: colorName || 'Custom Texture',
+        profileColorName: colorName || (windowConfig.profileColor.startsWith('data:') ? 'Custom Texture' : windowConfig.profileColor),
     };
     setQuotationItems(prev => [...prev, newItem]);
     alert(`"${newItem.title}" saved to quotation! You now have ${quotationItems.length + 1} item(s).`);
@@ -1161,15 +1155,7 @@ const App: React.FC = () => {
 
   const handleBatchSave = useCallback((items: BatchAddItem[]) => {
     const colorName = savedColors.find(c => c.value === windowConfig.profileColor)?.name;
-    
     const baseConfigForQuotation = JSON.parse(JSON.stringify(windowConfig));
-    // Strip large texture data to prevent storage issues and crashes
-    if (baseConfigForQuotation.profileColor && baseConfigForQuotation.profileColor.startsWith('data:image')) {
-        baseConfigForQuotation.profileColor = '#808080'; // Use a neutral grey for print/preview of textured items
-    }
-    if (baseConfigForQuotation.glassTexture) {
-        baseConfigForQuotation.glassTexture = '';
-    }
 
     const newQuotationItems: QuotationItem[] = items
       .filter(item => Number(item.width) > 0 && Number(item.height) > 0)
@@ -1178,8 +1164,6 @@ const App: React.FC = () => {
         itemConfig.width = Number(item.width);
         itemConfig.height = Number(item.height);
         
-        // Note: hardwareCost is based on the original design.
-        // A more complex implementation could recalculate it per size.
         return {
           id: uuidv4(),
           title: item.title || 'Untitled Window',
@@ -1189,7 +1173,7 @@ const App: React.FC = () => {
           rate: Number(item.rate) || 0,
           hardwareCost: hardwareCostPerWindow,
           hardwareItems: JSON.parse(JSON.stringify(series.hardwareItems)),
-          profileColorName: colorName || 'Custom Texture',
+          profileColorName: colorName || (windowConfig.profileColor.startsWith('data:') ? 'Custom Texture' : windowConfig.profileColor),
         };
     });
 
@@ -1246,12 +1230,6 @@ const App: React.FC = () => {
 
     const colorName = savedColors.find(c => c.value === windowConfig.profileColor)?.name;
     const configForQuotation = JSON.parse(JSON.stringify(windowConfig));
-    if (configForQuotation.profileColor && configForQuotation.profileColor.startsWith('data:image')) {
-        configForQuotation.profileColor = '#808080';
-    }
-    if (configForQuotation.glassTexture) {
-        configForQuotation.glassTexture = '';
-    }
 
     const updatedItem: QuotationItem = {
         id: editingItemId,
@@ -1262,7 +1240,7 @@ const App: React.FC = () => {
         rate: Number(rate) || 0,
         hardwareCost: hardwareCostPerWindow,
         hardwareItems: JSON.parse(JSON.stringify(series.hardwareItems)),
-        profileColorName: colorName || 'Custom Texture',
+        profileColorName: colorName || (windowConfig.profileColor.startsWith('data:') ? 'Custom Texture' : windowConfig.profileColor),
     };
 
     setQuotationItems(prev => prev.map(item => item.id === editingItemId ? updatedItem : item));

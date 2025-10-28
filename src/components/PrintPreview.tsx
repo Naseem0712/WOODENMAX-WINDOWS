@@ -1,3 +1,5 @@
+
+
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, HardwareItem } from '../types';
 import { Button } from './ui/Button';
@@ -313,14 +315,25 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
           delete panelStyle.backgroundColor;
       }
       
+      const reflectionElement = (
+        <div 
+          className="absolute inset-0 w-full h-full pointer-events-none" 
+          style={{
+            background: 'linear-gradient(to top left, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.2) 40%, rgba(255, 255, 255, 0) 60%)',
+          }}
+        />
+      );
+      
       const childrenWithProps = React.Children.map(children, child => {
         if (React.isValidElement(child) && child.type === PrintShutterIndicator) {
             return React.cloneElement(child as React.ReactElement<any>, { width: glassWidthPx, height: glassHeightPx });
         }
         return child;
       });
+
       return (
-        <div className="absolute" style={panelStyle}>
+        <div className="absolute overflow-hidden" style={panelStyle}>
+            {(!glassTexture && !isMesh) && reflectionElement}
             <PrintGlassGrid config={config} panelId={panelId} width={glassWidthPx / scale} height={glassHeightPx / scale} scale={scale} />
             {childrenWithProps}
         </div> 
