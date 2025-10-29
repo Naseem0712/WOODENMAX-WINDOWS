@@ -338,12 +338,12 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     }
     
     // Outer frame
-    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR) {
+    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
         profileElements.push(<PrintableMiteredFrame key="outer-frame" width={effectiveWidth} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
     }
     
-    const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR) ? dims.outerFrame : 0;
+    const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) ? dims.outerFrame : 0;
     const holeX1 = leftFix ? leftFixSize : frameOffset;
     const holeY1 = topFix ? topFixSize : frameOffset;
     const holeX2 = rightFix ? numWidth - rightFixSize : numWidth - frameOffset;
@@ -423,27 +423,38 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                 <div className="absolute" style={{ top: holeY1 * scale, left: holeX1 * scale, width: innerAreaWidth * scale, height: innerAreaHeight * scale }}>
                     {windowType === WindowType.MIRROR ? (() => {
                         const { mirrorConfig } = config;
-                        const frameThickness = mirrorConfig.isFrameless ? 0 : dims.outerFrame;
+                        
                         let borderRadius = '0px';
                         switch (mirrorConfig.shape) {
                             case MirrorShape.OVAL: borderRadius = '50%'; break;
                             case MirrorShape.CAPSULE: borderRadius = '9999px'; break;
                             case MirrorShape.ROUNDED_RECTANGLE: borderRadius = `${(Number(mirrorConfig.cornerRadius) || 0) * scale}px`; break;
-                            case MirrorShape.RECTANGLE: default: borderRadius = '0px'; break;
+                            case MirrorShape.RECTANGLE:
+                            default:
+                                borderRadius = '0px';
+                                break;
                         }
-                        const commonStyle: React.CSSProperties = {
+                        const fullAreaStyle: React.CSSProperties = {
                             position: 'absolute', width: innerAreaWidth * scale, height: innerAreaHeight * scale,
                             borderRadius: borderRadius, overflow: 'hidden'
                         };
+
+                        if (mirrorConfig.isFrameless) {
+                            return <PrintableMirrorPanel key="mirror-surface" style={fullAreaStyle} />;
+                        }
+
+                        // Framed version
+                        const frameThickness = dims.outerFrame;
                         const mirrorStyle: React.CSSProperties = {
                             position: 'absolute', top: frameThickness * scale, left: frameThickness * scale,
                             width: (innerAreaWidth - frameThickness * 2) * scale, height: (innerAreaHeight - frameThickness * 2) * scale,
                             borderRadius: borderRadius,
                         };
-                        return <>
-                            {!mirrorConfig.isFrameless && <div key="mirror-frame" style={{ ...commonStyle, backgroundColor: profileColor }} />}
-                            <PrintableMirrorPanel key="mirror-surface" style={mirrorStyle} />
-                        </>;
+                        
+                        return (<>
+                                <div key="mirror-frame" style={{ ...fullAreaStyle, backgroundColor: profileColor }} />
+                                <PrintableMirrorPanel key="mirror-surface" style={mirrorStyle} />
+                            </>);
                     })() : null}
                     {windowType === WindowType.SLIDING ? (() => {
                         const { shutterConfig, fixedShutters, slidingHandles } = config;
