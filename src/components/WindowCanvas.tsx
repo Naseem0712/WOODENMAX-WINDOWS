@@ -1,5 +1,3 @@
-
-
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { WindowConfig, HandleConfig, CornerSideConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType, MirrorShape } from '../types';
@@ -286,10 +284,19 @@ const MirrorPanel: React.FC<{ style: React.CSSProperties }> = ({ style }) => {
         ...style,
         background: 'linear-gradient(135deg, hsl(210, 15%, 85%) 0%, hsl(210, 15%, 95%) 50%, hsl(210, 15%, 80%) 100%)',
         boxShadow: 'inset 0 0 10px rgba(0,0,0,0.1)',
+        position: 'relative',
+        overflow: 'hidden',
     };
 
     return (
-        <div style={mirrorStyle} />
+        <div style={mirrorStyle}>
+            <div 
+              className="absolute inset-0 w-full h-full pointer-events-none" 
+              style={{
+                background: 'linear-gradient(to top left, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.15) 40%, rgba(255, 255, 255, 0) 60%)'
+              }}
+            />
+        </div>
     );
 };
 
@@ -313,7 +320,7 @@ const createWindowElements = (
         const leftFix = fixedPanels.find(p => p.position === FixedPanelPosition.LEFT);
         const rightFix = fixedPanels.find(p => p.position === FixedPanelPosition.RIGHT);
 
-        const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) ? dims.outerFrame : 0;
+        const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR) ? dims.outerFrame : 0;
         const holeX1 = leftFix ? leftFix.size : frameOffset;
         const holeY1 = topFix ? topFix.size : frameOffset;
         const holeX2 = rightFix ? w - rightFix.size : w - frameOffset;
@@ -329,7 +336,7 @@ const createWindowElements = (
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
-    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) {
+    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
         profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
     }

@@ -1,4 +1,5 @@
 
+
 import React, { useRef, useState, useEffect } from 'react';
 import type { QuotationItem, QuotationSettings, BOM } from '../types';
 import { Button } from './ui/Button';
@@ -8,7 +9,8 @@ import { Input } from './ui/Input';
 import { PrinterIcon } from './icons/PrinterIcon';
 import { UploadIcon } from './icons/UploadIcon';
 import { Select } from './ui/Select';
-import { PrintPreview } from './PrintPreview';
+// FIX: Corrected import path for PrintPreview.
+import { PrintPreview } from '../PrintPreview';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { generateBillOfMaterials } from '../utils/materialCalculator';
 import { MaterialSummaryModal } from './MaterialSummaryModal';

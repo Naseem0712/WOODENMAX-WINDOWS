@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback, lazy, Suspense } from 'react';
 // FIX: Import `GlassGridConfig` type to resolve 'Cannot find name' errors.
 import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig } from './types';
@@ -354,8 +352,8 @@ const DEFAULT_MIRROR_SERIES: ProfileSeries = {
     dimensions: { ...BASE_DIMENSIONS, outerFrame: 30 },
     hardwareItems: [],
     glassOptions: {
-        thicknesses: [4, 5, 6],
-        customThicknessAllowed: false,
+        thicknesses: [4, 5, 6, 8],
+        customThicknessAllowed: true,
         specialTypes: [],
     },
 };

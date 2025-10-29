@@ -3,7 +3,7 @@ import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, Hard
 import { Button } from './components/ui/Button';
 import { PrinterIcon } from './components/icons/PrinterIcon';
 import { XMarkIcon } from './components/icons/XMarkIcon';
-import { FixedPanelPosition, ShutterConfigType, WindowType } from './types';
+import { FixedPanelPosition, ShutterConfigType, WindowType, MirrorShape } from './types';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import html2pdf from 'html2pdf.js';
 
@@ -239,6 +239,15 @@ const PrintableHandle: React.FC<{ config: HandleConfig | null, scale: number }> 
     return <div style={style} />;
 };
 
+const PrintableMirrorPanel: React.FC<{ style: React.CSSProperties }> = ({ style }) => {
+    const mirrorStyle: React.CSSProperties = {
+        ...style,
+        backgroundColor: '#D1D5DB', // A light grey for print
+        border: '0.5px solid #999',
+    };
+    return <div style={mirrorStyle} />;
+};
+
 
 const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }> = ({ config, externalScale }) => {
     if (config.windowType === WindowType.CORNER && config.leftConfig && config.rightConfig) {
@@ -329,12 +338,12 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     }
     
     // Outer frame
-    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) {
+    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
         profileElements.push(<PrintableMiteredFrame key="outer-frame" width={effectiveWidth} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
     }
     
-    const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) ? dims.outerFrame : 0;
+    const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR) ? dims.outerFrame : 0;
     const holeX1 = leftFix ? leftFixSize : frameOffset;
     const holeY1 = topFix ? topFixSize : frameOffset;
     const holeX2 = rightFix ? numWidth - rightFixSize : numWidth - frameOffset;
@@ -412,6 +421,30 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
             {profileElements}
             {innerAreaWidth > 0 && innerAreaHeight > 0 && (
                 <div className="absolute" style={{ top: holeY1 * scale, left: holeX1 * scale, width: innerAreaWidth * scale, height: innerAreaHeight * scale }}>
+                    {windowType === WindowType.MIRROR ? (() => {
+                        const { mirrorConfig } = config;
+                        const frameThickness = mirrorConfig.isFrameless ? 0 : dims.outerFrame;
+                        let borderRadius = '0px';
+                        switch (mirrorConfig.shape) {
+                            case MirrorShape.OVAL: borderRadius = '50%'; break;
+                            case MirrorShape.CAPSULE: borderRadius = '9999px'; break;
+                            case MirrorShape.ROUNDED_RECTANGLE: borderRadius = `${(Number(mirrorConfig.cornerRadius) || 0) * scale}px`; break;
+                            case MirrorShape.RECTANGLE: default: borderRadius = '0px'; break;
+                        }
+                        const commonStyle: React.CSSProperties = {
+                            position: 'absolute', width: innerAreaWidth * scale, height: innerAreaHeight * scale,
+                            borderRadius: borderRadius, overflow: 'hidden'
+                        };
+                        const mirrorStyle: React.CSSProperties = {
+                            position: 'absolute', top: frameThickness * scale, left: frameThickness * scale,
+                            width: (innerAreaWidth - frameThickness * 2) * scale, height: (innerAreaHeight - frameThickness * 2) * scale,
+                            borderRadius: borderRadius,
+                        };
+                        return <>
+                            {!mirrorConfig.isFrameless && <div key="mirror-frame" style={{ ...commonStyle, backgroundColor: profileColor }} />}
+                            <PrintableMirrorPanel key="mirror-surface" style={mirrorStyle} />
+                        </>;
+                    })() : null}
                     {windowType === WindowType.SLIDING ? (() => {
                         const { shutterConfig, fixedShutters, slidingHandles } = config;
                         const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;
@@ -952,8 +985,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         <EditableSection title="Description" value={settings.description} onChange={(val) => setSettings({...settings, description: val})} />
                         <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} />
                         
-{/* FIX: Corrected corrupted style property 'breakBefore'. */}
-<div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs" style={{breakBefore: 'avoid'}}>
+                        <div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs" style={{breakBefore: 'avoid'}}>
                             <div className="flex-grow">
                                 <h3 className="font-bold text-sm mb-1">Bank Details</h3>
                                 <p><strong>A/C Name:</strong> {settings.bankDetails.name}</p>
