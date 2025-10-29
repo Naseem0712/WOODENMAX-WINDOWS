@@ -84,17 +84,20 @@ function calculateProfileUsage(config: WindowConfig): Map<keyof ProfileDimension
     // Window-type specific calculations
     switch (config.windowType) {
         case WindowType.LOUVERS: {
-            const { louverPattern } = config;
-            const patternHeight = louverPattern.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
-            if (patternHeight > 0) {
-                let currentY = 0;
-                while (currentY < h) {
+            const { louverPattern, orientation } = config;
+            const dimension = orientation === 'vertical' ? w : h;
+            const totalDimension = orientation === 'vertical' ? h : w;
+
+            const patternUnitSize = louverPattern.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+            if (patternUnitSize > 0) {
+                let currentPos = 0;
+                while (currentPos < totalDimension) {
                     for (const item of louverPattern) {
-                        if (currentY >= h) break;
+                        if (currentPos >= totalDimension) break;
                         if (item.type === 'profile') {
-                            add('louverProfile', w);
+                            add('louverProfile', dimension);
                         }
-                        currentY += (Number(item.size) || 0);
+                        currentPos += (Number(item.size) || 0);
                     }
                 }
             }
@@ -210,20 +213,25 @@ export function generateBillOfMaterials(items: QuotationItem[]): BOM {
                 unitsPerWindow = 1;
             } else if (hw.unit === 'per_shutter_or_door') {
                 if (config.windowType === WindowType.LOUVERS) {
-                    const { louverPattern, height } = config;
-                    const patternHeight = louverPattern.reduce((sum, p) => sum + (Number(p.size) || 0), 0);
-                    if (patternHeight > 0) {
-                        let totalProfiles = 0;
-                        let currentY = 0;
-                        const h = Number(height) || 0;
-                        while(currentY < h) {
-                            for(const p of louverPattern) {
-                                if (currentY >= h) break;
-                                if(p.type === 'profile') totalProfiles++;
-                                currentY += (Number(p.size) || 0);
+                    const { louverPattern, height, width, orientation } = config;
+                    const pattern = louverPattern;
+                    const patternUnitSize = pattern.reduce((sum, p) => sum + (Number(p.size) || 0), 0);
+                    if (patternUnitSize > 0) {
+                        const totalDimension = orientation === 'vertical' ? (Number(height) || 0) : (Number(width) || 0);
+                        const numProfilesInPattern = pattern.filter(p => p.type === 'profile').length;
+                        if(numProfilesInPattern > 0) {
+                            const numCompletePatterns = Math.floor(totalDimension / patternUnitSize);
+                            let panelCount = numCompletePatterns * numProfilesInPattern;
+                            const remainingDimension = totalDimension % patternUnitSize;
+                            let currentSize = 0;
+                            for(const p of pattern) {
+                                if (currentSize < remainingDimension) {
+                                    if (p.type === 'profile') panelCount++;
+                                    currentSize += Number(p.size) || 0;
+                                } else break;
                             }
+                            unitsPerWindow = panelCount;
                         }
-                         unitsPerWindow = totalProfiles;
                     }
                 } else if (config.windowType === WindowType.VENTILATOR) {
                     const doorCells = config.ventilatorGrid.flat().filter(c => c.type === 'door').length;
@@ -266,27 +274,30 @@ export function generateBillOfMaterials(items: QuotationItem[]): BOM {
             const requiredBars = packPieces(pieces, standardLength);
             const totalLength = pieces.reduce((sum, p) => sum + p, 0);
             const weightPerMeter = Number(data.series.weights?.[profileKey as keyof ProfileDimensions]) || 0;
+            const totalWeight = (totalLength / 1000) * weightPerMeter;
 
-            bomSeries.profiles.push({
-                profileKey: profileKey as keyof ProfileDimensions,
-                pieces,
-                standardLength,
-                requiredBars,
+            const bomProfile: BOMProfile = {
+                profileKey: profileKey as keyof ProfileDimensions | 'glassGridProfile',
                 totalLength,
+                standardLength,
                 weightPerMeter,
-                totalWeight: totalLength / 1000 * weightPerMeter
-            });
+                pieces,
+                requiredBars,
+                totalWeight,
+            };
+            bomSeries.profiles.push(bomProfile);
         }
-        
-        for (const [name, totalQuantity] of data.hardware.entries()) {
-            bomSeries.hardware.push({ name, totalQuantity });
-        }
-        
-        bomSeries.profiles.sort((a,b) => a.profileKey.localeCompare(b.profileKey));
-        bomSeries.hardware.sort((a,b) => a.name.localeCompare(b.name));
 
+        for (const [name, totalQuantity] of data.hardware.entries()) {
+            const bomHardware: BOMHardware = {
+                name,
+                totalQuantity,
+            };
+            bomSeries.hardware.push(bomHardware);
+        }
+        
         bom.push(bomSeries);
     }
-    
-    return bom.sort((a, b) => a.seriesName.localeCompare(b.seriesName));
+
+    return bom;
 }

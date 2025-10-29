@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback, lazy, Suspense } from 'react';
-// FIX: Import `GlassGridConfig` type to resolve 'Cannot find name' errors.
 import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig, LouverPatternItem } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType, MirrorShape } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
-// FIX: Import QuotationPanel to resolve 'Cannot find name' errors.
 import { QuotationPanel } from './components/QuotationPanel';
 import { v4 as uuidv4 } from 'uuid';
 import { ChevronLeftIcon } from './components/icons/ChevronLeftIcon';
@@ -448,6 +446,7 @@ const initialConfig: ConfigState = {
     ventilatorGrid: [],
     partitionPanels: { count: 2, types: [{ type: 'fixed' }, { type: 'sliding' }], hasTopChannel: true },
     louverPattern: [{ id: uuidv4(), type: 'profile', size: 50 }, { id: uuidv4(), type: 'gap', size: 50 }],
+    orientation: 'vertical',
     leftWidth: 1200,
     rightWidth: 1200,
     cornerPostWidth: 100,
@@ -721,6 +720,7 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
               leftConfig: { ...defaultCornerSideConfig, ...(parsed.leftConfig || {}) },
               rightConfig: { ...defaultCornerSideConfig, ...(parsed.rightConfig || {}) },
               louverPattern: parsed.louverPattern || initialConfig.louverPattern,
+              orientation: parsed.orientation || initialConfig.orientation,
             };
             finalConfig.partitionPanels.types = finalConfig.partitionPanels.types || [];
             finalConfig.leftConfig.slidingHandles = finalConfig.leftConfig.slidingHandles || [];
@@ -775,6 +775,7 @@ const getInitialConfig = (): ConfigState => {
           leftConfig: { ...defaultCornerSideConfig, ...(parsed.leftConfig || {}) },
           rightConfig: { ...defaultCornerSideConfig, ...(parsed.rightConfig || {}) },
           louverPattern: parsed.louverPattern || initialConfig.louverPattern,
+          orientation: parsed.orientation || initialConfig.orientation,
       };
 
       // Ensure critical arrays inside nested objects are present
@@ -1182,21 +1183,24 @@ const App: React.FC = () => {
                 panelCount = 1;
             } else if (item.unit === 'per_shutter_or_door') {
                  if (config.windowType === WindowType.LOUVERS) {
-                    const pattern = (config as WindowConfig).louverPattern;
-                    const patternHeight = pattern.reduce((sum, p) => sum + (Number(p.size) || 0), 0);
-                    if (patternHeight > 0) {
-                        const totalHeight = Number((config as WindowConfig).height) || 0;
+                    const { louverPattern, height, width, orientation } = config as WindowConfig;
+                    const pattern = louverPattern;
+                    const patternUnitSize = pattern.reduce((sum, p) => sum + (Number(p.size) || 0), 0);
+
+                    if (patternUnitSize > 0) {
+                        const totalDimension = orientation === 'vertical' ? (Number(height) || 0) : (Number(width) || 0);
                         const numProfilesInPattern = pattern.filter(p => p.type === 'profile').length;
-                        const numCompletePatterns = Math.floor(totalHeight / patternHeight);
-                        panelCount = numCompletePatterns * numProfilesInPattern;
-                        // Roughly account for partial pattern
-                        const remainingHeight = totalHeight % patternHeight;
-                        let currentHeight = 0;
-                        for(const p of pattern) {
-                            if (currentHeight < remainingHeight) {
-                                if (p.type === 'profile') panelCount++;
-                                currentHeight += Number(p.size) || 0;
-                            } else break;
+                        if (numProfilesInPattern > 0) {
+                            const numCompletePatterns = Math.floor(totalDimension / patternUnitSize);
+                            panelCount = numCompletePatterns * numProfilesInPattern;
+                            const remainingDimension = totalDimension % patternUnitSize;
+                            let currentSize = 0;
+                            for(const p of pattern) {
+                                if (currentSize < remainingDimension) {
+                                    if (p.type === 'profile') panelCount++;
+                                    currentSize += Number(p.size) || 0;
+                                } else break;
+                            }
                         }
                     }
                 } else if (config.windowType === WindowType.VENTILATOR) {

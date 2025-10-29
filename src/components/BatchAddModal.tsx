@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import type { WindowConfig } from '../types';
+// FIX: Import BatchAddItem from types to resolve circular dependency.
+import type { WindowConfig, BatchAddItem } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from './ui/Button';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -10,15 +11,6 @@ import { PlusIcon } from './icons/PlusIcon';
 import { Select } from './ui/Select';
 
 type Unit = 'mm' | 'cm' | 'in' | 'ft-in';
-
-export interface BatchAddItem {
-  id: string;
-  title: string;
-  width: number | '';
-  height: number | '';
-  quantity: number | '';
-  rate: number | '';
-}
 
 interface BatchAddModalProps {
   isOpen: boolean;

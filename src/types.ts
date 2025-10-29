@@ -1,5 +1,3 @@
-
-
 export interface BatchAddItem {
   id: string;
   title: string;
@@ -8,7 +6,6 @@ export interface BatchAddItem {
   quantity: number | '';
   rate: number | '';
 }
-
 
 export enum WindowType {
   SLIDING = 'sliding',
@@ -77,7 +74,6 @@ export interface ProfileDimensions {
   topTrack: number | '';
   bottomTrack: number | '';
   
-  // FIX: Added 'glassGridProfile' to support legacy glass grid configurations that define bar thickness within the profile series.
   glassGridProfile: number | '';
 }
 
@@ -127,7 +123,6 @@ export enum GlassType {
   TINTED_BLUE = 'tinted-blue',
   CLEAR_SAPPHIRE = 'clear-sapphire',
   BROWN_TINTED = 'brown-tinted',
-  // FIX: Corrected typo from 'black-tilted' to 'black-tinted'.
   BLACK_TINTED = 'black-tinted',
   TINTED_GREY = 'tinted-grey',
   VERTICAL_FLUTED = 'vertical-fluted',
@@ -258,6 +253,7 @@ export interface WindowConfig {
 
   // Louvers specific
   louverPattern: LouverPatternItem[];
+  orientation: 'vertical' | 'horizontal';
 
   // Mirror specific
   mirrorConfig: {

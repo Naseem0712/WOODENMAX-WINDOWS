@@ -376,28 +376,55 @@ const createWindowElements = (
     if (innerAreaWidth > 0 && innerAreaHeight > 0) {
        switch (windowType) {
             case WindowType.LOUVERS: {
-                const { louverPattern } = config;
-                const patternHeight = louverPattern.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
-                if (patternHeight > 0) {
-                    let currentY = 0;
-                    while (currentY < innerAreaHeight) {
-                        for (const item of louverPattern) {
-                            const itemSize = Number(item.size) || 0;
-                            if (currentY >= innerAreaHeight) break;
-                            
-                            const remainingHeight = innerAreaHeight - currentY;
-                            const h = Math.min(itemSize, remainingHeight);
+                const { louverPattern, orientation } = config;
+                if (orientation === 'vertical') {
+                    const patternHeight = louverPattern.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+                    if (patternHeight > 0) {
+                        let currentY = 0;
+                        while (currentY < innerAreaHeight) {
+                            for (const item of louverPattern) {
+                                const itemSize = Number(item.size) || 0;
+                                if (currentY >= innerAreaHeight) break;
+                                
+                                const remainingHeight = innerAreaHeight - currentY;
+                                const h = Math.min(itemSize, remainingHeight);
 
-                            if (item.type === 'profile') {
-                                innerContent.push(
-                                    <ProfilePiece
-                                        key={`louver-${currentY}`}
-                                        color={profileColor}
-                                        style={{ top: currentY * scale, left: 0, width: innerAreaWidth * scale, height: h * scale }}
-                                    />
-                                );
+                                if (item.type === 'profile') {
+                                    innerContent.push(
+                                        <ProfilePiece
+                                            key={`louver-v-${currentY}`}
+                                            color={profileColor}
+                                            style={{ top: currentY * scale, left: 0, width: innerAreaWidth * scale, height: h * scale }}
+                                        />
+                                    );
+                                }
+                                currentY += itemSize;
                             }
-                            currentY += itemSize;
+                        }
+                    }
+                } else { // Horizontal orientation
+                    const patternWidth = louverPattern.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+                    if (patternWidth > 0) {
+                        let currentX = 0;
+                        while (currentX < innerAreaWidth) {
+                            for (const item of louverPattern) {
+                                const itemSize = Number(item.size) || 0;
+                                if (currentX >= innerAreaWidth) break;
+
+                                const remainingWidth = innerAreaWidth - currentX;
+                                const w = Math.min(itemSize, remainingWidth);
+
+                                if (item.type === 'profile') {
+                                    innerContent.push(
+                                        <ProfilePiece
+                                            key={`louver-h-${currentX}`}
+                                            color={profileColor}
+                                            style={{ top: 0, left: currentX * scale, width: w * scale, height: innerAreaHeight * scale }}
+                                        />
+                                    );
+                                }
+                                currentX += itemSize;
+                            }
                         }
                     }
                 }

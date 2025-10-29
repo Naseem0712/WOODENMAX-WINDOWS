@@ -381,6 +381,13 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
                 <Button variant="secondary" onClick={() => onAddLouverItem('profile')}><PlusIcon className="w-4 h-4 mr-2"/> Add Profile</Button>
                 <Button variant="secondary" onClick={() => onAddLouverItem('gap')}><PlusIcon className="w-4 h-4 mr-2"/> Add Gap</Button>
             </div>
+             <div className="mt-4 pt-4 border-t border-slate-700">
+                <label className="block text-sm font-medium text-slate-300 mb-2">Orientation</label>
+                <div className="grid grid-cols-2 gap-2">
+                    <Button variant={config.orientation === 'vertical' ? 'primary' : 'secondary'} onClick={() => setConfig('orientation', 'vertical')}>Vertical</Button>
+                    <Button variant={config.orientation === 'horizontal' ? 'primary' : 'secondary'} onClick={() => setConfig('orientation', 'horizontal')}>Horizontal</Button>
+                </div>
+            </div>
         </CollapsibleCard>
       )}
 
