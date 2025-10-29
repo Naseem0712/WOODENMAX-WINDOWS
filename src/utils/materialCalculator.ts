@@ -1,4 +1,3 @@
-
 import type { WindowConfig, QuotationItem, ProfileDimensions, BOM, BOMSeries, BOMHardware, BOMProfile } from '../types';
 import { WindowType, ShutterConfigType, FixedPanelPosition } from '../types';
 
@@ -69,7 +68,7 @@ function calculateProfileUsage(config: WindowConfig): Map<keyof ProfileDimension
     const innerH = holeY2 - holeY1;
 
     // Outer Frame and Fixed Panels
-    if (config.windowType !== WindowType.GLASS_PARTITION && config.windowType !== WindowType.CORNER) {
+    if (config.windowType !== WindowType.GLASS_PARTITION && config.windowType !== WindowType.CORNER && config.windowType !== WindowType.LOUVERS) {
         if (dims.outerFrameVertical && Number(dims.outerFrameVertical) > 0) {
             add('outerFrame', w, w); // Horizontal pieces
             add('outerFrameVertical', h, h); // Vertical pieces
@@ -84,6 +83,23 @@ function calculateProfileUsage(config: WindowConfig): Map<keyof ProfileDimension
     
     // Window-type specific calculations
     switch (config.windowType) {
+        case WindowType.LOUVERS: {
+            const { louverPattern } = config;
+            const patternHeight = louverPattern.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+            if (patternHeight > 0) {
+                let currentY = 0;
+                while (currentY < h) {
+                    for (const item of louverPattern) {
+                        if (currentY >= h) break;
+                        if (item.type === 'profile') {
+                            add('louverProfile', w);
+                        }
+                        currentY += (Number(item.size) || 0);
+                    }
+                }
+            }
+            break;
+        }
         case WindowType.SLIDING: {
             const { shutterConfig } = config;
             const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;
@@ -193,7 +209,23 @@ export function generateBillOfMaterials(items: QuotationItem[]): BOM {
             if (hw.unit === 'per_window') {
                 unitsPerWindow = 1;
             } else if (hw.unit === 'per_shutter_or_door') {
-                if (config.windowType === WindowType.VENTILATOR) {
+                if (config.windowType === WindowType.LOUVERS) {
+                    const { louverPattern, height } = config;
+                    const patternHeight = louverPattern.reduce((sum, p) => sum + (Number(p.size) || 0), 0);
+                    if (patternHeight > 0) {
+                        let totalProfiles = 0;
+                        let currentY = 0;
+                        const h = Number(height) || 0;
+                        while(currentY < h) {
+                            for(const p of louverPattern) {
+                                if (currentY >= h) break;
+                                if(p.type === 'profile') totalProfiles++;
+                                currentY += (Number(p.size) || 0);
+                            }
+                        }
+                         unitsPerWindow = totalProfiles;
+                    }
+                } else if (config.windowType === WindowType.VENTILATOR) {
                     const doorCells = config.ventilatorGrid.flat().filter(c => c.type === 'door').length;
                     const louverCells = config.ventilatorGrid.flat().filter(c => c.type === 'louvers').length;
                     const name = hw.name.toLowerCase();

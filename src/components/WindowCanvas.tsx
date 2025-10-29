@@ -320,7 +320,7 @@ const createWindowElements = (
         const leftFix = fixedPanels.find(p => p.position === FixedPanelPosition.LEFT);
         const rightFix = fixedPanels.find(p => p.position === FixedPanelPosition.RIGHT);
 
-        const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR) ? dims.outerFrame : 0;
+        const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) ? dims.outerFrame : 0;
         const holeX1 = leftFix ? leftFix.size : frameOffset;
         const holeY1 = topFix ? topFix.size : frameOffset;
         const holeX2 = rightFix ? w - rightFix.size : w - frameOffset;
@@ -336,7 +336,7 @@ const createWindowElements = (
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
-    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR) {
+    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
         profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
     }
@@ -375,6 +375,34 @@ const createWindowElements = (
     const innerContent: React.ReactNode[] = [];
     if (innerAreaWidth > 0 && innerAreaHeight > 0) {
        switch (windowType) {
+            case WindowType.LOUVERS: {
+                const { louverPattern } = config;
+                const patternHeight = louverPattern.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+                if (patternHeight > 0) {
+                    let currentY = 0;
+                    while (currentY < innerAreaHeight) {
+                        for (const item of louverPattern) {
+                            const itemSize = Number(item.size) || 0;
+                            if (currentY >= innerAreaHeight) break;
+                            
+                            const remainingHeight = innerAreaHeight - currentY;
+                            const h = Math.min(itemSize, remainingHeight);
+
+                            if (item.type === 'profile') {
+                                innerContent.push(
+                                    <ProfilePiece
+                                        key={`louver-${currentY}`}
+                                        color={profileColor}
+                                        style={{ top: currentY * scale, left: 0, width: innerAreaWidth * scale, height: h * scale }}
+                                    />
+                                );
+                            }
+                            currentY += itemSize;
+                        }
+                    }
+                }
+                break;
+            }
             case WindowType.MIRROR: {
                 const { mirrorConfig } = config;
                 const frameThickness = mirrorConfig.isFrameless ? 0 : dims.outerFrame;

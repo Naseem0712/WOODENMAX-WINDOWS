@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback, lazy, Suspense } from 'react';
 // FIX: Import `GlassGridConfig` type to resolve 'Cannot find name' errors.
-import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig } from './types';
+import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig, LouverPatternItem } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType, MirrorShape } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
@@ -46,6 +46,9 @@ type ConfigAction =
   | { type: 'CYCLE_PARTITION_PANEL_TYPE'; payload: number }
   | { type: 'SET_PARTITION_HAS_TOP_CHANNEL'; payload: boolean }
   | { type: 'CYCLE_PARTITION_PANEL_FRAMING'; payload: number }
+  | { type: 'ADD_LOUVER_ITEM'; payload: { type: 'profile' | 'gap' } }
+  | { type: 'REMOVE_LOUVER_ITEM'; payload: { id: string } }
+  | { type: 'UPDATE_LOUVER_ITEM'; payload: { id: string; size: number | '' } }
   | { type: 'SET_SIDE_CONFIG'; payload: { side: 'left' | 'right'; config: Partial<CornerSideConfig> } }
   | { type: 'UPDATE_LAMINATED_CONFIG'; payload: Partial<LaminatedGlassConfig> }
   | { type: 'UPDATE_DGU_CONFIG'; payload: Partial<DguGlassConfig> }
@@ -56,7 +59,7 @@ type ConfigAction =
 const BASE_DIMENSIONS = {
     outerFrame: 0, outerFrameVertical: 0, fixedFrame: 0, shutterHandle: 0, shutterInterlock: 0,
     shutterTop: 0, shutterBottom: 0, shutterMeeting: 0, casementShutter: 0,
-    mullion: 0, louverBlade: 0, topTrack: 0, bottomTrack: 0, glassGridProfile: 0,
+    mullion: 0, louverBlade: 0, louverProfile: 0, topTrack: 0, bottomTrack: 0, glassGridProfile: 0,
 };
 
 const ALL_PROFILES_16_FEET = {
@@ -358,6 +361,20 @@ const DEFAULT_MIRROR_SERIES: ProfileSeries = {
     },
 };
 
+const DEFAULT_LOUVERS_HARDWARE: HardwareItem[] = [
+    { id: uuidv4(), name: 'Louver End Cap', qtyPerShutter: 2, rate: 50, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Mounting Bracket', qtyPerShutter: 2, rate: 100, unit: 'per_shutter_or_door' },
+];
+
+const DEFAULT_LOUVERS_SERIES: ProfileSeries = {
+    id: 'series-louvers-default',
+    name: 'Standard Louver Series',
+    type: WindowType.LOUVERS,
+    dimensions: { ...BASE_DIMENSIONS, louverProfile: 50 },
+    hardwareItems: DEFAULT_LOUVERS_HARDWARE,
+    glassOptions: { thicknesses: [], customThicknessAllowed: false, specialTypes: [] },
+};
+
 const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
     company: { logo: '', name: 'WoodenMax', address: '123 Wood Lane, Timber Town', email: 'info@woodenmax.com', website: 'www.woodenmax.com' },
     customer: { name: '', address: '', contactPerson: '' },
@@ -430,6 +447,7 @@ const initialConfig: ConfigState = {
     doorPositions: [],
     ventilatorGrid: [],
     partitionPanels: { count: 2, types: [{ type: 'fixed' }, { type: 'sliding' }], hasTopChannel: true },
+    louverPattern: [{ id: uuidv4(), type: 'profile', size: 50 }, { id: uuidv4(), type: 'gap', size: 50 }],
     leftWidth: 1200,
     rightWidth: 1200,
     cornerPostWidth: 100,
@@ -449,6 +467,7 @@ const SERIES_MAP: Record<WindowType, ProfileSeries> = {
     [WindowType.GLASS_PARTITION]: DEFAULT_GLASS_PARTITION_SERIES,
     [WindowType.CORNER]: DEFAULT_CORNER_SERIES,
     [WindowType.MIRROR]: DEFAULT_MIRROR_SERIES,
+    [WindowType.LOUVERS]: DEFAULT_LOUVERS_SERIES,
 };
 
 function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
@@ -676,6 +695,12 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             newTypes[index] = { ...newTypes[index], framing: currentFraming === 'none' ? 'full' : 'none' };
             return { ...state, partitionPanels: { ...state.partitionPanels, types: newTypes } };
         }
+        case 'ADD_LOUVER_ITEM':
+            return { ...state, louverPattern: [...state.louverPattern, { id: uuidv4(), type: action.payload.type, size: 50 }] };
+        case 'REMOVE_LOUVER_ITEM':
+            return { ...state, louverPattern: state.louverPattern.filter(item => item.id !== action.payload.id) };
+        case 'UPDATE_LOUVER_ITEM':
+            return { ...state, louverPattern: state.louverPattern.map(item => item.id === action.payload.id ? { ...item, size: action.payload.size } : item) };
         case 'UPDATE_LAMINATED_CONFIG':
             return { ...state, laminatedGlassConfig: { ...state.laminatedGlassConfig, ...action.payload } };
         case 'UPDATE_DGU_CONFIG':
@@ -695,6 +720,7 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
               mirrorConfig: { ...initialConfig.mirrorConfig, ...(parsed.mirrorConfig || {}) },
               leftConfig: { ...defaultCornerSideConfig, ...(parsed.leftConfig || {}) },
               rightConfig: { ...defaultCornerSideConfig, ...(parsed.rightConfig || {}) },
+              louverPattern: parsed.louverPattern || initialConfig.louverPattern,
             };
             finalConfig.partitionPanels.types = finalConfig.partitionPanels.types || [];
             finalConfig.leftConfig.slidingHandles = finalConfig.leftConfig.slidingHandles || [];
@@ -748,6 +774,7 @@ const getInitialConfig = (): ConfigState => {
           mirrorConfig: { ...initialConfig.mirrorConfig, ...(parsed.mirrorConfig || {}) },
           leftConfig: { ...defaultCornerSideConfig, ...(parsed.leftConfig || {}) },
           rightConfig: { ...defaultCornerSideConfig, ...(parsed.rightConfig || {}) },
+          louverPattern: parsed.louverPattern || initialConfig.louverPattern,
       };
 
       // Ensure critical arrays inside nested objects are present
@@ -927,7 +954,8 @@ const App: React.FC = () => {
   const availableSeries = useMemo(() => {
     const allSeries = [
         DEFAULT_SLIDING_SERIES, DEFAULT_CASEMENT_SERIES, DEFAULT_VENTILATOR_SERIES, 
-        DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_CORNER_SERIES, DEFAULT_MIRROR_SERIES, ...savedSeries
+        DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_CORNER_SERIES, DEFAULT_MIRROR_SERIES, 
+        DEFAULT_LOUVERS_SERIES, ...savedSeries
     ];
     return allSeries.filter((s, index, self) => index === self.findIndex(t => t.id === s.id));
   }, [savedSeries]);
@@ -1121,6 +1149,10 @@ const App: React.FC = () => {
   const onSetPartitionHasTopChannel = useCallback((hasChannel: boolean) => dispatch({ type: 'SET_PARTITION_HAS_TOP_CHANNEL', payload: hasChannel }), []);
   const onCyclePartitionPanelFraming = useCallback((index: number) => dispatch({ type: 'CYCLE_PARTITION_PANEL_FRAMING', payload: index }), []);
   
+  const onAddLouverItem = useCallback((type: 'profile' | 'gap') => dispatch({ type: 'ADD_LOUVER_ITEM', payload: { type } }), []);
+  const onRemoveLouverItem = useCallback((id: string) => dispatch({ type: 'REMOVE_LOUVER_ITEM', payload: { id } }), []);
+  const onUpdateLouverItem = useCallback((id: string, size: number | '') => dispatch({ type: 'UPDATE_LOUVER_ITEM', payload: { id, size } }), []);
+
   const handleLaminatedConfigChange = useCallback((payload: Partial<LaminatedGlassConfig>) => {
     dispatch({ type: 'UPDATE_LAMINATED_CONFIG', payload });
   }, []);
@@ -1149,7 +1181,25 @@ const App: React.FC = () => {
             if (item.unit === 'per_window') {
                 panelCount = 1;
             } else if (item.unit === 'per_shutter_or_door') {
-                if (config.windowType === WindowType.VENTILATOR) {
+                 if (config.windowType === WindowType.LOUVERS) {
+                    const pattern = (config as WindowConfig).louverPattern;
+                    const patternHeight = pattern.reduce((sum, p) => sum + (Number(p.size) || 0), 0);
+                    if (patternHeight > 0) {
+                        const totalHeight = Number((config as WindowConfig).height) || 0;
+                        const numProfilesInPattern = pattern.filter(p => p.type === 'profile').length;
+                        const numCompletePatterns = Math.floor(totalHeight / patternHeight);
+                        panelCount = numCompletePatterns * numProfilesInPattern;
+                        // Roughly account for partial pattern
+                        const remainingHeight = totalHeight % patternHeight;
+                        let currentHeight = 0;
+                        for(const p of pattern) {
+                            if (currentHeight < remainingHeight) {
+                                if (p.type === 'profile') panelCount++;
+                                currentHeight += Number(p.size) || 0;
+                            } else break;
+                        }
+                    }
+                } else if (config.windowType === WindowType.VENTILATOR) {
                     const doorCells = config.ventilatorGrid.flat().filter(c => c.type === 'door').length;
                     const louverCells = config.ventilatorGrid.flat().filter(c => c.type === 'louvers').length;
                     const name = item.name.toLowerCase();
@@ -1326,13 +1376,16 @@ const App: React.FC = () => {
     onCyclePartitionPanelType,
     onSetPartitionHasTopChannel,
     onCyclePartitionPanelFraming,
+    onAddLouverItem,
+    onRemoveLouverItem,
+    onUpdateLouverItem,
     onLaminatedConfigChange: handleLaminatedConfigChange,
     onDguConfigChange: handleDguConfigChange,
     onUpdateMirrorConfig: handleUpdateMirrorConfig,
     onResetDesign: handleResetDesign,
     activeCornerSide,
     setActiveCornerSide
-  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleLaminatedConfigChange, handleDguConfigChange, handleUpdateMirrorConfig, handleResetDesign, activeCornerSide]);
+  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onAddLouverItem, onRemoveLouverItem, onUpdateLouverItem, handleLaminatedConfigChange, handleDguConfigChange, handleUpdateMirrorConfig, handleResetDesign, activeCornerSide]);
 
   const handleOpenConfigure = () => setActiveMobilePanel('configure');
   const handleOpenQuote = () => setActiveMobilePanel('quotation');

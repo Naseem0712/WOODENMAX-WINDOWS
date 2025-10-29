@@ -17,6 +17,7 @@ export enum WindowType {
   GLASS_PARTITION = 'glass_partition',
   CORNER = 'corner',
   MIRROR = 'mirror',
+  LOUVERS = 'louvers',
 }
 
 export enum MirrorShape {
@@ -68,6 +69,9 @@ export interface ProfileDimensions {
 
   // Ventilator
   louverBlade: number | '';
+
+  // Louvers
+  louverProfile: number | '';
 
   // Glass Partition
   topTrack: number | '';
@@ -203,6 +207,12 @@ export interface GlassGridConfig {
     }>;
 }
 
+export interface LouverPatternItem {
+  id: string;
+  type: 'profile' | 'gap';
+  size: number | '';
+}
+
 
 export interface WindowConfig {
   width: number | '';
@@ -245,6 +255,9 @@ export interface WindowConfig {
     types: PartitionPanelConfig[]; 
     hasTopChannel: boolean;
   };
+
+  // Louvers specific
+  louverPattern: LouverPatternItem[];
 
   // Mirror specific
   mirrorConfig: {

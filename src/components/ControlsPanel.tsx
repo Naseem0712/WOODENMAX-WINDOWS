@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig } from '../types';
+import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig, LouverPatternItem } from '../types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType, MirrorShape } from '../types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -45,6 +45,11 @@ interface ControlsPanelProps {
   onCyclePartitionPanelType: (index: number) => void;
   onSetPartitionHasTopChannel: (hasChannel: boolean) => void;
   onCyclePartitionPanelFraming: (index: number) => void;
+
+  onAddLouverItem: (type: 'profile' | 'gap') => void;
+  onRemoveLouverItem: (id: string) => void;
+  onUpdateLouverItem: (id: string, size: number | '') => void;
+
   onLaminatedConfigChange: (payload: Partial<LaminatedGlassConfig>) => void;
   onDguConfigChange: (payload: Partial<DguGlassConfig>) => void;
   onUpdateMirrorConfig: (payload: Partial<WindowConfig['mirrorConfig']>) => void;
@@ -81,6 +86,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
     toggleDoorPosition, onVentilatorCellClick,
     savedColors, setSavedColors, onUpdateHandle,
     onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming,
+    onAddLouverItem, onRemoveLouverItem, onUpdateLouverItem,
     onLaminatedConfigChange, onDguConfigChange, onUpdateMirrorConfig,
     onResetDesign,
     activeCornerSide, setActiveCornerSide
@@ -310,8 +316,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
       </div>
 
       <CollapsibleCard title="Design Type" isOpen={openCard === 'Design Type'} onToggle={() => handleToggleCard('Design Type')}>
-          <div className="grid grid-cols-3 bg-slate-700 rounded-md p-1 gap-1">
-              {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.CORNER, WindowType.MIRROR].map(type => {
+          <div className="grid grid-cols-4 bg-slate-700 rounded-md p-1 gap-1">
+              {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.LOUVERS, WindowType.CORNER, WindowType.MIRROR].map(type => {
                   const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                   const isActive = (isCorner && type === WindowType.CORNER) || (!isCorner && windowType === type);
                   return <button key={type} onClick={() => setConfig('windowType', type)} className={`p-2 text-xs font-semibold rounded capitalize ${isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>{typeLabel}</button>
@@ -346,6 +352,36 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
               <option value={WindowType.VENTILATOR}>Ventilator</option>
             </Select>
          </CollapsibleCard>
+      )}
+
+      {windowType === WindowType.LOUVERS && (
+        <CollapsibleCard title="Louver Pattern" isOpen={openCard === 'Louver Pattern'} onToggle={() => handleToggleCard('Louver Pattern')}>
+            <div className="space-y-2">
+                {config.louverPattern.map((item, index) => (
+                    <div key={item.id} className="flex items-end gap-2 p-2 bg-slate-900/50 rounded-md">
+                        <div className="flex-shrink-0 w-16 text-center">
+                            <span className={`text-xs font-bold ${item.type === 'profile' ? 'text-indigo-300' : 'text-slate-400'}`}>
+                                {item.type.toUpperCase()}
+                            </span>
+                        </div>
+                        <DimensionInput
+                            id={`${idPrefix}louver-item-${item.id}`}
+                            name={`louver-item-${item.id}`}
+                            label={`Size ${index + 1}`}
+                            value_mm={item.size}
+                            onChange_mm={v => onUpdateLouverItem(item.id, v)}
+                        />
+                        <Button variant="danger" onClick={() => onRemoveLouverItem(item.id)} className="p-2 h-10 w-10 flex-shrink-0">
+                            <TrashIcon className="w-5 h-5"/>
+                        </Button>
+                    </div>
+                ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-3">
+                <Button variant="secondary" onClick={() => onAddLouverItem('profile')}><PlusIcon className="w-4 h-4 mr-2"/> Add Profile</Button>
+                <Button variant="secondary" onClick={() => onAddLouverItem('gap')}><PlusIcon className="w-4 h-4 mr-2"/> Add Gap</Button>
+            </div>
+        </CollapsibleCard>
       )}
 
       {windowType === WindowType.MIRROR && (
@@ -512,7 +548,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
       )}
 
       <CollapsibleCard title="Appearance" isOpen={openCard === 'Appearance'} onToggle={() => handleToggleCard('Appearance')}>
-        {windowType !== WindowType.MIRROR && (
+        {windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS && (
             <>
                 <div className="grid grid-cols-2 gap-4">
                     <Select id={`${idPrefix}appearance-glass-tint`} name="appearance-glass-tint" label="Glass Tint" value={config.glassType} onChange={(e) => setConfig('glassType', e.target.value as GlassType)}>
@@ -570,16 +606,21 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
                 )}
             </>
         )}
-        <div className={`grid grid-cols-2 gap-4 ${windowType !== WindowType.MIRROR ? 'mt-4' : ''}`}>
-            <Select id={`${idPrefix}appearance-glass-thickness`} name="appearance-glass-thickness" label={windowType === WindowType.MIRROR ? "Mirror Thickness" : "Glass Thickness"} value={isCustomThickness ? 'custom' : config.glassThickness} onChange={handleThicknessChange}>
-                <option value="">Default</option>
-                {series.glassOptions.thicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
-                {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
-            </Select>
-            {isCustomThickness && <Input id={`${idPrefix}appearance-glass-thickness-custom`} name="appearance-glass-thickness-custom" label="Custom Thickness" type="number" inputMode="decimal" value={config.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))} unit="mm" />}
-        </div>
-        <Input id={`${idPrefix}custom-glass-name`} name="custom-glass-name" label="Custom Name (Optional)" type="text" placeholder={windowType === WindowType.MIRROR ? "e.g., Saint-Gobain Vision" : "e.g., Saint-Gobain Sun Ban"} value={config.customGlassName} onChange={e => setConfig('customGlassName', e.target.value)} />
-        {windowType !== WindowType.MIRROR && (
+        {windowType !== WindowType.LOUVERS && (
+            <div className={`grid grid-cols-2 gap-4 ${windowType !== WindowType.MIRROR ? 'mt-4' : ''}`}>
+                <Select id={`${idPrefix}appearance-glass-thickness`} name="appearance-glass-thickness" label={windowType === WindowType.MIRROR ? "Mirror Thickness" : "Glass Thickness"} value={isCustomThickness ? 'custom' : config.glassThickness} onChange={handleThicknessChange}>
+                    <option value="">Default</option>
+                    {series.glassOptions.thicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
+                    {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
+                </Select>
+                {isCustomThickness && <Input id={`${idPrefix}appearance-glass-thickness-custom`} name="appearance-glass-thickness-custom" label="Custom Thickness" type="number" inputMode="decimal" value={config.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))} unit="mm" />}
+            </div>
+        )}
+        {(windowType !== WindowType.LOUVERS) && (
+             <Input id={`${idPrefix}custom-glass-name`} name="custom-glass-name" label="Custom Name (Optional)" type="text" placeholder={windowType === WindowType.MIRROR ? "e.g., Saint-Gobain Vision" : "e.g., Saint-Gobain Sun Ban"} value={config.customGlassName} onChange={e => setConfig('customGlassName', e.target.value)} />
+        )}
+       
+        {windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS && (
             <div className='mt-4 pt-4 border-t border-slate-700'>
                 <h4 className="text-base font-semibold text-slate-200 mb-2">Glass Texture</h4>
                 <Button variant="secondary" className="w-full" onClick={() => glassTextureUploadRef.current?.click()}> <UploadIcon className="w-4 h-4 mr-2" /> Upload Texture </Button>
@@ -611,47 +652,49 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         </div>
       </CollapsibleCard>
 
-      <CollapsibleCard title="Georgian Bars" isOpen={openCard === 'Georgian Bars'} onToggle={() => handleToggleCard('Georgian Bars')}>
-        <div className="grid grid-cols-2 gap-4">
-            <DimensionInput id={`${idPrefix}georgian-bar-thickness`} name="georgian-bar-thickness" label="Bar Thickness" value_mm={glassGrid.barThickness} onChange_mm={v => setConfig('glassGrid', {...glassGrid, barThickness: v === '' ? 0 : v})} controlledUnit={georgianUnit} />
-            <Select id={`${idPrefix}georgian-unit-select`} label="Unit" value={georgianUnit} onChange={e => setGeorgianUnit(e.target.value as Unit)}>
-                <option value="mm">mm</option>
-                <option value="cm">cm</option>
-                <option value="in">in</option>
-                <option value="ft-in">ft-in</option>
-            </Select>
-        </div>
-        <label className="flex items-center space-x-2 cursor-pointer mt-4">
-              <input type="checkbox" id={`${idPrefix}georgian-apply-all`} name="georgian-apply-all" checked={glassGrid.applyToAll} onChange={handleApplyToAllChange} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
-              <span className="text-sm text-slate-200">Apply to all panels</span>
-        </label>
-        {!glassGrid.applyToAll && availableGeorgianPanels.length > 0 && (
-          <Select id={`${idPrefix}georgian-panel-select`} name="georgian-panel-select" label="Target Panel" value={activeGeorgianPanelId} onChange={e => setActiveGeorgianPanelId(e.target.value)}>
-             <option value="default">Default Pattern</option>
-             {availableGeorgianPanels.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </Select>
-        )}
-        <div className="mt-4 pt-4 border-t border-slate-700 space-y-4">
-            <div>
-                <h4 className="text-base font-semibold text-slate-200 mb-2">Horizontal Bars</h4>
-                <div className="grid grid-cols-3 gap-2">
-                    <Input id={`${idPrefix}georgian-h-count`} name="georgian-h-count" label="Count" type="number" value={activeGeorgianPattern.horizontal.count} onChange={e => handleGeorgianPatternChange('horizontal', 'count', parseInt(e.target.value) || 0)} />
-                    <DimensionInput id={`${idPrefix}georgian-h-offset`} name="georgian-h-offset" label="Offset" value_mm={activeGeorgianPattern.horizontal.offset} onChange_mm={v => handleGeorgianPatternChange('horizontal', 'offset', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
-                    <DimensionInput id={`${idPrefix}georgian-h-gap`} name="georgian-h-gap" label="Gap" value_mm={activeGeorgianPattern.horizontal.gap} onChange_mm={v => handleGeorgianPatternChange('horizontal', 'gap', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+      {windowType !== WindowType.LOUVERS && (
+          <CollapsibleCard title="Georgian Bars" isOpen={openCard === 'Georgian Bars'} onToggle={() => handleToggleCard('Georgian Bars')}>
+            <div className="grid grid-cols-2 gap-4">
+                <DimensionInput id={`${idPrefix}georgian-bar-thickness`} name="georgian-bar-thickness" label="Bar Thickness" value_mm={glassGrid.barThickness} onChange_mm={v => setConfig('glassGrid', {...glassGrid, barThickness: v === '' ? 0 : v})} controlledUnit={georgianUnit} />
+                <Select id={`${idPrefix}georgian-unit-select`} label="Unit" value={georgianUnit} onChange={e => setGeorgianUnit(e.target.value as Unit)}>
+                    <option value="mm">mm</option>
+                    <option value="cm">cm</option>
+                    <option value="in">in</option>
+                    <option value="ft-in">ft-in</option>
+                </Select>
+            </div>
+            <label className="flex items-center space-x-2 cursor-pointer mt-4">
+                  <input type="checkbox" id={`${idPrefix}georgian-apply-all`} name="georgian-apply-all" checked={glassGrid.applyToAll} onChange={handleApplyToAllChange} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
+                  <span className="text-sm text-slate-200">Apply to all panels</span>
+            </label>
+            {!glassGrid.applyToAll && availableGeorgianPanels.length > 0 && (
+              <Select id={`${idPrefix}georgian-panel-select`} name="georgian-panel-select" label="Target Panel" value={activeGeorgianPanelId} onChange={e => setActiveGeorgianPanelId(e.target.value)}>
+                 <option value="default">Default Pattern</option>
+                 {availableGeorgianPanels.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </Select>
+            )}
+            <div className="mt-4 pt-4 border-t border-slate-700 space-y-4">
+                <div>
+                    <h4 className="text-base font-semibold text-slate-200 mb-2">Horizontal Bars</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                        <Input id={`${idPrefix}georgian-h-count`} name="georgian-h-count" label="Count" type="number" value={activeGeorgianPattern.horizontal.count} onChange={e => handleGeorgianPatternChange('horizontal', 'count', parseInt(e.target.value) || 0)} />
+                        <DimensionInput id={`${idPrefix}georgian-h-offset`} name="georgian-h-offset" label="Offset" value_mm={activeGeorgianPattern.horizontal.offset} onChange_mm={v => handleGeorgianPatternChange('horizontal', 'offset', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+                        <DimensionInput id={`${idPrefix}georgian-h-gap`} name="georgian-h-gap" label="Gap" value_mm={activeGeorgianPattern.horizontal.gap} onChange_mm={v => handleGeorgianPatternChange('horizontal', 'gap', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+                    </div>
+                </div>
+                 <div>
+                    <h4 className="text-base font-semibold text-slate-200 mb-2">Vertical Bars</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                        <Input id={`${idPrefix}georgian-v-count`} name="georgian-v-count" label="Count" type="number" value={activeGeorgianPattern.vertical.count} onChange={e => handleGeorgianPatternChange('vertical', 'count', parseInt(e.target.value) || 0)} />
+                        <DimensionInput id={`${idPrefix}georgian-v-offset`} name="georgian-v-offset" label="Offset" value_mm={activeGeorgianPattern.vertical.offset} onChange_mm={v => handleGeorgianPatternChange('vertical', 'offset', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+                        <DimensionInput id={`${idPrefix}georgian-v-gap`} name="georgian-v-gap" label="Gap" value_mm={activeGeorgianPattern.vertical.gap} onChange_mm={v => handleGeorgianPatternChange('vertical', 'gap', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+                    </div>
                 </div>
             </div>
-             <div>
-                <h4 className="text-base font-semibold text-slate-200 mb-2">Vertical Bars</h4>
-                <div className="grid grid-cols-3 gap-2">
-                    <Input id={`${idPrefix}georgian-v-count`} name="georgian-v-count" label="Count" type="number" value={activeGeorgianPattern.vertical.count} onChange={e => handleGeorgianPatternChange('vertical', 'count', parseInt(e.target.value) || 0)} />
-                    <DimensionInput id={`${idPrefix}georgian-v-offset`} name="georgian-v-offset" label="Offset" value_mm={activeGeorgianPattern.vertical.offset} onChange_mm={v => handleGeorgianPatternChange('vertical', 'offset', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
-                    <DimensionInput id={`${idPrefix}georgian-v-gap`} name="georgian-v-gap" label="Gap" value_mm={activeGeorgianPattern.vertical.gap} onChange_mm={v => handleGeorgianPatternChange('vertical', 'gap', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
-                </div>
-            </div>
-        </div>
-      </CollapsibleCard>
+          </CollapsibleCard>
+      )}
       
-      {windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.MIRROR && (
+      {windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS && (
           <CollapsibleCard title="Fixed Panels" isOpen={openCard === 'Fixed Panels'} onToggle={() => handleToggleCard('Fixed Panels')}>
           <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.TOP)}><PlusIcon className="w-4 h-4 mr-2"/> Top</Button>
@@ -686,7 +729,10 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         )}
         <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
           <h4 className="text-base font-semibold text-slate-200">Profile Dimensions</h4>
-          {Object.keys(series.dimensions).map(key => {
+          {Object.keys(series.dimensions).filter(key => {
+              if (windowType === WindowType.LOUVERS) return key === 'louverProfile';
+              return true;
+          }).map(key => {
             const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
             return (
                 <DimensionInput key={key} id={`${idPrefix}dim-${key}`} name={`dim-${key}`} label={label} value_mm={series.dimensions[key as keyof typeof series.dimensions]} onChange_mm={v => handleDimensionChange(key as keyof ProfileSeries['dimensions'], v)} weightValue={series.weights?.[key as keyof ProfileDimensions]} onWeightChange={v => handleProfileDetailChange('weights', key as keyof ProfileDimensions, v)} lengthValue={series.lengths?.[key as keyof ProfileDimensions]} onLengthChange={v => handleProfileDetailChange('lengths', key as keyof ProfileDimensions, v)} />
