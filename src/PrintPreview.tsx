@@ -663,6 +663,20 @@ const EditableSection: React.FC<{title: string, value: string, onChange: (value:
 const getGlassDescription = (config: WindowConfig): string => {
     const formatType = (type: string) => type.replace(/_/g, ' ').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 
+    // Special handling for Mirrors
+    if (config.windowType === WindowType.MIRROR) {
+        if (config.customGlassName) {
+            // If custom name seems to include thickness already, use it as is.
+            if (/\d+\s*mm/i.test(config.customGlassName)) {
+                return config.customGlassName;
+            }
+            // Otherwise, prepend thickness to the custom name.
+            return `${config.glassThickness || '?'}mm ${config.customGlassName}`;
+        }
+        // Default description if no custom name
+        return `${config.glassThickness || '?'}mm Mirror`;
+    }
+
     if (config.glassSpecialType === 'laminated' && config.laminatedGlassConfig) {
         const { glass1Thickness, glass1Type, pvbThickness, glass2Thickness, glass2Type, isToughened } = config.laminatedGlassConfig;
         return `${glass1Thickness || '?'}mm ${formatType(glass1Type)} + ${pvbThickness || '?'}mm PVB + ${glass2Thickness || '?'}mm ${formatType(glass2Type)}${isToughened ? ' (Toughened)' : ''}`;
@@ -924,7 +938,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                         <tr><td className='pr-2 font-semibold'>Size:</td><td>{`${item.config.width} x ${item.config.height}`} mm</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Color:</td><td>{getColorName(item)}</td></tr>
+                                                        <tr><td className='pr-2 font-semibold'>Profile Color:</td><td>{getColorName(item)}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Glass:</td><td>{glassDescription}</td></tr>
                                                         {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
                                                         {relevantHardware.length > 0 && (
