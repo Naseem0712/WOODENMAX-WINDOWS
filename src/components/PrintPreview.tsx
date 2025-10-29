@@ -1,10 +1,12 @@
+
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, HardwareItem } from '../types';
 import { Button } from './ui/Button';
 import { PrinterIcon } from './icons/PrinterIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
-import { FixedPanelPosition, ShutterConfigType, WindowType } from '../types';
+import { FixedPanelPosition, ShutterConfigType, WindowType, MirrorShape } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
+import html2pdf from 'html2pdf.js';
 
 interface PrintPreviewProps {
   isOpen: boolean;
@@ -779,16 +781,14 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
         pagebreak: { mode: ['css', 'legacy'] }
     };
 
-    import('html2pdf.js').then(({ default: html2pdf }) => {
-        html2pdf().from(element).set(opt).save().then(() => {
-            setIsExporting(false);
-            element.classList.remove('pdf-export-mode');
-        }).catch((err: any) => {
-            console.error("PDF export failed", err);
-            setIsExporting(false);
-            element.classList.remove('pdf-export-mode');
-            alert("Sorry, there was an error exporting the PDF.");
-        });
+    html2pdf().from(element).set(opt).save().then(() => {
+        setIsExporting(false);
+        element.classList.remove('pdf-export-mode');
+    }).catch((err: any) => {
+        console.error("PDF export failed", err);
+        setIsExporting(false);
+        element.classList.remove('pdf-export-mode');
+        alert("Sorry, there was an error exporting the PDF.");
     });
   };
   
@@ -953,7 +953,8 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         <EditableSection title="Description" value={settings.description} onChange={(val) => setSettings({...settings, description: val})} />
                         <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} />
                         
-                        <div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs" style={{breakBefore: 'avoid'}}>
+                        {/* FIX: Corrected corrupted style property 'breakBefore' to 'breakInside'. */}
+                        <div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs" style={{breakInside: 'avoid'}}>
                             <div className="flex-grow">
                                 <h3 className="font-bold text-sm mb-1">Bank Details</h3>
                                 <p><strong>A/C Name:</strong> {settings.bankDetails.name}</p>

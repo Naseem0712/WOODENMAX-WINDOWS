@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { WindowConfig, HandleConfig, CornerSideConfig } from '../types';
-import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType } from '../types';
+import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType, MirrorShape } from '../types';
 import { PlusIcon } from './icons/PlusIcon';
 import { MinusIcon } from './icons/MinusIcon';
 import { ArrowsPointingInIcon } from './icons/ArrowsPointingInIcon';
@@ -281,6 +281,18 @@ const GlassPanel: React.FC<{
     );
 };
 
+const MirrorPanel: React.FC<{ style: React.CSSProperties }> = ({ style }) => {
+    const mirrorStyle: React.CSSProperties = {
+        ...style,
+        background: 'linear-gradient(135deg, hsl(210, 15%, 85%) 0%, hsl(210, 15%, 95%) 50%, hsl(210, 15%, 80%) 100%)',
+        boxShadow: 'inset 0 0 10px rgba(0,0,0,0.1)',
+    };
+
+    return (
+        <div style={mirrorStyle} />
+    );
+};
+
 const createWindowElements = (
     config: WindowConfig, 
     scale: number, 
@@ -356,6 +368,56 @@ const createWindowElements = (
     const innerContent: React.ReactNode[] = [];
     if (innerAreaWidth > 0 && innerAreaHeight > 0) {
        switch (windowType) {
+            case WindowType.MIRROR: {
+                const { mirrorConfig } = config;
+                const frameThickness = mirrorConfig.isFrameless ? 0 : dims.outerFrame;
+
+                let borderRadius = '0px';
+                switch (mirrorConfig.shape) {
+                    case MirrorShape.OVAL: borderRadius = '50%'; break;
+                    case MirrorShape.CAPSULE: borderRadius = '9999px'; break;
+                    case MirrorShape.ROUNDED_RECTANGLE:
+                        const radius = Number(mirrorConfig.cornerRadius) || 0;
+                        borderRadius = `${radius}px`;
+                        break;
+                    case MirrorShape.RECTANGLE:
+                    default:
+                        borderRadius = '0px';
+                        break;
+                }
+
+                const commonStyle: React.CSSProperties = {
+                    position: 'absolute',
+                    width: innerAreaWidth * scale,
+                    height: innerAreaHeight * scale,
+                    borderRadius: borderRadius,
+                    overflow: 'hidden'
+                };
+
+                if (!mirrorConfig.isFrameless) {
+                    innerContent.push(<div key="mirror-frame" style={{ ...commonStyle, backgroundColor: profileColor }} />);
+                }
+                
+                const parseRadius = (br: string): number => parseFloat(br.replace('px', ''));
+                const outerRadiusVal = parseRadius(borderRadius);
+                const innerRadiusVal = Math.max(0, outerRadiusVal - frameThickness); 
+                let innerBorderRadius = `${innerRadiusVal}px`;
+                if(borderRadius === '50%' || borderRadius === '9999px') {
+                    innerBorderRadius = borderRadius;
+                }
+
+                const mirrorStyle: React.CSSProperties = {
+                    position: 'absolute',
+                    top: frameThickness * scale,
+                    left: frameThickness * scale,
+                    width: (innerAreaWidth - frameThickness * 2) * scale,
+                    height: (innerAreaHeight - frameThickness * 2) * scale,
+                    borderRadius: innerBorderRadius,
+                };
+                innerContent.push(<MirrorPanel key="mirror-surface" style={mirrorStyle} />);
+
+                break;
+            }
             case WindowType.SLIDING: {
                 const { shutterConfig, fixedShutters, slidingHandles } = config;
                 const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;

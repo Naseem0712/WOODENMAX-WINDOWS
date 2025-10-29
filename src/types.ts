@@ -1,4 +1,5 @@
 
+
 export interface BatchAddItem {
   id: string;
   title: string;
@@ -15,6 +16,14 @@ export enum WindowType {
   VENTILATOR = 'ventilator',
   GLASS_PARTITION = 'glass_partition',
   CORNER = 'corner',
+  MIRROR = 'mirror',
+}
+
+export enum MirrorShape {
+  RECTANGLE = 'rectangle',
+  ROUNDED_RECTANGLE = 'rounded_rectangle',
+  CAPSULE = 'capsule',
+  OVAL = 'oval',
 }
 
 export interface SavedColor {
@@ -235,6 +244,13 @@ export interface WindowConfig {
     count: number; 
     types: PartitionPanelConfig[]; 
     hasTopChannel: boolean;
+  };
+
+  // Mirror specific
+  mirrorConfig: {
+    shape: MirrorShape;
+    isFrameless: boolean;
+    cornerRadius: number | '';
   };
   
   // Corner specific

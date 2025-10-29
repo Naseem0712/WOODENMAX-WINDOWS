@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback, lazy, Suspense } from 'react';
 // FIX: Import `GlassGridConfig` type to resolve 'Cannot find name' errors.
 import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig } from './types';
-import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType } from './types';
+import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType, MirrorShape } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
 // FIX: Import QuotationPanel to resolve 'Cannot find name' errors.
@@ -51,6 +51,7 @@ type ConfigAction =
   | { type: 'SET_SIDE_CONFIG'; payload: { side: 'left' | 'right'; config: Partial<CornerSideConfig> } }
   | { type: 'UPDATE_LAMINATED_CONFIG'; payload: Partial<LaminatedGlassConfig> }
   | { type: 'UPDATE_DGU_CONFIG'; payload: Partial<DguGlassConfig> }
+  | { type: 'UPDATE_MIRROR_CONFIG'; payload: Partial<WindowConfig['mirrorConfig']> }
   | { type: 'LOAD_CONFIG'; payload: ConfigState }
   | { type: 'RESET_DESIGN' };
 
@@ -346,6 +347,19 @@ const DEFAULT_CORNER_SERIES: ProfileSeries = {
     glassOptions: DEFAULT_GLASS_OPTIONS,
 };
 
+const DEFAULT_MIRROR_SERIES: ProfileSeries = {
+    id: 'series-mirror-default',
+    name: 'Standard Mirror Frame',
+    type: WindowType.MIRROR,
+    dimensions: { ...BASE_DIMENSIONS, outerFrame: 30 },
+    hardwareItems: [],
+    glassOptions: {
+        thicknesses: [4, 5, 6],
+        customThicknessAllowed: false,
+        specialTypes: [],
+    },
+};
+
 const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
     company: { logo: '', name: 'WoodenMax', address: '123 Wood Lane, Timber Town', email: 'info@woodenmax.com', website: 'www.woodenmax.com' },
     customer: { name: '', address: '', contactPerson: '' },
@@ -423,6 +437,11 @@ const initialConfig: ConfigState = {
     cornerPostWidth: 100,
     leftConfig: defaultCornerSideConfig,
     rightConfig: { ...defaultCornerSideConfig, verticalDividers: [0.5], doorPositions: [{ row: 0, col: 0 }, { row: 0, col: 1 }] },
+    mirrorConfig: {
+        shape: MirrorShape.RECTANGLE,
+        isFrameless: false,
+        cornerRadius: 50,
+    },
 };
 
 const SERIES_MAP: Record<WindowType, ProfileSeries> = {
@@ -431,6 +450,7 @@ const SERIES_MAP: Record<WindowType, ProfileSeries> = {
     [WindowType.VENTILATOR]: DEFAULT_VENTILATOR_SERIES,
     [WindowType.GLASS_PARTITION]: DEFAULT_GLASS_PARTITION_SERIES,
     [WindowType.CORNER]: DEFAULT_CORNER_SERIES,
+    [WindowType.MIRROR]: DEFAULT_MIRROR_SERIES,
 };
 
 function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
@@ -662,6 +682,8 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             return { ...state, laminatedGlassConfig: { ...state.laminatedGlassConfig, ...action.payload } };
         case 'UPDATE_DGU_CONFIG':
             return { ...state, dguGlassConfig: { ...state.dguGlassConfig, ...action.payload } };
+        case 'UPDATE_MIRROR_CONFIG':
+            return { ...state, mirrorConfig: { ...state.mirrorConfig, ...action.payload } };
         case 'LOAD_CONFIG': {
             const parsed = action.payload;
             const finalConfig: ConfigState = {
@@ -672,6 +694,7 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
               partitionPanels: { ...initialConfig.partitionPanels, ...(parsed.partitionPanels || {}) },
               laminatedGlassConfig: { ...initialConfig.laminatedGlassConfig, ...(parsed.laminatedGlassConfig || {}) },
               dguGlassConfig: { ...initialConfig.dguGlassConfig, ...(parsed.dguGlassConfig || {}) },
+              mirrorConfig: { ...initialConfig.mirrorConfig, ...(parsed.mirrorConfig || {}) },
               leftConfig: { ...defaultCornerSideConfig, ...(parsed.leftConfig || {}) },
               rightConfig: { ...defaultCornerSideConfig, ...(parsed.rightConfig || {}) },
             };
@@ -724,6 +747,7 @@ const getInitialConfig = (): ConfigState => {
           partitionPanels: { ...initialConfig.partitionPanels, ...(parsed.partitionPanels || {}) },
           laminatedGlassConfig: { ...initialConfig.laminatedGlassConfig, ...(parsed.laminatedGlassConfig || {}) },
           dguGlassConfig: { ...initialConfig.dguGlassConfig, ...(parsed.dguGlassConfig || {}) },
+          mirrorConfig: { ...initialConfig.mirrorConfig, ...(parsed.mirrorConfig || {}) },
           leftConfig: { ...defaultCornerSideConfig, ...(parsed.leftConfig || {}) },
           rightConfig: { ...defaultCornerSideConfig, ...(parsed.rightConfig || {}) },
       };
@@ -905,7 +929,7 @@ const App: React.FC = () => {
   const availableSeries = useMemo(() => {
     const allSeries = [
         DEFAULT_SLIDING_SERIES, DEFAULT_CASEMENT_SERIES, DEFAULT_VENTILATOR_SERIES, 
-        DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_CORNER_SERIES, ...savedSeries
+        DEFAULT_GLASS_PARTITION_SERIES, DEFAULT_CORNER_SERIES, DEFAULT_MIRROR_SERIES, ...savedSeries
     ];
     return allSeries.filter((s, index, self) => index === self.findIndex(t => t.id === s.id));
   }, [savedSeries]);
@@ -1105,6 +1129,9 @@ const App: React.FC = () => {
   const handleDguConfigChange = useCallback((payload: Partial<DguGlassConfig>) => {
     dispatch({ type: 'UPDATE_DGU_CONFIG', payload });
   }, []);
+  const handleUpdateMirrorConfig = useCallback((payload: Partial<WindowConfig['mirrorConfig']>) => {
+    dispatch({ type: 'UPDATE_MIRROR_CONFIG', payload });
+  }, []);
 
   const handleResetDesign = useCallback(() => {
     if (window.confirm("Are you sure you want to reset the current design? All changes will be lost.")) {
@@ -1303,10 +1330,11 @@ const App: React.FC = () => {
     onCyclePartitionPanelFraming,
     onLaminatedConfigChange: handleLaminatedConfigChange,
     onDguConfigChange: handleDguConfigChange,
+    onUpdateMirrorConfig: handleUpdateMirrorConfig,
     onResetDesign: handleResetDesign,
     activeCornerSide,
     setActiveCornerSide
-  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleLaminatedConfigChange, handleDguConfigChange, handleResetDesign, activeCornerSide]);
+  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, handleLaminatedConfigChange, handleDguConfigChange, handleUpdateMirrorConfig, handleResetDesign, activeCornerSide]);
 
   const handleOpenConfigure = () => setActiveMobilePanel('configure');
   const handleOpenQuote = () => setActiveMobilePanel('quotation');

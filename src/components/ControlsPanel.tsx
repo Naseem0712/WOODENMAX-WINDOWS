@@ -1,7 +1,8 @@
 
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig } from '../types';
-import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType } from '../types';
+import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType, MirrorShape } from '../types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
@@ -48,6 +49,7 @@ interface ControlsPanelProps {
   onCyclePartitionPanelFraming: (index: number) => void;
   onLaminatedConfigChange: (payload: Partial<LaminatedGlassConfig>) => void;
   onDguConfigChange: (payload: Partial<DguGlassConfig>) => void;
+  onUpdateMirrorConfig: (payload: Partial<WindowConfig['mirrorConfig']>) => void;
   onResetDesign: () => void;
 
   activeCornerSide: 'left' | 'right';
@@ -81,7 +83,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
     toggleDoorPosition, onVentilatorCellClick,
     savedColors, setSavedColors, onUpdateHandle,
     onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming,
-    onLaminatedConfigChange, onDguConfigChange,
+    onLaminatedConfigChange, onDguConfigChange, onUpdateMirrorConfig,
     onResetDesign,
     activeCornerSide, setActiveCornerSide
   } = props;
@@ -311,7 +313,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
 
       <CollapsibleCard title="Design Type" isOpen={openCard === 'Design Type'} onToggle={() => handleToggleCard('Design Type')}>
           <div className="grid grid-cols-3 bg-slate-700 rounded-md p-1 gap-1">
-              {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.CORNER].map(type => {
+              {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.CORNER, WindowType.MIRROR].map(type => {
                   const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                   const isActive = (isCorner && type === WindowType.CORNER) || (!isCorner && windowType === type);
                   return <button key={type} onClick={() => setConfig('windowType', type)} className={`p-2 text-xs font-semibold rounded capitalize ${isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>{typeLabel}</button>
@@ -346,6 +348,54 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
               <option value={WindowType.VENTILATOR}>Ventilator</option>
             </Select>
          </CollapsibleCard>
+      )}
+
+      {windowType === WindowType.MIRROR && (
+        <CollapsibleCard title="Mirror Shape & Style" isOpen={openCard === 'Mirror Shape & Style'} onToggle={() => handleToggleCard('Mirror Shape & Style')}>
+            <div className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Shape</label>
+                    <div className="grid grid-cols-2 gap-2">
+                        {[MirrorShape.RECTANGLE, MirrorShape.ROUNDED_RECTANGLE, MirrorShape.CAPSULE, MirrorShape.OVAL].map(shape => (
+                            <Button 
+                                key={shape}
+                                variant={config.mirrorConfig.shape === shape ? 'primary' : 'secondary'}
+                                onClick={() => onUpdateMirrorConfig({ shape })}
+                                className="capitalize"
+                            >
+                                {shape.replace('_', ' ')}
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+
+                {config.mirrorConfig.shape === MirrorShape.ROUNDED_RECTANGLE && (
+                    <DimensionInput 
+                        id={`${idPrefix}mirror-corner-radius`} 
+                        name="mirror-corner-radius" 
+                        label="Corner Radius" 
+                        value_mm={config.mirrorConfig.cornerRadius} 
+                        onChange_mm={v => onUpdateMirrorConfig({ cornerRadius: v })} 
+                    />
+                )}
+
+                <label className="flex items-center space-x-2 cursor-pointer pt-2">
+                    <input 
+                        type="checkbox" 
+                        id={`${idPrefix}mirror-frameless`} 
+                        name="mirror-frameless" 
+                        checked={config.mirrorConfig.isFrameless} 
+                        onChange={e => onUpdateMirrorConfig({ isFrameless: e.target.checked })} 
+                        className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm text-slate-200">Frameless Design</span>
+                </label>
+                
+                {!config.mirrorConfig.isFrameless && (
+                     <p className="text-xs text-slate-400">Frame thickness can be adjusted in the "Profile Series" section under "Outer Frame".</p>
+                )}
+            </div>
+        </CollapsibleCard>
       )}
 
       {activeWindowType === WindowType.SLIDING && (
@@ -597,7 +647,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         </div>
       </CollapsibleCard>
       
-      {windowType !== WindowType.GLASS_PARTITION && (
+      {windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.MIRROR && (
           <CollapsibleCard title="Fixed Panels" isOpen={openCard === 'Fixed Panels'} onToggle={() => handleToggleCard('Fixed Panels')}>
           <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.TOP)}><PlusIcon className="w-4 h-4 mr-2"/> Top</Button>
