@@ -7,6 +7,7 @@ import { XMarkIcon } from './icons/XMarkIcon';
 import { PlusIcon } from './icons/PlusIcon';
 
 interface QuotationPanelProps {
+    idPrefix?: string;
     width: number;
     height: number;
     windowTitle: string;
@@ -39,7 +40,7 @@ const CostDisplay: React.FC<{label:string, value: number, isTotal?: boolean}> = 
 
 
 export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
-    width, height, quantity, setQuantity, areaType, setAreaType, rate, setRate, onSave, onUpdate, onCancelEdit, editingItemId, onBatchAdd, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount, onViewQuotation, onClose
+    idPrefix = '', width, height, quantity, setQuantity, areaType, setAreaType, rate, setRate, onSave, onUpdate, onCancelEdit, editingItemId, onBatchAdd, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount, onViewQuotation, onClose
 }) => {
 
     const numQuantity = Number(quantity) || 0;
@@ -67,7 +68,7 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
                     <div className="grid grid-cols-4 gap-2">
                         <div className="col-span-2">
                            <Input 
-                                id="window-title"
+                                id={`${idPrefix}window-title`}
                                 name="window-title"
                                 label="Window Tag" 
                                 type="text" 
@@ -77,7 +78,7 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
                             />
                         </div>
                         <Input 
-                            id="quantity"
+                            id={`${idPrefix}quantity`}
                             name="quantity"
                             label="Quantity" 
                             type="number" 
@@ -87,7 +88,7 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
                             onChange={e => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                         />
                         <Select
-                            id="area-type"
+                            id={`${idPrefix}area-type`}
                             name="area-type"
                             label="Unit"
                             value={areaType}
@@ -101,7 +102,7 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
                 
                 <div className="md:col-span-2">
                      <Input
-                        id="base-rate"
+                        id={`${idPrefix}base-rate`}
                         name="base-rate"
                         label="Base Rate" 
                         type="number" 
