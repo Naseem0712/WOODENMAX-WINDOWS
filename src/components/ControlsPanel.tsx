@@ -12,6 +12,7 @@ import { XMarkIcon } from './icons/XMarkIcon';
 import { CollapsibleCard } from './ui/CollapsibleCard';
 import { SearchableSelect } from './ui/SearchableSelect';
 import { UploadIcon } from './icons/UploadIcon';
+import { useRubberBandScroll } from '../hooks/useRubberBandScroll';
 
 
 interface ControlsPanelProps {
@@ -101,6 +102,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
   const [selectedPanelId, setSelectedPanelId] = useState<string>('');
   const glassTextureUploadRef = useRef<HTMLInputElement>(null);
   const profileTextureUploadRef = useRef<HTMLInputElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  useRubberBandScroll(scrollContainerRef);
   
   const isCorner = windowType === WindowType.CORNER;
 
@@ -306,7 +309,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
   ];
 
   return (
-    <div className="w-full p-4 space-y-4 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
+    <div ref={scrollContainerRef} className="w-full p-4 space-y-4 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
       <div className="flex justify-between items-center pb-2 border-b border-slate-700">
         <h2 className="text-2xl font-bold text-white">Configuration</h2>
         <div className="flex items-center gap-2">
