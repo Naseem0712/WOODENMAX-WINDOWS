@@ -932,6 +932,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
 
                                     const { panelCounts, relevantHardware } = getItemDetails(item);
                                     const glassDescription = getGlassDescription(item.config);
+                                    const isFrameless = item.config.windowType === WindowType.MIRROR && item.config.mirrorConfig.isFrameless;
 
                                     return (
                                         <tr key={item.id} className="border-b border-gray-300 print-item">
@@ -949,7 +950,9 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                         <tr><td className='pr-2 font-semibold'>Size:</td><td>{`${item.config.width} x ${item.config.height}`} mm</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Profile Color:</td><td>{getColorName(item)}</td></tr>
+                                                        {!isFrameless && (
+                                                            <tr><td className='pr-2 font-semibold'>Profile Color:</td><td>{getColorName(item)}</td></tr>
+                                                        )}
                                                         <tr><td className='pr-2 font-semibold'>Glass:</td><td>{glassDescription}</td></tr>
                                                         {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
                                                         {relevantHardware.length > 0 && (
