@@ -9,9 +9,9 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
 export const Select: React.FC<SelectProps> = ({ label, id, children, ...props }) => {
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-slate-300 mb-1">
+      {label && <label htmlFor={id} className="block text-sm font-medium text-slate-300 mb-1">
         {label}
-      </label>
+      </label>}
       <div className="relative">
         <select
           id={id}

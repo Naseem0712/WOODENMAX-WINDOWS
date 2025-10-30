@@ -6,8 +6,7 @@ import { Input } from './ui/Input';
 import { PrinterIcon } from './icons/PrinterIcon';
 import { UploadIcon } from './icons/UploadIcon';
 import { Select } from './ui/Select';
-// FIX: Corrected import path for PrintPreview.
-import { PrintPreview } from '../PrintPreview';
+import { PrintPreview } from './PrintPreview';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { generateBillOfMaterials } from '../utils/materialCalculator';
 import { MaterialSummaryModal } from './MaterialSummaryModal';
@@ -315,17 +314,17 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
                     <span className="text-slate-300">Sub Total:</span>
                     <span className="font-semibold text-white ml-2">₹{Math.round(subTotal).toLocaleString('en-IN')}</span>
                 </div>
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-2 items-end">
                     <div className="w-32"><Input id="modal-discount-amount" name="modal-discount-amount" label="Discount" type="number" inputMode="decimal" value={settings.financials.discount} onChange={e => handleSettingsChange('financials', 'discount', e.target.value === '' ? '' : Number(e.target.value))}/></div>
-                    <Select id="modal-discount-type" name="modal-discount-type" label="" aria-label="Discount Type" value={settings.financials.discountType} onChange={e => handleSettingsChange('financials', 'discountType', e.target.value as 'percentage' | 'fixed')} className="mt-5">
+                    <Select id="modal-discount-type" name="modal-discount-type" label="" aria-label="Discount Type" value={settings.financials.discountType} onChange={e => handleSettingsChange('financials', 'discountType', e.target.value as 'percentage' | 'fixed')}>
                         <option value="percentage">%</option>
                         <option value="fixed">₹</option>
                     </Select>
-                    <span className="text-red-400 text-sm mt-5">(-₹{Math.round(discountAmount).toLocaleString('en-IN')})</span>
+                    <span className="text-red-400 text-sm pb-2">(-₹{Math.round(discountAmount).toLocaleString('en-IN')})</span>
                 </div>
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-2 items-end">
                     <div className="w-24"><Input id="modal-gst-percentage" name="modal-gst-percentage" label="GST" type="number" inputMode="decimal" value={settings.financials.gstPercentage} onChange={e => handleSettingsChange('financials', 'gstPercentage', e.target.value === '' ? '' : Number(e.target.value))} unit="%"/></div>
-                    <span className="text-green-400 text-sm mt-5">(+₹{Math.round(gstAmount).toLocaleString('en-IN')})</span>
+                    <span className="text-green-400 text-sm pb-2">(+₹{Math.round(gstAmount).toLocaleString('en-IN')})</span>
                 </div>
                 <div className="text-right">
                     <span className="text-lg font-semibold text-slate-300">Grand Total:</span>
