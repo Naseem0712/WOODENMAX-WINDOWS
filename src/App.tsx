@@ -747,6 +747,11 @@ const getInitialConfig = (): ConfigState => {
     const saved = window.localStorage.getItem('woodenmax-current-config');
     if (saved) {
       const parsed = JSON.parse(saved);
+      
+      if (typeof parsed !== 'object' || parsed === null) {
+        console.warn("Invalid config in localStorage, falling back to default.");
+        return initialConfig;
+      }
 
       // --- Migration for Glass Grid ---
       if (parsed.glassGrid && typeof parsed.glassGrid.rows !== 'undefined') {
@@ -851,7 +856,15 @@ const App: React.FC = () => {
   const [quantity, setQuantity] = useState<number | ''>(() => { try { const s = window.localStorage.getItem('woodenmax-quotation-panel-quantity'); return s ? JSON.parse(s) : 1; } catch { return 1; } });
   const [areaType, setAreaType] = useState<AreaType>(() => (window.localStorage.getItem('woodenmax-quotation-panel-areaType') as AreaType) || AreaType.SQFT);
   const [rate, setRate] = useState<number | ''>(() => { try { const s = window.localStorage.getItem('woodenmax-quotation-panel-rate'); return s ? JSON.parse(s) : 550; } catch { return 550; } });
-  const [quotationItems, setQuotationItems] = useState<QuotationItem[]>(() => { try { const s = window.localStorage.getItem('woodenmax-quotation-items'); return s ? JSON.parse(s) : []; } catch { return []; } });
+  const [quotationItems, setQuotationItems] = useState<QuotationItem[]>(() => { 
+    try { 
+      const s = window.localStorage.getItem('woodenmax-quotation-items'); 
+      const parsed = s ? JSON.parse(s) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { 
+      return []; 
+    } 
+  });
   const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isBatchAddModalOpen, setIsBatchAddModalOpen] = useState(false);
