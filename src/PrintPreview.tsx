@@ -932,7 +932,19 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
 
                                     const { panelCounts, relevantHardware } = getItemDetails(item);
                                     const glassDescription = getGlassDescription(item.config);
-                                    const isFrameless = item.config.windowType === WindowType.MIRROR && item.config.mirrorConfig.isFrameless;
+                                    
+                                    let isFrameless = false;
+                                    if (item.config.windowType === WindowType.MIRROR) {
+                                        isFrameless = item.config.mirrorConfig.isFrameless;
+                                    } else if (item.config.windowType === WindowType.GLASS_PARTITION) {
+                                        const { partitionPanels } = item.config;
+                                        // A partition is frameless if it has no top/bottom channels AND no individual panels are framed.
+                                        // Hinged panels are always considered framed.
+                                        const hasFramedPanels = partitionPanels.types.some(p => p.type === 'hinged' || p.framing === 'full');
+                                        if (!partitionPanels.hasTopChannel && !hasFramedPanels) {
+                                            isFrameless = true;
+                                        }
+                                    }
 
                                     return (
                                         <tr key={item.id} className="border-b border-gray-300 print-item">
