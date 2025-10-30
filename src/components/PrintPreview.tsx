@@ -5,7 +5,6 @@ import { PrinterIcon } from './icons/PrinterIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { FixedPanelPosition, ShutterConfigType, WindowType, MirrorShape } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
-import html2pdf from 'html2pdf.js';
 import { Input } from './ui/Input';
 
 interface PrintPreviewProps {
@@ -841,14 +840,16 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
         pagebreak: { mode: ['css', 'legacy'] }
     };
 
-    html2pdf().from(element).set(opt).save().then(() => {
-        setIsExporting(false);
-        element.classList.remove('pdf-export-mode');
-    }).catch((err: any) => {
-        console.error("PDF export failed", err);
-        setIsExporting(false);
-        element.classList.remove('pdf-export-mode');
-        alert("Sorry, there was an error exporting the PDF.");
+    import('html2pdf.js').then(({ default: html2pdf }) => {
+        html2pdf().from(element).set(opt).save().then(() => {
+            setIsExporting(false);
+            element.classList.remove('pdf-export-mode');
+        }).catch((err: any) => {
+            console.error("PDF export failed", err);
+            setIsExporting(false);
+            element.classList.remove('pdf-export-mode');
+            alert("Sorry, there was an error exporting the PDF.");
+        });
     });
   };
   

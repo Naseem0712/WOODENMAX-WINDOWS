@@ -4,7 +4,6 @@ import { Button } from './ui/Button';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { PrinterIcon } from './icons/PrinterIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
-import html2pdf from 'html2pdf.js';
 
 interface MaterialSummaryModalProps {
   isOpen: boolean;
@@ -43,15 +42,17 @@ export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOp
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
             pagebreak: { mode: ['css', 'legacy'] }
         };
-
-        html2pdf().from(element).set(opt).save().then(() => {
-            setIsExporting(false);
-            element.classList.remove('pdf-export-mode');
-        }).catch((err) => {
-            console.error("PDF export failed", err);
-            setIsExporting(false);
-            element.classList.remove('pdf-export-mode');
-            alert("Sorry, there was an error exporting the PDF.");
+        
+        import('html2pdf.js').then(({ default: html2pdf }) => {
+            html2pdf().from(element).set(opt).save().then(() => {
+                setIsExporting(false);
+                element.classList.remove('pdf-export-mode');
+            }).catch((err: any) => {
+                console.error("PDF export failed", err);
+                setIsExporting(false);
+                element.classList.remove('pdf-export-mode');
+                alert("Sorry, there was an error exporting the PDF.");
+            });
         });
     };
 

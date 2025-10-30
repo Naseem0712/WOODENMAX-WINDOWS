@@ -12,8 +12,8 @@ import { DownloadIcon } from './components/icons/DownloadIcon';
 import { AdjustmentsIcon } from './components/icons/AdjustmentsIcon';
 import { ListBulletIcon } from './components/icons/ListBulletIcon';
 import { DocumentTextIcon } from './components/icons/DocumentTextIcon';
+import { QuotationListModal } from './components/QuotationListModal';
 
-const QuotationListModal = lazy(() => import('./components/QuotationListModal').then(module => ({ default: module.QuotationListModal })));
 const BatchAddModal = lazy(() => import('./components/BatchAddModal').then(module => ({ default: module.BatchAddModal })));
 const ContentModal = lazy(() => import('./components/ContentModal').then(module => ({ default: module.ContentModal })));
 
@@ -1435,9 +1435,7 @@ const App: React.FC = () => {
   return (
     <>
       {isQuotationModalOpen && (
-          <Suspense fallback={loadingFallback}>
-              <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} onEdit={handleEditItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} />
-          </Suspense>
+          <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} onEdit={handleEditItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} />
       )}
       {isBatchAddModalOpen && (
           <Suspense fallback={loadingFallback}>
