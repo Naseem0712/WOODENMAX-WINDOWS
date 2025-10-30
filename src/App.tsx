@@ -375,7 +375,7 @@ const DEFAULT_LOUVERS_SERIES: ProfileSeries = {
 
 const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
     company: { logo: '', name: 'WoodenMax', address: '123 Wood Lane, Timber Town', email: 'info@woodenmax.com', website: 'www.woodenmax.com' },
-    customer: { name: '', address: '', contactPerson: '' },
+    customer: { name: '', address: '', contactPerson: '', architectName: '' },
     financials: { gstPercentage: 18, discount: 0, discountType: 'percentage' },
     bankDetails: { name: '', accountNumber: '', ifsc: '', branch: '', accountType: 'current' },
     title: 'Quotation for Aluminium Works',
@@ -873,8 +873,20 @@ const App: React.FC = () => {
 
   const [quotationSettings, setQuotationSettings] = useState<QuotationSettings>(() => {
       try {
-        const item = window.localStorage.getItem('woodenmax-quotation-settings');
-        return item ? JSON.parse(item) : DEFAULT_QUOTATION_SETTINGS;
+          const item = window.localStorage.getItem('woodenmax-quotation-settings');
+          if (item) {
+              const savedSettings = JSON.parse(item);
+              // Deep merge to ensure nested objects get new default properties from updates
+              return {
+                  ...DEFAULT_QUOTATION_SETTINGS,
+                  ...savedSettings,
+                  company: { ...DEFAULT_QUOTATION_SETTINGS.company, ...savedSettings.company },
+                  customer: { ...DEFAULT_QUOTATION_SETTINGS.customer, ...savedSettings.customer },
+                  financials: { ...DEFAULT_QUOTATION_SETTINGS.financials, ...savedSettings.financials },
+                  bankDetails: { ...DEFAULT_QUOTATION_SETTINGS.bankDetails, ...savedSettings.bankDetails },
+              };
+          }
+          return DEFAULT_QUOTATION_SETTINGS;
       } catch (error) { return DEFAULT_QUOTATION_SETTINGS; }
   });
   

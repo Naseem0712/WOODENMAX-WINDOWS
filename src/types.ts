@@ -294,6 +294,7 @@ export interface QuotationSettings {
     name: string;
     address: string;
     contactPerson: string;
+    architectName?: string;
   };
   financials: {
     gstPercentage: number | '';
