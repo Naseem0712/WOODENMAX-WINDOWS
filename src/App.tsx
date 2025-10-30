@@ -12,7 +12,6 @@ import { DownloadIcon } from './components/icons/DownloadIcon';
 import { AdjustmentsIcon } from './components/icons/AdjustmentsIcon';
 import { ListBulletIcon } from './components/icons/ListBulletIcon';
 import { DocumentTextIcon } from './components/icons/DocumentTextIcon';
-import { useRubberBandScroll } from './hooks/useRubberBandScroll';
 
 const QuotationListModal = lazy(() => import('./components/QuotationListModal').then(module => ({ default: module.QuotationListModal })));
 const BatchAddModal = lazy(() => import('./components/BatchAddModal').then(module => ({ default: module.BatchAddModal })));
@@ -869,11 +868,6 @@ const App: React.FC = () => {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [canvasKey, setCanvasKey] = useState(() => uuidv4());
   const panelRef = useRef<HTMLDivElement>(null);
-
-  const configurePanelRef = useRef<HTMLDivElement>(null);
-  const quotationPanelRef = useRef<HTMLDivElement>(null);
-  const configurePanelStyle = useRubberBandScroll(configurePanelRef, activeMobilePanel === 'configure');
-  const quotationPanelStyle = useRubberBandScroll(quotationPanelRef, activeMobilePanel === 'quotation');
   
   const windowConfig: WindowConfig = useMemo(() => ({
     ...windowConfigState,
@@ -1465,19 +1459,13 @@ const App: React.FC = () => {
         </div>
         {/* Mobile Configure Panel */}
         <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${activeMobilePanel === 'configure' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={handleCloseMobilePanels}></div>
-        <div 
-          ref={configurePanelRef}
-          style={configurePanelStyle}
-          className={`lg:hidden fixed bottom-0 left-0 right-0 max-h-[85vh] flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'configure' ? 'translate-y-0' : 'translate-y-full'}`}>
+        <div className={`lg:hidden fixed bottom-0 left-0 right-0 max-h-[85vh] flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'configure' ? 'translate-y-0' : 'translate-y-full'}`}>
            <ControlsPanel {...commonControlProps} idPrefix="mobile-" onClose={handleCloseMobilePanels} />
         </div>
         
         {/* Mobile Quotation Panel */}
         <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${activeMobilePanel === 'quotation' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={handleCloseMobilePanels}></div>
-        <div 
-          ref={quotationPanelRef}
-          style={quotationPanelStyle}
-          className={`lg:hidden fixed bottom-0 left-0 right-0 flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'quotation' ? 'translate-y-0' : 'translate-y-full'}`}>
+        <div className={`lg:hidden fixed bottom-0 left-0 right-0 flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'quotation' ? 'translate-y-0' : 'translate-y-full'}`}>
             <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onUpdate={handleUpdateQuotationItem} onCancelEdit={handleCancelEdit} editingItemId={editingItemId} onBatchAdd={handleBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={handleViewQuotation} onClose={handleCloseMobilePanels} />
         </div>
       </div>

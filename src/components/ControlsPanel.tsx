@@ -306,186 +306,461 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
   ];
 
   return (
-    <div className="w-full flex flex-col h-full bg-slate-800">
-      <div className="flex-shrink-0 flex justify-between items-center p-4 pb-2 border-b border-slate-700">
+    <div className="w-full p-4 space-y-4 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
+      <div className="flex justify-between items-center pb-2 border-b border-slate-700">
         <h2 className="text-2xl font-bold text-white">Configuration</h2>
         <div className="flex items-center gap-2">
             <button onClick={onResetDesign} className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white" aria-label="Reset design" title="Reset Design"> <TrashIcon className="w-6 h-6" /> </button>
             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white" aria-label="Close panel"> <XMarkIcon className="w-6 h-6" /> </button>
         </div>
       </div>
-      <div className="flex-grow overflow-y-auto custom-scrollbar" style={{ touchAction: 'pan-y' }}>
-        <div className="p-4 space-y-4">
-            <CollapsibleCard title="Design Type" isOpen={openCard === 'Design Type'} onToggle={() => handleToggleCard('Design Type')}>
-                <div className="grid grid-cols-4 bg-slate-700 rounded-md p-1 gap-1">
-                    {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.LOUVERS, WindowType.CORNER, WindowType.MIRROR].map(type => {
-                        const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                        const isActive = (isCorner && type === WindowType.CORNER) || (!isCorner && windowType === type);
-                        return <button key={type} onClick={() => setConfig('windowType', type)} className={`p-2 text-xs font-semibold rounded capitalize ${isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>{typeLabel}</button>
-                    })}
+
+      <CollapsibleCard title="Design Type" isOpen={openCard === 'Design Type'} onToggle={() => handleToggleCard('Design Type')}>
+          <div className="grid grid-cols-4 bg-slate-700 rounded-md p-1 gap-1">
+              {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.LOUVERS, WindowType.CORNER, WindowType.MIRROR].map(type => {
+                  const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  const isActive = (isCorner && type === WindowType.CORNER) || (!isCorner && windowType === type);
+                  return <button key={type} onClick={() => setConfig('windowType', type)} className={`p-2 text-xs font-semibold rounded capitalize ${isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>{typeLabel}</button>
+              })}
+          </div>
+      </CollapsibleCard>
+      
+      <CollapsibleCard title="Overall Dimensions" isOpen={openCard === 'Overall Dimensions'} onToggle={() => handleToggleCard('Overall Dimensions')}>
+        {isCorner ? (
+            <>
+                <div className="grid grid-cols-2 gap-4">
+                    <DimensionInput id={`${idPrefix}left-width`} name="left-width" label="Left Wall Width" value_mm={config.leftWidth} onChange_mm={v => setConfig('leftWidth', v)} placeholder="e.g., 1200" />
+                    <DimensionInput id={`${idPrefix}right-width`} name="right-width" label="Right Wall Width" value_mm={config.rightWidth} onChange_mm={v => setConfig('rightWidth', v)} placeholder="e.g., 1200" />
                 </div>
-            </CollapsibleCard>
-            
-            <CollapsibleCard title="Overall Dimensions" isOpen={openCard === 'Overall Dimensions'} onToggle={() => handleToggleCard('Overall Dimensions')}>
-              {isCorner ? (
-                  <>
-                      <div className="grid grid-cols-2 gap-4">
-                          <DimensionInput id={`${idPrefix}left-width`} name="left-width" label="Left Wall Width" value_mm={config.leftWidth} onChange_mm={v => setConfig('leftWidth', v)} placeholder="e.g., 1200" />
-                          <DimensionInput id={`${idPrefix}right-width`} name="right-width" label="Right Wall Width" value_mm={config.rightWidth} onChange_mm={v => setConfig('rightWidth', v)} placeholder="e.g., 1200" />
-                      </div>
-                      <DimensionInput id={`${idPrefix}corner-post-width`} name="corner-post-width" label="Corner Post Width" value_mm={config.cornerPostWidth} onChange_mm={v => setConfig('cornerPostWidth', v)} placeholder="e.g., 100" />
-                  </>
-              ) : (
-                  <DimensionInput id={`${idPrefix}total-width`} name="total-width" label="Total Width" value_mm={config.width} onChange_mm={v => setConfig('width', v)} placeholder="e.g., 1800" />
-              )}
-              <DimensionInput id={`${idPrefix}total-height`} name="total-height" label="Total Height" value_mm={config.height} onChange_mm={v => setConfig('height', v)} placeholder="e.g., 1200" />
-            </CollapsibleCard>
-            
-            {isCorner && (
-              <CollapsibleCard title="Corner Window Setup" isOpen={openCard === 'Corner Window Setup'} onToggle={() => handleToggleCard('Corner Window Setup')}>
-                  <div className="mb-4 grid grid-cols-2 bg-slate-700 rounded-md p-1 gap-1">
-                      <button onClick={() => setActiveCornerSide('left')} className={`p-2 text-sm font-semibold rounded ${activeCornerSide === 'left' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Left Wall</button>
-                      <button onClick={() => setActiveCornerSide('right')} className={`p-2 text-sm font-semibold rounded ${activeCornerSide === 'right' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Right Wall</button>
-                  </div>
-                  <Select id={`${idPrefix}corner-side-type`} name="corner-side-type" label={`${activeCornerSide === 'left' ? 'Left' : 'Right'} Wall Type`} value={displayConfig.windowType} onChange={(e) => setSideConfig({ windowType: e.target.value as CornerSideConfig['windowType'] })}>
-                    <option value={WindowType.SLIDING}>Sliding</option>
-                    <option value={WindowType.CASEMENT}>Casement / Fixed</option>
-                    <option value={WindowType.VENTILATOR}>Ventilator</option>
-                  </Select>
-              </CollapsibleCard>
+                 <DimensionInput id={`${idPrefix}corner-post-width`} name="corner-post-width" label="Corner Post Width" value_mm={config.cornerPostWidth} onChange_mm={v => setConfig('cornerPostWidth', v)} placeholder="e.g., 100" />
+            </>
+        ) : (
+            <DimensionInput id={`${idPrefix}total-width`} name="total-width" label="Total Width" value_mm={config.width} onChange_mm={v => setConfig('width', v)} placeholder="e.g., 1800" />
+        )}
+        <DimensionInput id={`${idPrefix}total-height`} name="total-height" label="Total Height" value_mm={config.height} onChange_mm={v => setConfig('height', v)} placeholder="e.g., 1200" />
+      </CollapsibleCard>
+      
+      {isCorner && (
+         <CollapsibleCard title="Corner Window Setup" isOpen={openCard === 'Corner Window Setup'} onToggle={() => handleToggleCard('Corner Window Setup')}>
+            <div className="mb-4 grid grid-cols-2 bg-slate-700 rounded-md p-1 gap-1">
+                <button onClick={() => setActiveCornerSide('left')} className={`p-2 text-sm font-semibold rounded ${activeCornerSide === 'left' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Left Wall</button>
+                <button onClick={() => setActiveCornerSide('right')} className={`p-2 text-sm font-semibold rounded ${activeCornerSide === 'right' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Right Wall</button>
+            </div>
+            <Select id={`${idPrefix}corner-side-type`} name="corner-side-type" label={`${activeCornerSide === 'left' ? 'Left' : 'Right'} Wall Type`} value={displayConfig.windowType} onChange={(e) => setSideConfig({ windowType: e.target.value as CornerSideConfig['windowType'] })}>
+              <option value={WindowType.SLIDING}>Sliding</option>
+              <option value={WindowType.CASEMENT}>Casement / Fixed</option>
+              <option value={WindowType.VENTILATOR}>Ventilator</option>
+            </Select>
+         </CollapsibleCard>
+      )}
+
+      {windowType === WindowType.LOUVERS && (
+        <CollapsibleCard title="Louver Pattern" isOpen={openCard === 'Louver Pattern'} onToggle={() => handleToggleCard('Louver Pattern')}>
+            <div className="space-y-2">
+                {config.louverPattern.map((item, index) => (
+                    <div key={item.id} className="flex items-end gap-2 p-2 bg-slate-900/50 rounded-md">
+                        <div className="flex-shrink-0 w-16 text-center">
+                            <span className={`text-xs font-bold ${item.type === 'profile' ? 'text-indigo-300' : 'text-slate-400'}`}>
+                                {item.type.toUpperCase()}
+                            </span>
+                        </div>
+                        <DimensionInput
+                            id={`${idPrefix}louver-item-${item.id}`}
+                            name={`louver-item-${item.id}`}
+                            label={`Size ${index + 1}`}
+                            value_mm={item.size}
+                            onChange_mm={v => onUpdateLouverItem(item.id, v)}
+                        />
+                        <Button variant="danger" onClick={() => onRemoveLouverItem(item.id)} className="p-2 h-10 w-10 flex-shrink-0">
+                            <TrashIcon className="w-5 h-5"/>
+                        </Button>
+                    </div>
+                ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-3">
+                <Button variant="secondary" onClick={() => onAddLouverItem('profile')}><PlusIcon className="w-4 h-4 mr-2"/> Add Profile</Button>
+                <Button variant="secondary" onClick={() => onAddLouverItem('gap')}><PlusIcon className="w-4 h-4 mr-2"/> Add Gap</Button>
+            </div>
+             <div className="mt-4 pt-4 border-t border-slate-700">
+                <label className="block text-sm font-medium text-slate-300 mb-2">Orientation</label>
+                <div className="grid grid-cols-2 gap-2">
+                    <Button variant={config.orientation === 'vertical' ? 'primary' : 'secondary'} onClick={() => setConfig('orientation', 'vertical')}>Vertical</Button>
+                    <Button variant={config.orientation === 'horizontal' ? 'primary' : 'secondary'} onClick={() => setConfig('orientation', 'horizontal')}>Horizontal</Button>
+                </div>
+            </div>
+        </CollapsibleCard>
+      )}
+
+      {windowType === WindowType.MIRROR && (
+        <CollapsibleCard title="Mirror Shape & Style" isOpen={openCard === 'Mirror Shape & Style'} onToggle={() => handleToggleCard('Mirror Shape & Style')}>
+            <div className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Shape</label>
+                    <div className="grid grid-cols-2 gap-2">
+                        {[MirrorShape.RECTANGLE, MirrorShape.ROUNDED_RECTANGLE, MirrorShape.CAPSULE, MirrorShape.OVAL].map(shape => (
+                            <Button 
+                                key={shape}
+                                variant={config.mirrorConfig.shape === shape ? 'primary' : 'secondary'}
+                                onClick={() => onUpdateMirrorConfig({ shape })}
+                                className="capitalize"
+                            >
+                                {shape.replace('_', ' ')}
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+
+                {config.mirrorConfig.shape === MirrorShape.ROUNDED_RECTANGLE && (
+                    <DimensionInput 
+                        id={`${idPrefix}mirror-corner-radius`} 
+                        name="mirror-corner-radius" 
+                        label="Corner Radius" 
+                        value_mm={config.mirrorConfig.cornerRadius} 
+                        onChange_mm={v => onUpdateMirrorConfig({ cornerRadius: v })} 
+                    />
+                )}
+
+                <label className="flex items-center space-x-2 cursor-pointer pt-2">
+                    <input 
+                        type="checkbox" 
+                        id={`${idPrefix}mirror-frameless`} 
+                        name="mirror-frameless" 
+                        checked={config.mirrorConfig.isFrameless} 
+                        onChange={e => onUpdateMirrorConfig({ isFrameless: e.target.checked })} 
+                        className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm text-slate-200">Frameless Design</span>
+                </label>
+                
+                {!config.mirrorConfig.isFrameless && (
+                     <p className="text-xs text-slate-400">Frame thickness can be adjusted in the "Profile Series" section under "Outer Frame".</p>
+                )}
+            </div>
+        </CollapsibleCard>
+      )}
+
+      {activeWindowType === WindowType.SLIDING && (
+        <CollapsibleCard title="Track & Shutter Setup" isOpen={openCard === 'Track & Shutter Setup'} onToggle={() => handleToggleCard('Track & Shutter Setup')}>
+            <Select id={`${idPrefix}track-type`} name="track-type" label="Track Type" value={displayConfig.trackType} onChange={(e) => isCorner ? setSideConfig({trackType: parseInt(e.target.value)}) : setConfig('trackType', parseInt(e.target.value) as TrackType)}>
+                <option value={TrackType.TWO_TRACK}>2-Track</option>
+                <option value={TrackType.THREE_TRACK}>3-Track</option>
+            </Select>
+            <Select id={`${idPrefix}shutter-config`} name="shutter-config" label="Shutter Configuration" value={displayConfig.shutterConfig} onChange={(e) => isCorner ? setSideConfig({shutterConfig: e.target.value as ShutterConfigType}) : setConfig('shutterConfig', e.target.value as ShutterConfigType)}>
+                {displayConfig.trackType === TrackType.TWO_TRACK && <><option value="2G">2 Glass Shutters</option><option value="4G">4 Glass Shutters</option></>}
+                {displayConfig.trackType === TrackType.THREE_TRACK && <><option value="3G">3 Glass Shutters</option><option value="2G1M">2 Glass + 1 Mesh Shutter</option></>}
+            </Select>
+            {displayConfig.fixedShutters.length > 0 && (
+              <div className="pt-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">Shutter Fixing</label>
+                <div className="grid grid-cols-2 gap-2">
+                    {displayConfig.fixedShutters.map((_, i) => (
+                        <label key={i} className="flex items-center space-x-2 p-2 bg-slate-700 rounded-md cursor-pointer hover:bg-slate-600">
+                            <input type="checkbox" id={`${idPrefix}fix-shutter-${i}`} name={`fix-shutter-${i}`} checked={displayConfig.fixedShutters[i] || false} onChange={e => handleFixShutterChange(i, e.target.checked)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                            <span className="text-sm text-slate-200">Fix Shutter {i + 1}</span>
+                        </label>
+                    ))}
+                </div>
+              </div>
             )}
+        </CollapsibleCard>
+      )}
 
-            {windowType === WindowType.LOUVERS && (
-              <CollapsibleCard title="Louver Pattern" isOpen={openCard === 'Louver Pattern'} onToggle={() => handleToggleCard('Louver Pattern')}>
-                  <div className="space-y-2">
-                      {config.louverPattern.map((item, index) => (
-                          <div key={item.id} className="flex items-end gap-2 p-2 bg-slate-900/50 rounded-md">
-                              <div className="flex-shrink-0 w-16 text-center">
-                                  <span className={`text-xs font-bold ${item.type === 'profile' ? 'text-indigo-300' : 'text-slate-400'}`}>
-                                      {item.type.toUpperCase()}
-                                  </span>
-                              </div>
-                              <DimensionInput
-                                  id={`${idPrefix}louver-item-${item.id}`}
-                                  name={`louver-item-${item.id}`}
-                                  label={`Size ${index + 1}`}
-                                  value_mm={item.size}
-                                  onChange_mm={v => onUpdateLouverItem(item.id, v)}
-                              />
-                              <Button variant="danger" onClick={() => onRemoveLouverItem(item.id)} className="p-2 h-10 w-10 flex-shrink-0">
-                                  <TrashIcon className="w-5 h-5"/>
-                              </Button>
-                          </div>
-                      ))}
+      {(activeWindowType === WindowType.CASEMENT || activeWindowType === WindowType.VENTILATOR) && (
+          <CollapsibleCard title="Grid Layout" isOpen={openCard === 'Grid Layout'} onToggle={() => handleToggleCard('Grid Layout')}>
+              <div className="grid grid-cols-2 gap-4">
+                  <Input id={`${idPrefix}grid-rows`} name="grid-rows" label="Rows" type="number" inputMode="numeric" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
+                  <Input id={`${idPrefix}grid-cols`} name="grid-cols" label="Columns" type="number" inputMode="numeric" value={gridCols} min={1} onChange={e => setGridSize(gridRows, Math.max(1, parseInt(e.target.value) || 1))} />
+              </div>
+              <div className="mt-4">
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Panel Configuration (Click to toggle)</label>
+                  <p className="text-xs text-slate-400 mb-2">You can also click grid lines on the canvas to merge panels.</p>
+                  <div className="bg-slate-900 p-2 rounded-md max-h-64 overflow-auto custom-scrollbar">
+                    <div className="grid gap-1" style={{gridTemplateRows: `repeat(${gridRows}, 1fr)`, gridTemplateColumns: `repeat(${gridCols}, 1fr)`}}>
+                        {Array.from({length: gridRows * gridCols}).map((_, index) => {
+                            const row = Math.floor(index / gridCols);
+                            const col = index % gridCols;
+                            if (activeWindowType === WindowType.CASEMENT) {
+                                const isDoor = displayConfig.doorPositions.some(p => p.row === row && p.col === col);
+                                return ( <button key={`${row}-${col}`} onClick={() => toggleDoorPosition(row, col)} className={`aspect-square rounded text-xs font-semibold flex items-center justify-center ${isDoor ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{isDoor ? 'Door' : 'Fixed'}</button> );
+                            }
+                            if (activeWindowType === WindowType.VENTILATOR) {
+                                const cell = displayConfig.ventilatorGrid[row]?.[col];
+                                const cellType = cell?.type || 'glass';
+                                const colorClass = cellType === 'door' ? 'bg-indigo-500 text-white' : cellType === 'louvers' ? 'bg-sky-600 text-white' : cellType === 'exhaust_fan' ? 'bg-teal-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600';
+                                return ( <button key={`${row}-${col}`} onClick={() => onVentilatorCellClick(row, col)} className={`aspect-square rounded text-xs font-semibold flex items-center justify-center ${colorClass}`}>{getVentilatorCellLabel(cellType)}</button> );
+                            }
+                            return null;
+                        })}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 mt-3">
-                      <Button variant="secondary" onClick={() => onAddLouverItem('profile')}><PlusIcon className="w-4 h-4 mr-2"/> Add Profile</Button>
-                      <Button variant="secondary" onClick={() => onAddLouverItem('gap')}><PlusIcon className="w-4 h-4 mr-2"/> Add Gap</Button>
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-slate-700">
-                      <label className="block text-sm font-medium text-slate-300 mb-2">Orientation</label>
-                      <div className="grid grid-cols-2 gap-2">
-                          <Button variant={config.orientation === 'vertical' ? 'primary' : 'secondary'} onClick={() => setConfig('orientation', 'vertical')}>Vertical</Button>
-                          <Button variant={config.orientation === 'horizontal' ? 'primary' : 'secondary'} onClick={() => setConfig('orientation', 'horizontal')}>Horizontal</Button>
-                      </div>
-                  </div>
-              </CollapsibleCard>
-            )}
+              </div>
+          </CollapsibleCard>
+      )}
 
-            {windowType === WindowType.MIRROR && (
-              <CollapsibleCard title="Mirror Shape & Style" isOpen={openCard === 'Mirror Shape & Style'} onToggle={() => handleToggleCard('Mirror Shape & Style')}>
-                  <div className="space-y-4">
-                      <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-2">Shape</label>
-                          <div className="grid grid-cols-2 gap-2">
-                              {[MirrorShape.RECTANGLE, MirrorShape.ROUNDED_RECTANGLE, MirrorShape.CAPSULE, MirrorShape.OVAL].map(shape => (
-                                  <Button 
-                                      key={shape}
-                                      variant={config.mirrorConfig.shape === shape ? 'primary' : 'secondary'}
-                                      onClick={() => onUpdateMirrorConfig({ shape })}
-                                      className="capitalize"
-                                  >
-                                      {shape.replace('_', ' ')}
-                                  </Button>
-                              ))}
-                          </div>
-                      </div>
+      {windowType === WindowType.GLASS_PARTITION && (
+        <CollapsibleCard title="Partition Panel Setup" isOpen={openCard === 'Partition Panel Setup'} onToggle={() => handleToggleCard('Partition Panel Setup')}>
+          <Input id={`${idPrefix}partition-count`} name="partition-count" label="Number of Panels" type="number" inputMode="numeric" min={1} max={8} value={config.partitionPanels.count} onChange={e => onSetPartitionPanelCount(Math.max(1, parseInt(e.target.value) || 1))}/>
+           <label className="flex items-center space-x-2 cursor-pointer mt-2">
+              <input type="checkbox" id={`${idPrefix}partition-has-top-channel`} name="partition-has-top-channel" checked={config.partitionPanels.hasTopChannel} onChange={e => onSetPartitionHasTopChannel(e.target.checked)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
+              <span className="text-sm text-slate-200">Enable Top/Bottom Channel</span>
+          </label>
+          {config.partitionPanels.count > 0 && (
+            <div className="pt-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">Panel Types (Click to change)</label>
+              <div className="grid grid-cols-1 gap-2">
+                  {Array.from({length: config.partitionPanels.count}).map((_, i) => {
+                      const panelConfig = config.partitionPanels.types[i] || { type: 'fixed' };
+                      const {type, framing = 'none'} = panelConfig;
+                      const typeColorClass = type === 'sliding' ? 'bg-sky-600 hover:bg-sky-700' : type === 'hinged' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-700 hover:bg-slate-600';
+                      const frameColorClass = framing === 'full' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-700 hover:bg-slate-600';
+                      return (
+                        <div key={i} className="grid grid-cols-3 gap-1 text-white text-sm font-semibold">
+                            <div className="p-2 rounded-l-md bg-slate-800 col-span-1 flex items-center justify-center">Panel {i + 1}</div>
+                            <button onClick={() => onCyclePartitionPanelType(i)} className={`p-2 capitalize ${typeColorClass} transition-colors`}>{type}</button>
+                            <button onClick={() => onCyclePartitionPanelFraming(i)} disabled={type === 'hinged'} className={`p-2 rounded-r-md capitalize ${frameColorClass} transition-colors ${type === 'hinged' ? 'opacity-50 cursor-not-allowed' : ''}`}>{type === 'hinged' ? 'Framed' : (framing === 'full' ? 'Framed' : 'Frameless')}</button>
+                        </div>
+                      )
+                  })}
+              </div>
+            </div>
+          )}
+        </CollapsibleCard>
+      )}
 
-                      {config.mirrorConfig.shape === MirrorShape.ROUNDED_RECTANGLE && (
-                          <DimensionInput 
-                              id={`${idPrefix}mirror-corner-radius`} 
-                              name="mirror-corner-radius" 
-                              label="Corner Radius" 
-                              value_mm={config.mirrorConfig.cornerRadius} 
-                              onChange_mm={v => onUpdateMirrorConfig({ cornerRadius: v })} 
-                          />
-                      )}
-
-                      <label className="flex items-center space-x-2 cursor-pointer pt-2">
-                          <input 
-                              type="checkbox" 
-                              id={`${idPrefix}mirror-frameless`} 
-                              name="mirror-frameless" 
-                              checked={config.mirrorConfig.isFrameless} 
-                              onChange={e => onUpdateMirrorConfig({ isFrameless: e.target.checked })} 
-                              className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <span className="text-sm text-slate-200">Frameless Design</span>
+      {operablePanels.length > 0 && (
+          <CollapsibleCard title="Handle Configuration" isOpen={openCard === 'Handle Configuration'} onToggle={() => handleToggleCard('Handle Configuration')}>
+              <Select id={`${idPrefix}handle-panel-select`} name="handle-panel-select" label="Select Panel" value={selectedPanelId} onChange={e => setSelectedPanelId(e.target.value)}>
+                {operablePanels.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </Select>
+              {selectedPanelId && (
+                  <div className="p-2 bg-slate-700 rounded-md space-y-3">
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                          <input type="checkbox" id={`${idPrefix}handle-enable`} name="handle-enable" checked={!!currentHandle} onChange={e => onUpdateHandle(selectedPanelId, e.target.checked ? { x: 50, y: 50, orientation: 'vertical', length: 150 } : null)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
+                          <span className="text-sm text-slate-200">Enable Handle</span>
                       </label>
-                      
-                      {!config.mirrorConfig.isFrameless && (
-                          <p className="text-xs text-slate-400">Frame thickness can be adjusted in the "Profile Series" section under "Outer Frame".</p>
+                      {currentHandle && (
+                          <div className="space-y-3">
+                              <Slider id={`${idPrefix}handle-pos-x`} name="handle-pos-x" label={`Horizontal Position: ${currentHandle.x}%`} value={currentHandle.x} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, x: parseInt(e.target.value)})}/>
+                              <Slider id={`${idPrefix}handle-pos-y`} name="handle-pos-y" label={`Vertical Position: ${currentHandle.y}%`} value={currentHandle.y} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, y: parseInt(e.target.value)})}/>
+                              <Slider id={`${idPrefix}handle-length`} name="handle-length" label={`Length: ${currentHandle.length || 150}mm`} value={currentHandle.length || 150} min={50} max={500} step={10} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, length: parseInt(e.target.value)})}/>
+                               <div className="grid grid-cols-2 gap-2">
+                                <Button variant={currentHandle.orientation === 'vertical' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, {...currentHandle, orientation: 'vertical'})}>Vertical</Button>
+                                <Button variant={currentHandle.orientation === 'horizontal' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, {...currentHandle, orientation: 'horizontal'})}>Horizontal</Button>
+                              </div>
+                          </div>
                       )}
                   </div>
-              </CollapsibleCard>
-            )}
-            
-            {/* The rest of the collapsible cards */}
-            {activeWindowType === WindowType.SLIDING && (
-              <CollapsibleCard title="Track & Shutter Setup" isOpen={openCard === 'Track & Shutter Setup'} onToggle={() => handleToggleCard('Track & Shutter Setup')}>
-                  {/* ... content ... */}
-              </CollapsibleCard>
-            )}
+              )}
+          </CollapsibleCard>
+      )}
 
-            {(activeWindowType === WindowType.CASEMENT || activeWindowType === WindowType.VENTILATOR) && (
-                <CollapsibleCard title="Grid Layout" isOpen={openCard === 'Grid Layout'} onToggle={() => handleToggleCard('Grid Layout')}>
-                    {/* ... content ... */}
-                </CollapsibleCard>
+      <CollapsibleCard title="Appearance" isOpen={openCard === 'Appearance'} onToggle={() => handleToggleCard('Appearance')}>
+        {windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS && (
+            <>
+                <div className="grid grid-cols-2 gap-4">
+                    <Select id={`${idPrefix}appearance-glass-tint`} name="appearance-glass-tint" label="Glass Tint" value={config.glassType} onChange={(e) => setConfig('glassType', e.target.value as GlassType)}>
+                    {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </Select>
+                    <Select id={`${idPrefix}appearance-special-type`} name="appearance-special-type" label="Special Type" value={config.glassSpecialType} onChange={e => setConfig('glassSpecialType', e.target.value as GlassSpecialType)}>
+                        <option value="none">None</option>
+                        {series.glassOptions.specialTypes.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+                    </Select>
+                </div>
+                {config.glassSpecialType === 'laminated' && config.laminatedGlassConfig && (
+                    <div className="p-3 bg-slate-900/50 rounded-md mt-4 space-y-3">
+                        <h4 className="text-base font-semibold text-slate-200">Laminated Glass Details</h4>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                            <Input id={`${idPrefix}laminated-g1-thickness`} name="laminated-g1-thickness" label="Glass 1 Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.glass1Thickness} onChange={e => onLaminatedConfigChange({ glass1Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                            <Select id={`${idPrefix}laminated-g1-type`} name="laminated-g1-type" label="Glass 1 Type" value={config.laminatedGlassConfig.glass1Type} onChange={e => onLaminatedConfigChange({ glass1Type: e.target.value as GlassType })}>
+                                {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </Select>
+                            <Input id={`${idPrefix}laminated-pvb-thickness`} name="laminated-pvb-thickness" label="PVB Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.pvbThickness} onChange={e => onLaminatedConfigChange({ pvbThickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                            <Select id={`${idPrefix}laminated-pvb-type`} name="laminated-pvb-type" label="PVB Type" value={config.laminatedGlassConfig.pvbType} onChange={e => onLaminatedConfigChange({ pvbType: e.target.value as LaminatedGlassConfig['pvbType'] })}>
+                                <option value="clear">Clear</option>
+                                <option value="milky_white">Milky White</option>
+                            </Select>
+                            <Input id={`${idPrefix}laminated-g2-thickness`} name="laminated-g2-thickness" label="Glass 2 Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.glass2Thickness} onChange={e => onLaminatedConfigChange({ glass2Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                            <Select id={`${idPrefix}laminated-g2-type`} name="laminated-g2-type" label="Glass 2 Type" value={config.laminatedGlassConfig.glass2Type} onChange={e => onLaminatedConfigChange({ glass2Type: e.target.value as GlassType })}>
+                                {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </Select>
+                        </div>
+                        <label className="flex items-center space-x-2 cursor-pointer pt-2">
+                            <input type="checkbox" id={`${idPrefix}laminated-is-toughened`} name="laminated-is-toughened" checked={config.laminatedGlassConfig.isToughened} onChange={e => onLaminatedConfigChange({ isToughened: e.target.checked })} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                            <span className="text-sm text-slate-200">Toughened / Tempered Glass</span>
+                        </label>
+                    </div>
+                )}
+                {config.glassSpecialType === 'dgu' && config.dguGlassConfig && (
+                    <div className="p-3 bg-slate-900/50 rounded-md mt-4 space-y-3">
+                        <h4 className="text-base font-semibold text-slate-200">DGU Glass Details</h4>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                            <Input id={`${idPrefix}dgu-g1-thickness`} name="dgu-g1-thickness" label="Glass 1 Thickness" type="number" inputMode="decimal" value={config.dguGlassConfig.glass1Thickness} onChange={e => onDguConfigChange({ glass1Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                            <Select id={`${idPrefix}dgu-g1-type`} name="dgu-g1-type" label="Glass 1 Type" value={config.dguGlassConfig.glass1Type} onChange={e => onDguConfigChange({ glass1Type: e.target.value as GlassType })}>
+                                {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </Select>
+                            <Input id={`${idPrefix}dgu-air-gap`} name="dgu-air-gap" label="Air Gap" type="number" inputMode="decimal" value={config.dguGlassConfig.airGap} onChange={e => onDguConfigChange({ airGap: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                            <div />
+                            <Input id={`${idPrefix}dgu-g2-thickness`} name="dgu-g2-thickness" label="Glass 2 Thickness" type="number" inputMode="decimal" value={config.dguGlassConfig.glass2Thickness} onChange={e => onDguConfigChange({ glass2Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                            <Select id={`${idPrefix}dgu-g2-type`} name="dgu-g2-type" label="Glass 2 Type" value={config.dguGlassConfig.glass2Type} onChange={e => onDguConfigChange({ glass2Type: e.target.value as GlassType })}>
+                                {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </Select>
+                        </div>
+                        <label className="flex items-center space-x-2 cursor-pointer pt-2">
+                            <input type="checkbox" id={`${idPrefix}dgu-is-toughened`} name="dgu-is-toughened" checked={config.dguGlassConfig.isToughened} onChange={e => onDguConfigChange({ isToughened: e.target.checked })} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                            <span className="text-sm text-slate-200">Toughened / Tempered Glass</span>
+                        </label>
+                    </div>
+                )}
+            </>
+        )}
+        {windowType !== WindowType.LOUVERS && (
+            <div className={`grid grid-cols-2 gap-4 ${windowType !== WindowType.MIRROR ? 'mt-4' : ''}`}>
+                <Select id={`${idPrefix}appearance-glass-thickness`} name="appearance-glass-thickness" label={windowType === WindowType.MIRROR ? "Mirror Thickness" : "Glass Thickness"} value={isCustomThickness ? 'custom' : config.glassThickness} onChange={handleThicknessChange}>
+                    <option value="">Default</option>
+                    {series.glassOptions.thicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
+                    {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
+                </Select>
+                {isCustomThickness && <Input id={`${idPrefix}appearance-glass-thickness-custom`} name="appearance-glass-thickness-custom" label="Custom Thickness" type="number" inputMode="decimal" value={config.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))} unit="mm" />}
+            </div>
+        )}
+        {(windowType !== WindowType.LOUVERS) && (
+             <Input id={`${idPrefix}custom-glass-name`} name="custom-glass-name" label="Custom Name (Optional)" type="text" placeholder={windowType === WindowType.MIRROR ? "e.g., Saint-Gobain Vision" : "e.g., Saint-Gobain Sun Ban"} value={config.customGlassName} onChange={e => setConfig('customGlassName', e.target.value)} />
+        )}
+       
+        {windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS && (
+            <div className='mt-4 pt-4 border-t border-slate-700'>
+                <h4 className="text-base font-semibold text-slate-200 mb-2">Glass Texture</h4>
+                <Button variant="secondary" className="w-full" onClick={() => glassTextureUploadRef.current?.click()}> <UploadIcon className="w-4 h-4 mr-2" /> Upload Texture </Button>
+                <input type="file" ref={glassTextureUploadRef} onChange={handleGlassTextureUpload} className="hidden" accept="image/*" />
+                {config.glassTexture && <Button variant="danger" className="w-full mt-2" onClick={() => setConfig('glassTexture', '')}> Remove Texture </Button>}
+            </div>
+        )}
+        <div className='mt-4 pt-4 border-t border-slate-700'>
+            <h4 className="text-base font-semibold text-slate-200 mb-2">Profile Color / Texture</h4>
+            <div className="flex flex-wrap gap-2">
+                {savedColors.map(color => (
+                    <button key={color.id} onClick={() => setConfig('profileColor', color.value)} onContextMenu={(e) => { e.preventDefault(); if (window.confirm(`Delete color "${color.name}"?`)) { handleDeleteColor(color.id); } }} className="relative group w-12 h-12 rounded-md border-2" style={{ borderColor: config.profileColor === color.value ? '#4f46e5' : 'transparent', background: color.type === 'color' ? color.value : `url(${color.value})`, backgroundSize: 'cover' }}>
+                        <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{color.name}</span>
+                    </button>
+                ))}
+                <button onClick={handleInitiateAddPreset} className="w-12 h-12 rounded-md border-2 border-dashed border-slate-500 flex items-center justify-center hover:bg-slate-600"> <PlusIcon className="w-6 h-6 text-slate-400" /> </button>
+            </div>
+             {isAddingPreset && (
+              <div className="mt-2 p-3 bg-slate-600 rounded-md space-y-2">
+                  <Input id={`${idPrefix}new-preset-name`} name="new-preset-name" label="Preset Name" value={newPreset.name} onChange={e => setNewPreset({...newPreset, name: e.target.value})}/>
+                  <div className='flex gap-2 items-end'>
+                    <Input id={`${idPrefix}new-preset-value`} name="new-preset-value" label="Color Value" type="color" value={newPreset.value} onChange={e => setNewPreset({...newPreset, value: e.target.value, type: 'color'})} className='p-1 h-10'/>
+                    <Button variant="secondary" className="h-10" onClick={() => profileTextureUploadRef.current?.click()}><UploadIcon className='w-4 h-4'/></Button>
+                    <input type="file" ref={profileTextureUploadRef} onChange={e => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setNewPreset({...newPreset, value: reader.result as string, type: 'texture'}); reader.readAsDataURL(file); } }} className="hidden" accept="image/*" />
+                  </div>
+                  <div className="flex gap-2"> <Button onClick={handleAddPreset} className="flex-grow">Save</Button> <Button variant="secondary" onClick={() => setIsAddingPreset(false)} className="flex-grow">Cancel</Button> </div>
+              </div>
             )}
-
-            {windowType === WindowType.GLASS_PARTITION && (
-              <CollapsibleCard title="Partition Panel Setup" isOpen={openCard === 'Partition Panel Setup'} onToggle={() => handleToggleCard('Partition Panel Setup')}>
-                {/* ... content ... */}
-              </CollapsibleCard>
-            )}
-
-            {operablePanels.length > 0 && (
-                <CollapsibleCard title="Handle Configuration" isOpen={openCard === 'Handle Configuration'} onToggle={() => handleToggleCard('Handle Configuration')}>
-                    {/* ... content ... */}
-                </CollapsibleCard>
-            )}
-
-            <CollapsibleCard title="Appearance" isOpen={openCard === 'Appearance'} onToggle={() => handleToggleCard('Appearance')}>
-              {/* ... content ... */}
-            </CollapsibleCard>
-
-            {windowType !== WindowType.LOUVERS && (
-                <CollapsibleCard title="Georgian Bars" isOpen={openCard === 'Georgian Bars'} onToggle={() => handleToggleCard('Georgian Bars')}>
-                  {/* ... content ... */}
-                </CollapsibleCard>
-            )}
-            
-            {windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS && (
-                <CollapsibleCard title="Fixed Panels" isOpen={openCard === 'Fixed Panels'} onToggle={() => handleToggleCard('Fixed Panels')}>
-                {/* ... content ... */}
-              </CollapsibleCard>
-            )}
-
-            <CollapsibleCard title="Profile Series" isOpen={openCard === 'Profile Series'} onToggle={() => handleToggleCard('Profile Series')}>
-              {/* ... content ... */}
-            </CollapsibleCard>
         </div>
-      </div>
+      </CollapsibleCard>
+
+      {windowType !== WindowType.LOUVERS && (
+          <CollapsibleCard title="Georgian Bars" isOpen={openCard === 'Georgian Bars'} onToggle={() => handleToggleCard('Georgian Bars')}>
+            <div className="grid grid-cols-2 gap-4">
+                <DimensionInput id={`${idPrefix}georgian-bar-thickness`} name="georgian-bar-thickness" label="Bar Thickness" value_mm={glassGrid.barThickness} onChange_mm={v => setConfig('glassGrid', {...glassGrid, barThickness: v === '' ? 0 : v})} controlledUnit={georgianUnit} />
+                <Select id={`${idPrefix}georgian-unit-select`} label="Unit" value={georgianUnit} onChange={e => setGeorgianUnit(e.target.value as Unit)}>
+                    <option value="mm">mm</option>
+                    <option value="cm">cm</option>
+                    <option value="in">in</option>
+                    <option value="ft-in">ft-in</option>
+                </Select>
+            </div>
+            <label className="flex items-center space-x-2 cursor-pointer mt-4">
+                  <input type="checkbox" id={`${idPrefix}georgian-apply-all`} name="georgian-apply-all" checked={glassGrid.applyToAll} onChange={handleApplyToAllChange} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
+                  <span className="text-sm text-slate-200">Apply to all panels</span>
+            </label>
+            {!glassGrid.applyToAll && availableGeorgianPanels.length > 0 && (
+              <Select id={`${idPrefix}georgian-panel-select`} name="georgian-panel-select" label="Target Panel" value={activeGeorgianPanelId} onChange={e => setActiveGeorgianPanelId(e.target.value)}>
+                 <option value="default">Default Pattern</option>
+                 {availableGeorgianPanels.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </Select>
+            )}
+            <div className="mt-4 pt-4 border-t border-slate-700 space-y-4">
+                <div>
+                    <h4 className="text-base font-semibold text-slate-200 mb-2">Horizontal Bars</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                        <Input id={`${idPrefix}georgian-h-count`} name="georgian-h-count" label="Count" type="number" value={activeGeorgianPattern.horizontal.count} onChange={e => handleGeorgianPatternChange('horizontal', 'count', parseInt(e.target.value) || 0)} />
+                        <DimensionInput id={`${idPrefix}georgian-h-offset`} name="georgian-h-offset" label="Offset" value_mm={activeGeorgianPattern.horizontal.offset} onChange_mm={v => handleGeorgianPatternChange('horizontal', 'offset', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+                        <DimensionInput id={`${idPrefix}georgian-h-gap`} name="georgian-h-gap" label="Gap" value_mm={activeGeorgianPattern.horizontal.gap} onChange_mm={v => handleGeorgianPatternChange('horizontal', 'gap', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+                    </div>
+                </div>
+                 <div>
+                    <h4 className="text-base font-semibold text-slate-200 mb-2">Vertical Bars</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                        <Input id={`${idPrefix}georgian-v-count`} name="georgian-v-count" label="Count" type="number" value={activeGeorgianPattern.vertical.count} onChange={e => handleGeorgianPatternChange('vertical', 'count', parseInt(e.target.value) || 0)} />
+                        <DimensionInput id={`${idPrefix}georgian-v-offset`} name="georgian-v-offset" label="Offset" value_mm={activeGeorgianPattern.vertical.offset} onChange_mm={v => handleGeorgianPatternChange('vertical', 'offset', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+                        <DimensionInput id={`${idPrefix}georgian-v-gap`} name="georgian-v-gap" label="Gap" value_mm={activeGeorgianPattern.vertical.gap} onChange_mm={v => handleGeorgianPatternChange('vertical', 'gap', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+                    </div>
+                </div>
+            </div>
+          </CollapsibleCard>
+      )}
+      
+      {windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS && (
+          <CollapsibleCard title="Fixed Panels" isOpen={openCard === 'Fixed Panels'} onToggle={() => handleToggleCard('Fixed Panels')}>
+          <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.TOP)}><PlusIcon className="w-4 h-4 mr-2"/> Top</Button>
+              <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.BOTTOM)}><PlusIcon className="w-4 h-4 mr-2"/> Bottom</Button>
+              <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.LEFT)}><PlusIcon className="w-4 h-4 mr-2"/> Left</Button>
+              <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.RIGHT)}><PlusIcon className="w-4 h-4 mr-2"/> Right</Button>
+          </div>
+          {fixedPanels.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
+              {fixedPanels.map(panel => (
+                <div key={panel.id} className="flex items-end gap-2">
+                  <DimensionInput id={`${idPrefix}fixed-panel-${panel.id}`} name={`fixed-panel-${panel.id}`} label={`Fixed Panel ${panel.position}`} value_mm={panel.size} onChange_mm={v => updateFixedPanelSize(panel.id, v === '' ? 0 : v)} />
+                  <Button variant="danger" onClick={() => removeFixedPanel(panel.id)} className="p-2 h-10 w-10 flex-shrink-0"><TrashIcon className="w-5 h-5"/></Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CollapsibleCard>
+      )}
+
+      <CollapsibleCard title="Profile Series" isOpen={openCard === 'Profile Series'} onToggle={() => handleToggleCard('Profile Series')}>
+        <SearchableSelect id={`${idPrefix}series-select`} label="Select Series" options={seriesOptions} value={series.id} onChange={onSeriesSelect} />
+        <div className="flex gap-2 mt-2">
+            <Button variant="secondary" className="w-full" onClick={handleInitiateSave}>Save as New...</Button>
+            {!isDefaultSeries && <Button variant="danger" className="w-full" onClick={() => onSeriesDelete(series.id)}>Delete</Button>}
+        </div>
+        {isSavingSeries && (
+          <div className="mt-2 p-3 bg-slate-600 rounded-md space-y-2">
+            <Input id={`${idPrefix}new-series-name`} name="new-series-name" label="New Series Name" value={newSeriesName} onChange={e => setNewSeriesName(e.target.value)} />
+            <div className="flex gap-2"> <Button onClick={handleConfirmSave} className="flex-grow">Save</Button> <Button variant="secondary" onClick={() => setIsSavingSeries(false)} className="flex-grow">Cancel</Button> </div>
+          </div>
+        )}
+        <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
+          <h4 className="text-base font-semibold text-slate-200">Profile Dimensions</h4>
+          {Object.keys(series.dimensions).filter(key => {
+              if (windowType === WindowType.LOUVERS) return key === 'louverProfile';
+              return true;
+          }).map(key => {
+            const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+            return (
+                <DimensionInput key={key} id={`${idPrefix}dim-${key}`} name={`dim-${key}`} label={label} value_mm={series.dimensions[key as keyof typeof series.dimensions]} onChange_mm={v => handleDimensionChange(key as keyof ProfileSeries['dimensions'], v)} weightValue={series.weights?.[key as keyof ProfileDimensions]} onWeightChange={v => handleProfileDetailChange('weights', key as keyof ProfileDimensions, v)} lengthValue={series.lengths?.[key as keyof ProfileDimensions]} onLengthChange={v => handleProfileDetailChange('lengths', key as keyof ProfileDimensions, v)} />
+            )
+          })}
+        </div>
+        <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
+          <h4 className="text-base font-semibold text-slate-200">Hardware Items</h4>
+          {series.hardwareItems.map(item => (
+            <div key={item.id} className="bg-slate-900/50 p-3 rounded-md grid grid-cols-12 gap-2">
+              <div className="col-span-12"><Input id={`${idPrefix}hw-${item.id}-name`} name={`hw-${item.id}-name`} label="Name" value={item.name} onChange={e => onHardwareChange(item.id, 'name', e.target.value)} /></div>
+              <div className="col-span-4"><Input id={`${idPrefix}hw-${item.id}-qty`} name={`hw-${item.id}-qty`} label="Qty" type="number" value={item.qtyPerShutter} onChange={e => onHardwareChange(item.id, 'qtyPerShutter', e.target.value === '' ? '' : Number(e.target.value))} /></div>
+              <div className="col-span-5"><Input id={`${idPrefix}hw-${item.id}-rate`} name={`hw-${item.id}-rate`} label="Rate" type="number" value={item.rate} onChange={e => onHardwareChange(item.id, 'rate', e.target.value === '' ? '' : Number(e.target.value))} /></div>
+              <div className="col-span-3 flex items-end"><Button variant="danger" onClick={() => onRemoveHardware(item.id)} className="p-2 h-10 w-full"><TrashIcon className="w-5 h-5"/></Button></div>
+              <div className="col-span-12"><Select id={`${idPrefix}hw-${item.id}-unit`} name={`hw-${item.id}-unit`} label="Unit" value={item.unit} onChange={e => onHardwareChange(item.id, 'unit', e.target.value as HardwareItem['unit'])}><option value="per_shutter_or_door">Per Shutter/Door</option><option value="per_window">Per Window</option></Select></div>
+            </div>
+          ))}
+          <Button variant="secondary" className="w-full" onClick={onAddHardware}><PlusIcon className="w-4 h-4 mr-2"/> Add Hardware Item</Button>
+        </div>
+      </CollapsibleCard>
+
     </div>
   );
 });
