@@ -833,7 +833,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
 
   return (
     <div ref={containerRef} className="absolute inset-0 p-6 flex items-center justify-center bg-transparent overflow-auto">
-      <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none"> WoodenMax </div>
+      <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none" aria-hidden="true"> WoodenMax </div>
        <div ref={renderedWindowRef} style={{ margin: 'auto' }}>
             {windowType === WindowType.CORNER && config.leftConfig && config.rightConfig ? (
                 (() => {
@@ -878,9 +878,9 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
       </div>
       
       <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2 no-print">
-         <button onClick={() => setZoom(z => z * 1.2)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><PlusIcon className="w-6 h-6"/></button>
-         <button onClick={() => setZoom(1)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><ArrowsPointingInIcon className="w-5 h-5"/></button>
-         <button onClick={() => setZoom(z => z / 1.2)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><MinusIcon className="w-6 h-6"/></button>
+         <button onClick={() => setZoom(z => z * 1.2)} aria-label="Zoom in" className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><PlusIcon className="w-6 h-6"/></button>
+         <button onClick={() => setZoom(1)} aria-label="Reset zoom" className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><ArrowsPointingInIcon className="w-5 h-5"/></button>
+         <button onClick={() => setZoom(z => z / 1.2)} aria-label="Zoom out" className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><MinusIcon className="w-6 h-6"/></button>
       </div>
     </div>
   );

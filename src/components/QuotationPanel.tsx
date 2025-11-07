@@ -58,7 +58,7 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end max-w-7xl mx-auto">
                 <div className="md:col-span-3">
                      <div className="flex justify-between items-center mb-2">
-                        <h4 className="text-lg font-semibold text-slate-100">Quotation Details</h4>
+                        <h2 className="text-lg font-semibold text-slate-100">Quotation Details</h2>
                         {onClose && (
                             <button onClick={onClose} className="p-1 rounded-full hover:bg-slate-700 lg:hidden" aria-label="Close quotation panel">
                                 <XMarkIcon className="w-5 h-5 text-slate-400" />
