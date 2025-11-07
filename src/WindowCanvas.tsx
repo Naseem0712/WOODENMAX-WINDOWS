@@ -1,13 +1,11 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { WindowConfig, HandleConfig, CornerSideConfig } from './types';
-import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType } from './types';
+import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType, MirrorShape } from './types';
 import { PlusIcon } from './components/icons/PlusIcon';
 import { MinusIcon } from './components/icons/MinusIcon';
 import { ArrowsPointingInIcon } from './components/icons/ArrowsPointingInIcon';
 import { TrashIcon } from './components/icons/TrashIcon';
 import { PhotoIcon } from './components/icons/PhotoIcon';
-import html2pdf from 'html2pdf.js';
-import { v4 as uuidv4 } from 'uuid';
 
 interface WindowCanvasProps {
   config: WindowConfig;
@@ -262,12 +260,43 @@ const GlassPanel: React.FC<{
         delete panelStyle.backgroundColor;
         delete panelStyle.opacity;
     }
+    
+    const reflectionElement = (
+      <div 
+        className="absolute inset-0 w-full h-full pointer-events-none" 
+        style={{
+          background: 'linear-gradient(to top left, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 40%, rgba(255, 255, 255, 0) 60%)'
+        }}
+      />
+    );
 
     return ( 
-      <div className="absolute" style={panelStyle}>
+      <div className="absolute overflow-hidden" style={panelStyle}>
+        {!glassTexture && reflectionElement}
         <GlassGrid config={config} panelId={panelId} width={glassWidth} height={glassHeight} scale={scale} />
         {children}
       </div> 
+    );
+};
+
+const MirrorPanel: React.FC<{ style: React.CSSProperties }> = ({ style }) => {
+    const mirrorStyle: React.CSSProperties = {
+        ...style,
+        background: 'linear-gradient(135deg, hsl(210, 15%, 85%) 0%, hsl(210, 15%, 95%) 50%, hsl(210, 15%, 80%) 100%)',
+        boxShadow: 'inset 0 0 10px rgba(0,0,0,0.1)',
+        position: 'relative',
+        overflow: 'hidden',
+    };
+
+    return (
+        <div style={mirrorStyle}>
+            <div 
+              className="absolute inset-0 w-full h-full pointer-events-none" 
+              style={{
+                background: 'linear-gradient(to top left, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.15) 40%, rgba(255, 255, 255, 0) 60%)'
+              }}
+            />
+        </div>
     );
 };
 
@@ -291,7 +320,7 @@ const createWindowElements = (
         const leftFix = fixedPanels.find(p => p.position === FixedPanelPosition.LEFT);
         const rightFix = fixedPanels.find(p => p.position === FixedPanelPosition.RIGHT);
 
-        const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) ? dims.outerFrame : 0;
+        const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) ? dims.outerFrame : 0;
         const holeX1 = leftFix ? leftFix.size : frameOffset;
         const holeY1 = topFix ? topFix.size : frameOffset;
         const holeX2 = rightFix ? w - rightFix.size : w - frameOffset;
@@ -307,7 +336,7 @@ const createWindowElements = (
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
-    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER) {
+    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
         profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
     }
@@ -346,6 +375,111 @@ const createWindowElements = (
     const innerContent: React.ReactNode[] = [];
     if (innerAreaWidth > 0 && innerAreaHeight > 0) {
        switch (windowType) {
+            case WindowType.LOUVERS: {
+                const { louverPattern, orientation } = config;
+                if (orientation === 'vertical') {
+                    const patternHeight = louverPattern.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+                    if (patternHeight > 0) {
+                        let currentY = 0;
+                        while (currentY < innerAreaHeight) {
+                            for (const item of louverPattern) {
+                                const itemSize = Number(item.size) || 0;
+                                if (currentY >= innerAreaHeight) break;
+                                
+                                const remainingHeight = innerAreaHeight - currentY;
+                                const h = Math.min(itemSize, remainingHeight);
+
+                                if (item.type === 'profile') {
+                                    innerContent.push(
+                                        <ProfilePiece
+                                            key={`louver-v-${currentY}`}
+                                            color={profileColor}
+                                            style={{ top: currentY * scale, left: 0, width: innerAreaWidth * scale, height: h * scale }}
+                                        />
+                                    );
+                                }
+                                currentY += itemSize;
+                            }
+                        }
+                    }
+                } else { // Horizontal orientation
+                    const patternWidth = louverPattern.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+                    if (patternWidth > 0) {
+                        let currentX = 0;
+                        while (currentX < innerAreaWidth) {
+                            for (const item of louverPattern) {
+                                const itemSize = Number(item.size) || 0;
+                                if (currentX >= innerAreaWidth) break;
+
+                                const remainingWidth = innerAreaWidth - currentX;
+                                const w = Math.min(itemSize, remainingWidth);
+
+                                if (item.type === 'profile') {
+                                    innerContent.push(
+                                        <ProfilePiece
+                                            key={`louver-h-${currentX}`}
+                                            color={profileColor}
+                                            style={{ top: 0, left: currentX * scale, width: w * scale, height: innerAreaHeight * scale }}
+                                        />
+                                    );
+                                }
+                                currentX += itemSize;
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+            case WindowType.MIRROR: {
+                const { mirrorConfig } = config;
+                const frameThickness = mirrorConfig.isFrameless ? 0 : dims.outerFrame;
+
+                let borderRadius = '0px';
+                switch (mirrorConfig.shape) {
+                    case MirrorShape.OVAL: borderRadius = '50%'; break;
+                    case MirrorShape.CAPSULE: borderRadius = '9999px'; break;
+                    case MirrorShape.ROUNDED_RECTANGLE:
+                        const radius = Number(mirrorConfig.cornerRadius) || 0;
+                        borderRadius = `${radius}px`;
+                        break;
+                    case MirrorShape.RECTANGLE:
+                    default:
+                        borderRadius = '0px';
+                        break;
+                }
+
+                const commonStyle: React.CSSProperties = {
+                    position: 'absolute',
+                    width: innerAreaWidth * scale,
+                    height: innerAreaHeight * scale,
+                    borderRadius: borderRadius,
+                    overflow: 'hidden'
+                };
+
+                if (!mirrorConfig.isFrameless) {
+                    innerContent.push(<div key="mirror-frame" style={{ ...commonStyle, backgroundColor: profileColor }} />);
+                }
+                
+                const parseRadius = (br: string): number => parseFloat(br.replace('px', ''));
+                const outerRadiusVal = parseRadius(borderRadius);
+                const innerRadiusVal = Math.max(0, outerRadiusVal - frameThickness); 
+                let innerBorderRadius = `${innerRadiusVal}px`;
+                if(borderRadius === '50%' || borderRadius === '9999px') {
+                    innerBorderRadius = borderRadius;
+                }
+
+                const mirrorStyle: React.CSSProperties = {
+                    position: 'absolute',
+                    top: frameThickness * scale,
+                    left: frameThickness * scale,
+                    width: (innerAreaWidth - frameThickness * 2) * scale,
+                    height: (innerAreaHeight - frameThickness * 2) * scale,
+                    borderRadius: innerBorderRadius,
+                };
+                innerContent.push(<MirrorPanel key="mirror-surface" style={mirrorStyle} />);
+
+                break;
+            }
             case WindowType.SLIDING: {
                 const { shutterConfig, fixedShutters, slidingHandles } = config;
                 const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;
@@ -632,77 +766,64 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
         const opt = {
             margin: 0,
             html2canvas: {
-                scale: 4, // High resolution capture
-                backgroundColor: null, // Transparent background
+                scale: 5, // Keep high-res capture for quality
+                backgroundColor: null, // Transparent background from capture
                 logging: false,
                 useCORS: true,
             },
         };
 
-        html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((productCanvas: HTMLCanvasElement) => {
-            const FINAL_WIDTH = 2000;
-            const FINAL_HEIGHT = 2000;
-            const PADDING = 100;
+        import('html2pdf.js').then(({ default: html2pdf }) => {
+            html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((productCanvas: HTMLCanvasElement) => {
+                // User wants padding of ~1 inch. A common DPI is 96, so we use that for padding calculation.
+                const PADDING_IN_PIXELS = 96;
 
-            const newCanvas = document.createElement('canvas');
-            newCanvas.width = FINAL_WIDTH;
-            newCanvas.height = FINAL_HEIGHT;
-            
-            const ctx = newCanvas.getContext('2d');
-            if (!ctx) {
+                const newCanvas = document.createElement('canvas');
+                newCanvas.width = productCanvas.width + PADDING_IN_PIXELS * 2;
+                newCanvas.height = productCanvas.height + PADDING_IN_PIXELS * 2;
+                
+                const ctx = newCanvas.getContext('2d');
+                if (!ctx) {
+                    setIsExporting(false);
+                    return;
+                }
+
+                // 1. Fill with white background
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
+                
+                // 2. Draw the product image centered with padding
+                ctx.drawImage(productCanvas, PADDING_IN_PIXELS, PADDING_IN_PIXELS);
+
+                // 3. Add Watermark, scaled to the new canvas size
+                ctx.save();
+                ctx.translate(newCanvas.width / 2, newCanvas.height / 2);
+                ctx.rotate(-Math.PI / 4);
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                // Dynamically size the font based on the canvas size
+                const fontSize = Math.min(newCanvas.width, newCanvas.height) / 8;
+                ctx.font = `bold ${fontSize}px Arial`;
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+                
+                ctx.fillText('WoodenMax', 0, 0);
+                ctx.restore();
+
+                // 4. Export the new canvas
+                const link = document.createElement('a');
+                link.download = `woodenmax-design-${Date.now()}.png`;
+                link.href = newCanvas.toDataURL('image/png');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
                 setIsExporting(false);
-                return;
-            }
-
-            // 1. Fill with white background
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
-
-            // 2. Calculate scale and position to fit and center the product image
-            const canvasAspectRatio = productCanvas.width / productCanvas.height;
-            const targetWidth = FINAL_WIDTH - PADDING * 2;
-            const targetHeight = FINAL_HEIGHT - PADDING * 2;
-
-            let drawWidth = targetWidth;
-            let drawHeight = targetWidth / canvasAspectRatio;
-
-            if (drawHeight > targetHeight) {
-                drawHeight = targetHeight;
-                drawWidth = targetHeight * canvasAspectRatio;
-            }
-
-            const drawX = (FINAL_WIDTH - drawWidth) / 2;
-            const drawY = (FINAL_HEIGHT - drawHeight) / 2;
-            
-            // 3. Draw the product image
-            ctx.drawImage(productCanvas, drawX, drawY, drawWidth, drawHeight);
-
-            // 4. Add Watermark
-            ctx.save();
-            ctx.translate(newCanvas.width / 2, newCanvas.height / 2);
-            ctx.rotate(-Math.PI / 4); // Rotate 45 degrees
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            ctx.font = 'bold 200px Arial';
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.12)'; // 12% transparent black
-            
-            ctx.fillText('WoodenMax', 0, 0);
-            ctx.restore();
-
-            // 5. Export the new canvas
-            const link = document.createElement('a');
-            link.download = `woodenmax-design-${Date.now()}.png`;
-            link.href = newCanvas.toDataURL('image/png');
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            setIsExporting(false);
-        }).catch((err: any) => {
-            console.error('Failed to export PNG:', err);
-            alert('Could not export image.');
-            setIsExporting(false);
+            }).catch((err: any) => {
+                console.error('Failed to export PNG:', err);
+                alert('Could not export image.');
+                setIsExporting(false);
+            });
         });
     };
 

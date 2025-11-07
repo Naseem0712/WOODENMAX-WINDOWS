@@ -5,7 +5,7 @@ import { PrinterIcon } from './components/icons/PrinterIcon';
 import { XMarkIcon } from './components/icons/XMarkIcon';
 import { FixedPanelPosition, ShutterConfigType, WindowType, MirrorShape } from './types';
 import { DownloadIcon } from './components/icons/DownloadIcon';
-import html2pdf from 'html2pdf.js';
+import { Input } from './components/ui/Input';
 
 interface PrintPreviewProps {
   isOpen: boolean;
@@ -788,6 +788,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
     
   const printContainerRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isArchitecturalMode, setIsArchitecturalMode] = useState(false);
 
   if (!isOpen) return null;
 
@@ -838,14 +839,16 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
         pagebreak: { mode: ['css', 'legacy'] }
     };
 
-    html2pdf().from(element).set(opt).save().then(() => {
-        setIsExporting(false);
-        element.classList.remove('pdf-export-mode');
-    }).catch((err: any) => {
-        console.error("PDF export failed", err);
-        setIsExporting(false);
-        element.classList.remove('pdf-export-mode');
-        alert("Sorry, there was an error exporting the PDF.");
+    import('html2pdf.js').then(({ default: html2pdf }) => {
+        html2pdf().from(element).set(opt).save().then(() => {
+            setIsExporting(false);
+            element.classList.remove('pdf-export-mode');
+        }).catch((err: any) => {
+            console.error("PDF export failed", err);
+            setIsExporting(false);
+            element.classList.remove('pdf-export-mode');
+            alert("Sorry, there was an error exporting the PDF.");
+        });
     });
   };
   
@@ -879,8 +882,32 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                 <Button onClick={onClose} variant="secondary"><XMarkIcon className="w-5 h-5 mr-2"/> Close</Button>
             </div>
         </div>
+        <div className="flex-shrink-0 bg-slate-800 p-3 flex-wrap flex justify-start items-center gap-4 no-print border-t border-slate-700">
+             <label className="flex items-center space-x-2 cursor-pointer text-white">
+                <input
+                    type="checkbox"
+                    checked={isArchitecturalMode}
+                    onChange={e => setIsArchitecturalMode(e.target.checked)}
+                    className="w-4 h-4 rounded bg-slate-700 border-slate-500 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span>Architectural Version</span>
+            </label>
+            {isArchitecturalMode && (
+                <div className="w-64">
+                    <Input
+                        id="architect-name"
+                        name="architect-name"
+                        label="Architect's Name"
+                        value={settings.customer.architectName || ''}
+                        onChange={e => setSettings({ ...settings, customer: { ...settings.customer, architectName: e.target.value }})}
+                        placeholder="Enter Architect's Name"
+                        className="!py-1"
+                    />
+                </div>
+            )}
+        </div>
         <div ref={printContainerRef} className="flex-grow overflow-y-auto bg-slate-900 print-preview-container custom-scrollbar">
-            <div className="a4-page single-scroll-preview text-black">
+            <div className={`a4-page single-scroll-preview text-black ${isArchitecturalMode ? 'architectural-mode' : ''}`}>
                 {/* --- Start of Printable Content --- */}
                 <div className="print-header" style={{height: 'auto'}}>
                     <div className="flex justify-between items-start">
@@ -903,6 +930,9 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                             <p className="font-semibold">{settings.customer.name}</p>
                             <p className="whitespace-pre-wrap">{settings.customer.address}</p>
                             <p><strong>Attn:</strong> {settings.customer.contactPerson}</p>
+                            <div className="show-for-arch mt-1">
+                                <p><strong>Architect:</strong> {settings.customer.architectName || 'N/A'}</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -916,7 +946,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                     <th className="p-1 text-center w-[5%]">#</th>
                                     <th className="p-1 text-left w-[65%]" colSpan={2}>Item Description</th>
                                     <th className="p-1 text-center w-[10%]">Qty</th>
-                                    <th className="p-1 text-right w-[20%]" colSpan={2}>Total Amount</th>
+                                    <th className="p-1 text-right w-[20%] hide-for-arch" colSpan={2}>Total Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -961,7 +991,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                         <tr><td className='pr-2 font-semibold'>Series:</td><td>{item.config.series.name}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Size:</td><td>{`${item.config.width} x ${item.config.height}`} mm</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
+                                                        <tr className="hide-for-arch"><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
                                                         {!isFrameless && (
                                                             <tr><td className='pr-2 font-semibold'>Profile Color:</td><td>{getColorName(item)}</td></tr>
                                                         )}
@@ -981,7 +1011,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                 </table>
                                             </td>
                                             <td className="p-2 align-top text-center">{item.quantity}</td>
-                                            <td className="p-2 align-top text-right font-bold" colSpan={2}>₹{Math.round(totalCost).toLocaleString('en-IN')}</td>
+                                            <td className="p-2 align-top text-right font-bold hide-for-arch" colSpan={2}>₹{Math.round(totalCost).toLocaleString('en-IN')}</td>
                                         </tr>
                                     );
                                 })}
@@ -990,7 +1020,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                     </div>
 
                     <div className="print-summary final-summary-page" style={{breakInside: 'avoid'}}>
-                        <div className="flex justify-end mt-4">
+                        <div className="flex justify-end mt-4 hide-for-arch">
                             <div className="w-2/5 text-xs">
                                 <table className="w-full">
                                     <tbody>
@@ -1018,14 +1048,16 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                 </table>
                             </div>
                         </div>
-                        <div className="text-xs mt-2 text-right font-bold">
+                        <div className="text-xs mt-2 text-right font-bold hide-for-arch">
                             <p>Amount in Words: {amountToWords(grandTotal)}</p>
                         </div>
                         
                         <EditableSection title="Description" value={settings.description} onChange={(val) => setSettings({...settings, description: val})} />
-                        <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} />
+                        <div className="hide-for-arch">
+                            <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} />
+                        </div>
                         
-                        <div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs" style={{breakBefore: 'avoid'}}>
+                        <div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs hide-for-arch" style={{breakBefore: 'avoid'}}>
                             <div className="flex-grow">
                                 <h3 className="font-bold text-sm mb-1">Bank Details</h3>
                                 <p><strong>A/C Name:</strong> {settings.bankDetails.name}</p>
