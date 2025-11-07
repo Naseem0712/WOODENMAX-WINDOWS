@@ -13,9 +13,9 @@ export default defineConfig({
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'FrameLab - Window, louvers & Pergola Designer',
-        short_name: 'FrameLab',
-        description: 'Design custom windows, doors, pergolas & louvers with WoodenMax. Get instant quotes & material lists for aluminium, UPVC & iron fabrication projects.',
+        name: 'WoodenMax Window Designer',
+        short_name: 'WoodenMax',
+        description: 'Design custom windows, doors, and more with the WoodenMax Window Designer. Generate instant quotes and material lists.',
         theme_color: '#1e293b',
         background_color: '#0f172a',
         display: 'standalone',

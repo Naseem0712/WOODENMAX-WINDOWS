@@ -36,7 +36,7 @@ export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOp
 
         const opt = {
             margin: 0,
-            filename: `Material-Summary-${settings.customer.name || 'WoodenMax'}-${quoteNumber}.pdf`,
+            filename: `WoodenMax-Window-Designer-BOM-${settings.customer.name || quoteNumber}.pdf`,
             image: { type: 'jpeg' as const, quality: 0.98 },
             html2canvas: { scale: 2, logging: false, useCORS: true, backgroundColor: '#ffffff' },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },

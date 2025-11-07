@@ -378,7 +378,7 @@ const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
     customer: { name: '', address: '', contactPerson: '', architectName: '' },
     financials: { gstPercentage: 18, discount: 0, discountType: 'percentage' },
     bankDetails: { name: '', accountNumber: '', ifsc: '', branch: '', accountType: 'current' },
-    title: 'Quotation for Aluminium Works',
+    title: 'Quotation - WoodenMax Window Designer',
     terms: '1. 50% advance payment required.\n2. Prices are exclusive of taxes.\n3. Delivery within 4-6 weeks.',
     description: 'Supply and installation of premium aluminium windows and partitions as per the agreed specifications.'
 };
