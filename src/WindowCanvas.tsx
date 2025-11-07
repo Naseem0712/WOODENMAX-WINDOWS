@@ -1,5 +1,3 @@
-
-
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { WindowConfig, HandleConfig, CornerSideConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType } from './types';
