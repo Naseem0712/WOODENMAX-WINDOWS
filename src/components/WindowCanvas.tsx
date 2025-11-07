@@ -766,8 +766,8 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
         const opt = {
             margin: 0,
             html2canvas: {
-                scale: 4, // High resolution capture
-                backgroundColor: null, // Transparent background
+                scale: 5, // Increased scale for better source quality
+                backgroundColor: null, // Transparent background from capture
                 logging: false,
                 useCORS: true,
             },
@@ -775,9 +775,9 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
 
         import('html2pdf.js').then(({ default: html2pdf }) => {
             html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((productCanvas: HTMLCanvasElement) => {
-                const FINAL_WIDTH = 2000;
-                const FINAL_HEIGHT = 2000;
-                const PADDING = 100;
+                const FINAL_WIDTH = 4200; // User requested width
+                const FINAL_HEIGHT = 5700; // User requested height
+                const PADDING = 300; // Increased padding for larger canvas
 
                 const newCanvas = document.createElement('canvas');
                 newCanvas.width = FINAL_WIDTH;
@@ -819,7 +819,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 
-                ctx.font = 'bold 200px Arial';
+                ctx.font = 'bold 500px Arial'; // Increased font size for larger canvas
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.12)'; // 12% transparent black
                 
                 ctx.fillText('WoodenMax', 0, 0);
