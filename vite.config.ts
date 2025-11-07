@@ -15,7 +15,7 @@ export default defineConfig({
       manifest: {
         name: 'FrameLab - Window, louvers & Pergola Designer',
         short_name: 'FrameLab',
-        description: 'An advanced design tool from Real Vibe Studio for WoodenMax Architectural Elements. Design custom windows, doors, pergolas, and louvers. Generate instant, detailed quotations and material lists for aluminium, UPVC, and iron fabrication projects.',
+        description: 'Design custom windows, doors, pergolas & louvers with WoodenMax. Get instant quotes & material lists for aluminium, UPVC & iron fabrication projects.',
         theme_color: '#1e293b',
         background_color: '#0f172a',
         display: 'standalone',

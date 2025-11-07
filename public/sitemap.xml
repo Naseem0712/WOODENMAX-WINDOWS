@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+  This is a basic sitemap for your single-page application.
+  For more complex sites, consider using a dynamic sitemap generator.
+  Please update the <lastmod> date whenever you make significant changes.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://www.realvibestudio.in/</loc>
+    <lastmod>2024-07-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>
