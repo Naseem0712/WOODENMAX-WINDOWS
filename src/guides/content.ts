@@ -5,18 +5,58 @@ interface GuideContent {
 
 export const guides: Record<string, GuideContent> = {
     'index': {
-        title: 'Welcome to the Guides',
+        title: '🌟 Welcome to RealVibe Studio',
         html: `
-            <h2>Welcome to the WoodenMax Designer!</h2>
-            <p>This guide center is here to help you get the most out of our powerful design tool. Whether you're a fabricator, architect, or contractor, these guides will walk you through the key features and help you create accurate designs and quotations quickly.</p>
-            <p>Select a topic from the sidebar to get started. We cover everything from simple mirrors to complex corner windows.</p>
-            <h3>What You Can Do:</h3>
+            <h2>Smart Window & Design Tool for Professionals & Homeowners</h2>
+            <p><em>Created by Expert Designer – WoodenMax | 15+ Years of Experience</em></p>
+            <p>Welcome to RealVibe Studio, India’s most advanced AI-powered design and quotation system built with over 15 years of real fabrication and installation experience. Every feature of this tool is designed to make professional-quality window, door, and glass structure designing simple, fast, and fully automated — even for non-technical users.</p>
+            <h3>⚙️ Powerful Features You’ll Love</h3>
+            <h4>🧱 All-in-One Design System</h4>
+            <p>Design any type of structure with full flexibility:<br>
+            Sliding Windows, Casement Doors, Ventilators, Glass Partitions, Louvers, Mirrors, Georgian Bars, Corner Windows, and more — all customizable with glass thickness, type, hardware, and profiles of your choice.</p>
+            <p>Upload your own textures and instantly preview realistic 3D visuals of your design.</p>
+            <h4>⚡ AI-Powered Auto Calculation & Export</h4>
+            <p>Forget manual work — RealVibe Studio does all the hard work for you!<br>
+            With just one click, you can:</p>
             <ul>
-                <li><strong>Design Complex Windows:</strong> Create multi-track sliding systems, casement windows with custom grids, and more.</li>
-                <li><strong>Generate Instant Quotes:</strong> Add your designs to a professional quotation with just a few clicks.</li>
-                <li><strong>Export Material Lists (BOM):</strong> Get a detailed Bill of Materials, including cutting lists for profiles, hardware quantities, and weights.</li>
-                <li><strong>Customize Everything:</strong> Save your own profile series, colors, textures, and hardware to match your inventory.</li>
+                <li>🧩 <strong>Export Complete Hardware List</strong> – Hinges, rollers, locks, handles, screws, etc.</li>
+                <li>✂️ <strong>Generate Section Cutting Details</strong> – Get accurate cutting plans with total stock length and waste calculation.</li>
+                <li>📦 <strong>Get Required Stock Summary</strong> – Instantly calculate required profiles, glass sheets, and hardware quantity.</li>
+                <li>📜 <strong>Auto Cutting Plan Export</strong> – Download detailed cutting plans and section details ready for fabrication.</li>
             </ul>
+            <p>All this happens automatically — no manual entry, no guesswork.</p>
+            <h4>⏱️ 1–2 Minute Design Automation</h4>
+            <p>Just input your size — and in 1–2 minutes, your complete design, quotation, hardware list, and cutting plan are ready to export!<br>
+            Users can easily reuse previous designs, update sizes or materials, and auto-generate new quotations within seconds.</p>
+            <h4>💾 Smart Export & Correction System</h4>
+            <p>Save your work as a .json project file.</p>
+            <p>When you need to make corrections, just upload it again, modify, and re-export instantly — no need to rebuild your quotation or design from scratch.</p>
+            <p>Export in multiple formats: PDF, JSON, Image, and Cutting Plan Sheets.</p>
+            <h4>📱 Works Online & Offline</h4>
+            <p>RealVibe Studio works like a real desktop software –</p>
+            <ul>
+                <li>✅ Install it directly on your Home Screen (Mobile, Laptop, Tablet, or PC).</li>
+                <li>✅ No Login or Signup Needed.</li>
+                <li>✅ No Data Privacy Risk.</li>
+                <li>✅ Lightweight & Fast, runs even without internet.</li>
+                <li>✅ 100% browser-based Progressive Web App (PWA) – easy to install, easy to use.</li>
+            </ul>
+            <p>Once installed, it opens instantly like a professional design software — anytime, anywhere.</p>
+            <h3>💡 Why Choose RealVibe Studio</h3>
+            <ul>
+                <li>✔️ Designed by an expert with 15+ years of fabrication & installation experience</li>
+                <li>✔️ 100% AI-integrated smart automation for speed & precision</li>
+                <li>✔️ Real-time quotation with or without rates</li>
+                <li>✔️ Works offline on all devices</li>
+                <li>✔️ Instant export for cutting, hardware, and material planning</li>
+                <li>✔️ Perfect for fabricators, designers, architects, and contractors</li>
+            </ul>
+            <h3>🚀 Start Designing Smarter</h3>
+            <p>Experience the future of smart designing —<br>
+            No manual calculations, no complex tools, just one platform for everything.</p>
+            <p>👉 Visit: <a href="https://www.realvibestudio.in" target="_blank" rel="noopener noreferrer">https://www.realvibestudio.in</a></p>
+            <p>Design. Visualize. Calculate. Export.<br>
+            All in just a few clicks — only with RealVibe Studio.</p>
         `
     },
     'sliding': {
