@@ -101,111 +101,138 @@ export const guides: Record<string, GuideContent> = {
         `
     },
     'ventilator': {
-        title: 'Ventilator Designs',
+        title: '🌬️ Ventilator Windows',
         html: `
-            <h2>Designing Ventilators</h2>
-            <p>Perfect for bathrooms and utility areas, the ventilator designer allows for highly customized layouts.</p>
+            <h2>Bathroom Ventilator Design Tool | Louvers & Exhaust Options</h2>
+            <p>Design ventilator windows with adjustable louvers, exhaust fan cutouts, and openable panels for perfect airflow. Perfect for bathrooms and utility areas, the ventilator designer allows for highly customized layouts.</p>
             
-            <h3>Panel Types</h3>
-            <p>After creating a grid, click on any panel in the "Grid Layout" control panel to cycle through its type:</p>
+            <h3>How to Configure Your Ventilator</h3>
+            <p>After creating a grid in the "Grid Layout" section, click on any panel in the preview to cycle through its type:</p>
             <ul>
                 <li><strong>Glass:</strong> A standard fixed glass panel.</li>
-                <li><strong>Louvers:</strong> A panel filled with profile or glass louvers. The louver blade size is defined in your Profile Series.</li>
+                <li><strong>Louvers:</strong> A panel filled with profile or glass louvers.</li>
                 <li><strong>Door:</strong> An openable casement-style door within the ventilator frame.</li>
                 <li><strong>Exhaust Fan:</strong> A visual representation of an exhaust fan cutout.</li>
             </ul>
+
+            <h3 style="margin-top: 2.5em;">Q&A – Ventilators</h3>
+            <dl>
+                <dt><strong>Q: Can I fix an exhaust fan in my ventilator window design?</strong></dt>
+                <dd>A: Yes, you can add an exhaust fan slot easily while designing your bathroom ventilator by cycling through the panel types in the "Grid Layout" section.</dd>
+                
+                <dt><strong>Q: What glass types can I use for ventilators?</strong></dt>
+                <dd>A: You can use frosted, tinted, or plain glass for both fixed panels and louvers to balance privacy and natural light. These options are available in the "Appearance" section.</dd>
+                
+                <dt><strong>Q: Is it possible to make openable louvers?</strong></dt>
+                <dd>A: Yes, the tool lets you design panels with louvers. The adjustability (openable vs. fixed) depends on the hardware you use. You can specify this in your quotation description and adjust the hardware cost in your Profile Series to reflect this.</dd>
+            </dl>
         `
     },
     'glass_partition': {
-        title: 'Glass Partitions',
+        title: '🧱 Glass Partitions',
         html: `
-            <h2>Designing Glass Partitions</h2>
-            <p>Create modern interior partitions with options for both framed and frameless aesthetics.</p>
-            
-            <h3>Panel Configuration</h3>
-            <p>First, set the total number of vertical panels you need. Then, for each panel, you can cycle through its type:</p>
-            <ul>
-                <li><strong>Fixed:</strong> A stationary glass panel.</li>
-                <li><strong>Sliding:</strong> A sliding door panel.</li>
-                <li><strong>Hinged:</strong> An openable swing door.</li>
-            </ul>
-            
-            <h3>Framed vs. Frameless</h3>
-            <p>You have two levels of control over the frame:</p>
-            <ol>
-                <li><strong>Top/Bottom Channel:</strong> Enable or disable the main channels at the top and bottom of the entire partition for a cleaner look.</li>
-                <li><strong>Panel Framing:</strong> For Fixed and Sliding panels, you can toggle individual framing on or off. Hinged doors are always framed.</li>
-            </ol>
+            <h2>Create Modern Glass & Shower Partitions | Fixed, Sliding & Openable Designs</h2>
+            <p>Design stylish glass partitions for bathrooms, offices, and interiors — with or without profiles. Our advanced tool lets you create bathroom shower glass partitions, fixed panels, sliding doors, or openable systems with accurate dimensioning and cost estimation. Choose from clear, frosted, tinted, or textured glass, and visualize your custom setup instantly.</p>
+
+            <h3 style="margin-top: 2.5em;">Q&A – Glass Partitions</h3>
+            <dl>
+                <dt><strong>Q: Can I design both framed and frameless bathroom glass partitions?</strong></dt>
+                <dd>A: Yes! Our partition tool supports framed, semi-frameless, and frameless shower enclosures — perfect for both bathroom and office interiors.</dd>
+                
+                <dt><strong>Q: Can I make sliding, fixed, or openable shower glass doors?</strong></dt>
+                <dd>A: Absolutely! You can create sliding glass doors, fixed panels, or openable shower partitions as per your bathroom layout and space.</dd>
+                
+                <dt><strong>Q: What type of glass and profiles can I select?</strong></dt>
+                <dd>A: You can choose from clear, frosted, tinted, or designer glass with multiple profile color options like silver, black, or matte finish — or even go completely frameless for a premium modern look.</dd>
+
+                <dt><strong>Q: Does the tool calculate cost automatically?</strong></dt>
+                <dd>A: Yes, our glass partition estimator gives real-time pricing based on your selected glass thickness, profile, and design type.</dd>
+
+                <dt><strong>Q: Where can I use these glass partitions?</strong></dt>
+                <dd>A: These partitions are ideal for bathrooms, shower cabins, office spaces, commercial cabins, and living room dividers, offering a luxury aesthetic with privacy and functionality.</dd>
+            </dl>
         `
     },
     'louvers': {
-        title: 'Louver Systems',
+        title: '🌀 Louvers',
         html: `
-            <h2>Designing Louver Systems</h2>
-            <p>This module allows you to create custom louver patterns for facades, privacy screens, and decorative elements.</p>
+            <h2>Premium Louver Design Tool | Elevation, Ventilation & Decorative Louvers</h2>
+            <p>Create modern and functional louvers for facades, windows, bathrooms, and exterior elevations. Customize blade size, spacing, and angle to design aluminium, glass, or composite louvers that enhance airflow, hide pipes or panels, and add a luxury architectural finish.</p>
             
-            <h3>The Pattern Editor</h3>
-            <p>The core of this tool is the "Louver Pattern" editor. You build a repeating pattern by adding two types of elements:</p>
-            <ul>
-                <li><strong>Profile:</strong> This represents the louver blade itself. Its thickness is defined by the "Louver Profile" dimension in your selected Profile Series.</li>
-                <li><strong>Gap:</strong> This represents the empty space between louver blades.</li>
-            </ul>
-            <p>You can add, remove, and reorder these items and set a custom size for each to create unique, non-uniform louver designs. The tool will repeat this pattern across the entire width or height of your design.</p>
+            <h3 style="margin-top: 2.5em;">Q&A – Louvers</h3>
+            <dl>
+                <dt><strong>Q1. Can I design louvers for both exterior and interior use?</strong></dt>
+                <dd>A1. Yes! Our louver tool supports interior decorative panels as well as exterior sunshade or ventilation louvers used on building facades.</dd>
+                
+                <dt><strong>Q2. Can louvers be used to cover bathroom pipes or electric panels?</strong></dt>
+                <dd>A2. Absolutely! You can design customized louvers to neatly cover exposed bathroom pipes, electric panels, or ducts while maintaining airflow and a premium appearance.</dd>
+                
+                <dt><strong>Q3. What materials are available for louver design?</strong></dt>
+                <dd>A3. You can choose from aluminium, glass, or composite profiles — all available with customizable color, texture, and finish options.</dd>
+
+                <dt><strong>Q4. Can I set my own gap between blades?</strong></dt>
+                <dd>A4. Yes, you can easily adjust the blade spacing, angle, and frame depth to match your ventilation, privacy, or design preferences.</dd>
+                
+                <dt><strong>Q5. Are these louvers suitable for elevation aesthetics?</strong></dt>
+                <dd>A5. Definitely! Louvers are widely used in modern building elevations to add luxury, shadow lines, and a stylish architectural appeal while maintaining functionality.</dd>
+            </dl>
         `
     },
     'corner': {
-        title: 'Corner (L-Type) Windows',
+        title: '🧩 Corner Windows',
         html: `
-            <h2>Designing Corner Windows</h2>
-            <p>Create seamless L-shaped window configurations that wrap around corners.</p>
+            <h2>L-Type Corner Window Designer | Sliding & Casement Options</h2>
+            <p>Design elegant L-shaped corner windows with combined sliding and casement systems.</p>
             
-            <h3>How It Works</h3>
-            <ol>
-                <li><strong>Set Dimensions:</strong> Enter the width of the <strong>Left Wall</strong> and <strong>Right Wall</strong>, along with the width of the <strong>Corner Post</strong> that joins them.</li>
-                <li><strong>Configure Each Side:</strong> Use the "Left Wall" and "Right Wall" tabs to switch between the two sides.</li>
-                <li><strong>Choose a Type:</strong> For each side, you can independently choose to create a <strong>Sliding</strong>, <strong>Casement/Fixed</strong>, or <strong>Ventilator</strong> system. All the controls for that window type will become available for the selected side.</li>
-            </ol>
-            <p>This allows you to combine different window types, for example, a fixed casement window on one wall and a sliding window on the other.</p>
+            <h3 style="margin-top: 2.5em;">Q&A – Corner Windows</h3>
+            <dl>
+                <dt><strong>Q1. What makes corner windows special?</strong></dt>
+                <dd>A1. Corner windows provide wide open views and a luxury modern appearance for any building façade.</dd>
+                
+                <dt><strong>Q2. Can I combine sliding and openable panels in one corner?</strong></dt>
+                <dd>A2. Yes, our L-type window tool lets you mix fixed, sliding, and casement sections in a single layout.</dd>
+                
+                <dt><strong>Q3. Can I see a live 3D preview of my corner window?</strong></dt>
+                <dd>A3. Absolutely! You can visualize your corner window in real time with accurate profile and glass detailing.</dd>
+            </dl>
         `
     },
     'mirror': {
-        title: 'Mirror Design & Visualization',
+        title: '🪞 Mirror Designs',
         html: `
-            <h2>Designing Custom Mirrors</h2>
-            <p>Quickly design and visualize mirrors in various shapes and styles.</p>
+            <h2>Online Mirror Design Tool | Round, Square, Capsule & Custom Shapes</h2>
+            <p>Create decorative and functional mirrors for walls, bathrooms, or interiors — in any shape, with or without frame.</p>
             
-            <h3>Shape Options</h3>
-            <p>You can choose from several popular shapes:</p>
-            <ul>
-                <li><strong>Rectangle</strong></li>
-                <li><strong>Rounded Rectangle:</strong> Allows you to specify a custom corner radius.</li>
-                <li><strong>Capsule</strong></li>
-                <li><strong>Oval</strong></li>
-            </ul>
-            
-            <h3>Framed vs. Frameless</h3>
-            <p>Use the "Frameless Design" checkbox to toggle the profile frame on or off. When a frame is enabled, its thickness is controlled by the <strong>Outer Frame</strong> dimension in the selected "Profile Series". This allows you to visualize the final product accurately.</p>
+            <h3 style="margin-top: 2.5em;">Q&A – Mirror Designs</h3>
+            <dl>
+                <dt><strong>Q1. What mirror shapes can I design?</strong></dt>
+                <dd>A1. You can design round, square, capsule, rectangle, or any custom shape mirror using our visual creator.</dd>
+                
+                <dt><strong>Q2. Can I add frames or keep it frameless?</strong></dt>
+                <dd>A2. Yes, you can add aluminium or wooden frames, or keep it frameless for a minimalist style.</dd>
+                
+                <dt><strong>Q3. Does this tool calculate cost automatically?</strong></dt>
+                <dd>A3. Yes, the mirror quotation calculator provides instant pricing as per size, shape, and frame selection.</dd>
+            </dl>
         `
     },
     'georgian_bars': {
-        title: 'Georgian Bars (Decorative Grids)',
+        title: '🪟✨ Georgian Bars',
         html: `
-            <h2>Using Georgian Bars</h2>
-            <p>Georgian bars are a decorative grid applied over or inside a glass panel to give it a classic, luxury look of divided lites.</p>
+            <h2>Add Luxury to Glass with Georgian Bars | Decorative Glass Enhancer</h2>
+            <p>Add decorative Georgian bar grids to any window, door, or partition to achieve a luxury architectural finish.</p>
             
-            <h3>How to Apply</h3>
-            <p>The "Georgian Bars" control panel is available for most window types that use glass.</p>
-            <ol>
-                <li><strong>Set Bar Thickness:</strong> Define the width of the grid bars.</li>
-                <li><strong>Configure Pattern:</strong> For both Horizontal and Vertical bars, you can set:
-                    <ul>
-                        <li><strong>Count:</strong> The number of bars.</li>
-                        <li><strong>Offset:</strong> The distance from the edge to the first bar.</li>
-                        <li><strong>Gap:</strong> The distance between subsequent bars.</li>
-                    </ul>
-                </li>
-                <li><strong>Apply to All or Individually:</strong> By default, the pattern applies to all glass panels in the design. You can uncheck "Apply to all panels" to select and configure a unique grid for each individual panel.</li>
-            </ol>
+            <h3 style="margin-top: 2.5em;">Q&A – Georgian Bars</h3>
+            <dl>
+                <dt><strong>Q1. What are Georgian bars?</strong></dt>
+                <dd>A1. Georgian bars are decorative grids placed over glass panels to create a luxury and traditional look without dividing the glass.</dd>
+                
+                <dt><strong>Q2. Can I apply Georgian bars on any window type?</strong></dt>
+                <dd>A2. Yes, you can use them on sliding, casement, fixed, or glass partitions for a premium design finish.</dd>
+                
+                <dt><strong>Q3. Do Georgian bars affect glass strength or clarity?</strong></dt>
+                <dd>A3. No, they are applied externally or between glass layers, maintaining full glass strength and transparency.</dd>
+            </dl>
         `
     },
     'qna': {

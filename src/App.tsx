@@ -943,11 +943,11 @@ const App: React.FC = () => {
     const titleMap: Partial<Record<WindowType, string>> = {
         [WindowType.SLIDING]: 'Sliding Window & Door Designer | 2-Track, 3-Track Systems',
         [WindowType.CASEMENT]: 'Design Casement Windows, Doors & Foldable Systems Online',
-        [WindowType.VENTILATOR]: 'Custom Ventilator Design Tool | Louver & Glass Options',
-        [WindowType.GLASS_PARTITION]: 'Glass Partition Designer | Frameless & Sliding Systems',
-        [WindowType.LOUVERS]: 'Architectural Louver Design Tool | Custom Patterns',
-        [WindowType.CORNER]: 'L-Type Corner Window Design Tool | Sliding & Casement',
-        [WindowType.MIRROR]: 'Custom Mirror Designer | Framed & Frameless Shapes',
+        [WindowType.VENTILATOR]: 'Bathroom Ventilator Design Tool | Louvers & Exhaust Options',
+        [WindowType.GLASS_PARTITION]: 'Create Modern Glass & Shower Partitions | Fixed, Sliding & Openable Designs',
+        [WindowType.LOUVERS]: 'Premium Louver Design Tool | Elevation, Ventilation & Decorative Louvers',
+        [WindowType.CORNER]: 'L-Type Corner Window Designer | Sliding & Casement Options',
+        [WindowType.MIRROR]: 'Online Mirror Design Tool | Round, Square, Capsule & Custom Shapes',
     };
     
     if (appView === 'guides') {
