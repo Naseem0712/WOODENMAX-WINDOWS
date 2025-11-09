@@ -15,7 +15,7 @@ import { DocumentTextIcon } from './components/icons/DocumentTextIcon';
 import { QuotationListModal } from './components/QuotationListModal';
 
 const BatchAddModal = lazy(() => import('./components/BatchAddModal').then(module => ({ default: module.BatchAddModal })));
-const ContentModal = lazy(() => import('./components/ContentModal').then(module => ({ default: module.ContentModal })));
+const GuidesViewer = lazy(() => import('./components/GuidesViewer').then(module => ({ default: module.GuidesViewer })));
 
 interface BeforeInstallPromptEvent extends Event {
     readonly platforms: Array<string>;
@@ -811,6 +811,7 @@ const getInitialConfig = (): ConfigState => {
 };
 
 type MobilePanelState = 'none' | 'configure' | 'quotation';
+type AppView = 'designer' | 'guides';
 
 const App: React.FC = () => {
   
@@ -868,8 +869,10 @@ const App: React.FC = () => {
   const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isBatchAddModalOpen, setIsBatchAddModalOpen] = useState(false);
-  const [isContentModalOpen, setIsContentModalOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  
+  const [appView, setAppView] = useState<AppView>('designer');
+  const [guideSlug, setGuideSlug] = useState('index');
 
   const [quotationSettings, setQuotationSettings] = useState<QuotationSettings>(() => {
       try {
@@ -893,6 +896,55 @@ const App: React.FC = () => {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [canvasKey, setCanvasKey] = useState(() => uuidv4());
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // --- ROUTING & SEO EFFECTS ---
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#/', '');
+      const parts = hash.split('/');
+
+      if (parts[0] === 'guides') {
+        setAppView('guides');
+        setGuideSlug(parts[1] || 'index');
+      } else {
+        setAppView('designer');
+        const targetType = hash || WindowType.SLIDING;
+        const foundType = Object.values(WindowType).find(t => t === targetType) as WindowType | undefined;
+        
+        if (foundType && foundType !== windowConfigState.windowType) {
+          dispatch({ type: 'SET_WINDOW_TYPE', payload: foundType });
+        } else if (!foundType && hash) { // If hash exists but is invalid
+          window.location.replace(`#/${WindowType.SLIDING}`);
+        }
+      }
+    };
+    
+    handleHashChange(); // Initial load check
+    
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [windowConfigState.windowType]);
+
+  // This effect syncs the URL if the state changes for some other reason, e.g. initial load from localStorage
+  useEffect(() => {
+    if (appView === 'designer') {
+        const hash = window.location.hash.replace('#/', '');
+        if (windowType !== hash) {
+            window.history.replaceState(null, '', `#/${windowType}`);
+        }
+    }
+  }, [windowType, appView]);
+
+  // This effect updates the page title for SEO
+  useEffect(() => {
+    if (appView === 'guides') {
+        const guideTitle = guideSlug.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        document.title = `${guideTitle} Guide | WoodenMax Designer`;
+    } else if (windowType) {
+        const typeLabel = windowType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        document.title = `${typeLabel} Design Tool | WoodenMax Designer`;
+    }
+  }, [windowType, appView, guideSlug]);
   
   const windowConfig: WindowConfig = useMemo(() => ({
     ...windowConfigState,
@@ -951,7 +1003,7 @@ const App: React.FC = () => {
   
   useEffect(() => {
     // Lock body scroll when any modal or mobile panel is open
-    if (activeMobilePanel !== 'none' || isQuotationModalOpen || isBatchAddModalOpen || isContentModalOpen) {
+    if (activeMobilePanel !== 'none' || isQuotationModalOpen || isBatchAddModalOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -961,7 +1013,7 @@ const App: React.FC = () => {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [activeMobilePanel, isQuotationModalOpen, isBatchAddModalOpen, isContentModalOpen]);
+  }, [activeMobilePanel, isQuotationModalOpen, isBatchAddModalOpen]);
 
   const SERIES_MAP_MEMO = useMemo(() => SERIES_MAP, []);
 
@@ -1119,7 +1171,8 @@ const App: React.FC = () => {
         if(windowType === WindowType.CORNER) {
             dispatch({ type: 'SET_SIDE_CONFIG', payload: { side: activeCornerSide, config: { windowType: selected.type as CornerSideConfig['windowType'] } } });
         } else {
-            dispatch({ type: 'SET_WINDOW_TYPE', payload: selected.type });
+            // This will trigger the hash change logic via useEffect
+            window.location.hash = `/${selected.type}`;
         }
       }
     }
@@ -1318,7 +1371,10 @@ const App: React.FC = () => {
   const setConfig = useCallback((field: keyof WindowConfig, value: any) => {
     if (field === 'series') {
       setSeries(value);
-    } else {
+    } else if (field === 'windowType') {
+      window.location.hash = `/${value}`;
+    }
+    else {
       if (field === 'profileColor' || field === 'glassTexture') {
         setCanvasKey(uuidv4());
       }
@@ -1432,31 +1488,16 @@ const App: React.FC = () => {
   
   const loadingFallback = <div className="fixed inset-0 bg-slate-900 bg-opacity-80 flex items-center justify-center z-[100] no-print"><div className="text-white">Loading...</div></div>;
 
-  return (
+  const DesignerView = () => (
     <>
-      {isQuotationModalOpen && (
-          <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} onEdit={handleEditItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} />
-      )}
-      {isBatchAddModalOpen && (
-          <Suspense fallback={loadingFallback}>
-              <BatchAddModal isOpen={isBatchAddModalOpen} onClose={() => setIsBatchAddModalOpen(false)} baseConfig={windowConfig} baseRate={rate} onSave={handleBatchSave} />
-          </Suspense>
-      )}
-      {isContentModalOpen && (
-          <Suspense fallback={loadingFallback}>
-              <ContentModal isOpen={isContentModalOpen} onClose={() => setIsContentModalOpen(false)} />
-          </Suspense>
-      )}
-      
-      <div className={`flex flex-col h-screen font-sans bg-slate-900 overflow-hidden ${isPreviewing ? 'hidden' : ''}`}>
-        <header className="bg-slate-800 p-3 flex items-center shadow-md z-40 no-print">
+      <header className="bg-slate-800 p-3 flex items-center shadow-md z-40 no-print">
             <Logo className="h-10 w-10 mr-4 flex-shrink-0" />
             <div className="flex-grow">
                 <h1 className="text-2xl font-bold text-white tracking-wider">WoodenMax Architectural Elements</h1>
                 <p className="text-sm text-indigo-300">Powered by Real Vibe Studio</p>
             </div>
             <div className='flex items-center gap-2'>
-              <Button onClick={() => setIsContentModalOpen(true)} variant="secondary" className="hidden sm:inline-flex"> <DocumentTextIcon className="w-5 h-5 mr-2" /> Features & Guides </Button>
+              <Button onClick={() => window.location.hash = '#/guides'} variant="secondary" className="hidden sm:inline-flex"> <DocumentTextIcon className="w-5 h-5 mr-2" /> Features & Guides </Button>
               {installPrompt && ( <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse"> <DownloadIcon className="w-5 h-5 mr-2" /> Add to Home Screen </Button> )}
             </div>
         </header>
@@ -1491,6 +1532,31 @@ const App: React.FC = () => {
         <div className={`lg:hidden fixed bottom-0 left-0 right-0 flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'quotation' ? 'translate-y-0' : 'translate-y-full'}`}>
             <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onUpdate={handleUpdateQuotationItem} onCancelEdit={handleCancelEdit} editingItemId={editingItemId} onBatchAdd={handleBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={handleViewQuotation} onClose={handleCloseMobilePanels} />
         </div>
+    </>
+  );
+
+  return (
+    <>
+      {isQuotationModalOpen && (
+          <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} onEdit={handleEditItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} />
+      )}
+      {isBatchAddModalOpen && (
+          <Suspense fallback={loadingFallback}>
+              <BatchAddModal isOpen={isBatchAddModalOpen} onClose={() => setIsBatchAddModalOpen(false)} baseConfig={windowConfig} baseRate={rate} onSave={handleBatchSave} />
+          </Suspense>
+      )}
+      
+      <div className={`flex flex-col h-screen font-sans bg-slate-900 overflow-hidden ${isPreviewing ? 'hidden' : ''}`}>
+        <Suspense fallback={loadingFallback}>
+            {appView === 'designer' ? (
+                <DesignerView />
+            ) : (
+                <GuidesViewer 
+                    activeSlug={guideSlug} 
+                    onClose={() => window.location.hash = `#/${windowType}`}
+                />
+            )}
+        </Suspense>
       </div>
     </>
   );
