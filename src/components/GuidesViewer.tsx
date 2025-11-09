@@ -3,6 +3,7 @@ import { guides } from '../guides/content';
 import { Button } from './ui/Button';
 import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
 import { Logo } from './icons/Logo';
+import { guideOrder } from '../guides/order';
 
 interface GuidesViewerProps {
     activeSlug: string;
@@ -34,16 +35,20 @@ export const GuidesViewer: React.FC<GuidesViewerProps> = ({ activeSlug, onClose 
                 <aside className="w-64 bg-slate-800/50 p-4 flex-shrink-0 overflow-y-auto custom-scrollbar hidden md:block">
                     <nav>
                         <ul className="space-y-2">
-                            {Object.entries(guides).map(([slug, guide]) => (
-                                <li key={slug}>
-                                    <a 
-                                        href={`#/guides/${slug}`} 
-                                        className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeSlug === slug ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
-                                    >
-                                        {guide.title}
-                                    </a>
-                                </li>
-                            ))}
+                            {guideOrder.map(slug => {
+                                const guide = guides[slug];
+                                if (!guide) return null;
+                                return (
+                                    <li key={slug}>
+                                        <a 
+                                            href={`#/guides/${slug}`} 
+                                            className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeSlug === slug ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                                        >
+                                            {guide.title}
+                                        </a>
+                                    </li>
+                                );
+                            })}
                         </ul>
                     </nav>
                 </aside>

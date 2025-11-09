@@ -1,14 +1,75 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- 
-  This is a basic sitemap for your single-page application.
-  For more complex sites, consider using a dynamic sitemap generator.
-  Please update the <lastmod> date whenever you make significant changes.
--->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://www.realvibestudio.in/</loc>
-    <lastmod>2024-07-25</lastmod>
+    <lastmod>2024-07-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://www.realvibestudio.in/#/sliding</loc>
+    <lastmod>2024-07-26</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://www.realvibestudio.in/#/casement</loc>
+    <lastmod>2024-07-26</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.realvibestudio.in/#/ventilator</loc>
+    <lastmod>2024-07-26</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.realvibestudio.in/#/glass_partition</loc>
+    <lastmod>2024-07-26</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.realvibestudio.in/#/louvers</loc>
+    <lastmod>2024-07-26</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.realvibestudio.in/#/corner</loc>
+    <lastmod>2024-07-26</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.realvibestudio.in/#/mirror</loc>
+    <lastmod>2024-07-26</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.realvibestudio.in/#/guides/index</loc>
+    <lastmod>2024-07-26</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.realvibestudio.in/#/guides/sliding</loc>
+    <lastmod>2024-07-26</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.realvibestudio.in/#/guides/casement</loc>
+    <lastmod>2024-07-26</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+   <url>
+    <loc>https://www.realvibestudio.in/#/guides/georgian_bars</loc>
+    <lastmod>2024-07-26</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
   </url>
 </urlset>

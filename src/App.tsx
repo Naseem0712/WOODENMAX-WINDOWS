@@ -935,15 +935,44 @@ const App: React.FC = () => {
     }
   }, [windowType, appView]);
 
-  // This effect updates the page title for SEO
+  // This effect updates the page title and canonical URL for SEO
   useEffect(() => {
+    const baseUrl = "https://www.realvibestudio.in/";
+    let canonicalUrl = baseUrl;
+
+    const titleMap: Partial<Record<WindowType, string>> = {
+        [WindowType.SLIDING]: 'Sliding Window & Door Designer | 2-Track, 3-Track Systems',
+        [WindowType.CASEMENT]: 'Design Casement Windows, Doors & Foldable Systems Online',
+        [WindowType.VENTILATOR]: 'Custom Ventilator Design Tool | Louver & Glass Options',
+        [WindowType.GLASS_PARTITION]: 'Glass Partition Designer | Frameless & Sliding Systems',
+        [WindowType.LOUVERS]: 'Architectural Louver Design Tool | Custom Patterns',
+        [WindowType.CORNER]: 'L-Type Corner Window Design Tool | Sliding & Casement',
+        [WindowType.MIRROR]: 'Custom Mirror Designer | Framed & Frameless Shapes',
+    };
+    
     if (appView === 'guides') {
         const guideTitle = guideSlug.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         document.title = `${guideTitle} Guide | WoodenMax Designer`;
+        canonicalUrl = `${baseUrl}#/guides/${guideSlug}`;
     } else if (windowType) {
-        const typeLabel = windowType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        document.title = `${typeLabel} Design Tool | WoodenMax Designer`;
+        const pageTitle = titleMap[windowType];
+        if (pageTitle) {
+            document.title = `${pageTitle} | WoodenMax`;
+        } else {
+             const typeLabel = windowType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+             document.title = `${typeLabel} Design Tool | WoodenMax Designer`;
+        }
+        canonicalUrl = `${baseUrl}#/${windowType}`;
     }
+
+    let link = document.querySelector<HTMLLinkElement>("link[rel='canonical']");
+    if (!link) {
+        link = document.createElement('link');
+        link.rel = 'canonical';
+        document.head.appendChild(link);
+    }
+    link.href = canonicalUrl;
+
   }, [windowType, appView, guideSlug]);
   
   const windowConfig: WindowConfig = useMemo(() => ({
