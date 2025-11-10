@@ -102,6 +102,7 @@ export enum ShutterConfigType {
   THREE_GLASS = '3G',
   TWO_GLASS_ONE_MESH = '2G1M',
   FOUR_GLASS = '4G',
+  FOUR_GLASS_TWO_MESH = '4G2M',
 }
 
 export enum FixedPanelPosition {

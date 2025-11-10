@@ -115,7 +115,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
     const panels: { id: string, name: string }[] = [];
     switch(windowType) {
         case WindowType.SLIDING:
-            const numShutters = config.shutterConfig === '2G' ? 2 : config.shutterConfig === '4G' ? 4 : 3;
+            const numShutters = config.shutterConfig === '2G' ? 2 : config.shutterConfig === '4G' ? 4 : config.shutterConfig === '4G2M' ? 6 : 3;
             for (let i = 0; i < numShutters; i++) panels.push({ id: `sliding-${i}`, name: `Shutter ${i+1}`});
             break;
         case WindowType.CASEMENT:
@@ -450,7 +450,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
             </Select>
             <Select id={`${idPrefix}shutter-config`} name="shutter-config" label="Shutter Configuration" value={displayConfig.shutterConfig} onChange={(e) => isCorner ? setSideConfig({shutterConfig: e.target.value as ShutterConfigType}) : setConfig('shutterConfig', e.target.value as ShutterConfigType)}>
                 {displayConfig.trackType === TrackType.TWO_TRACK && <><option value="2G">2 Glass Shutters</option><option value="4G">4 Glass Shutters</option></>}
-                {displayConfig.trackType === TrackType.THREE_TRACK && <><option value="3G">3 Glass Shutters</option><option value="2G1M">2 Glass + 1 Mesh Shutter</option></>}
+                {displayConfig.trackType === TrackType.THREE_TRACK && <><option value="3G">3 Glass Shutters</option><option value="2G1M">2 Glass + 1 Mesh</option><option value="4G2M">4 Glass + 2 Mesh</option></>}
             </Select>
             {displayConfig.fixedShutters.length > 0 && (
               <div className="pt-2">

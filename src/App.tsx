@@ -1169,6 +1169,7 @@ const App: React.FC = () => {
       case ShutterConfigType.THREE_GLASS: return 3;
       case ShutterConfigType.TWO_GLASS_ONE_MESH: return 3;
       case ShutterConfigType.FOUR_GLASS: return 4;
+      case ShutterConfigType.FOUR_GLASS_TWO_MESH: return 6;
       default: return 0;
     }
   }, [windowConfig, windowType, activeCornerSide]);
@@ -1185,7 +1186,7 @@ const App: React.FC = () => {
             newSideConfig.shutterConfig = ShutterConfigType.TWO_GLASS;
             changed = true;
         }
-        if (sideConfig.trackType === TrackType.THREE_TRACK && ![ShutterConfigType.THREE_GLASS, ShutterConfigType.TWO_GLASS_ONE_MESH].includes(sideConfig.shutterConfig)) {
+        if (sideConfig.trackType === TrackType.THREE_TRACK && ![ShutterConfigType.THREE_GLASS, ShutterConfigType.TWO_GLASS_ONE_MESH, ShutterConfigType.FOUR_GLASS_TWO_MESH].includes(sideConfig.shutterConfig)) {
             newSideConfig.shutterConfig = ShutterConfigType.THREE_GLASS;
             changed = true;
         }
@@ -1201,7 +1202,7 @@ const App: React.FC = () => {
         if (windowConfigState.trackType === TrackType.TWO_TRACK && ![ShutterConfigType.TWO_GLASS, ShutterConfigType.FOUR_GLASS].includes(windowConfigState.shutterConfig)) {
             dispatch({ type: 'SET_FIELD', field: 'shutterConfig', payload: ShutterConfigType.TWO_GLASS });
         }
-        if (windowConfigState.trackType === TrackType.THREE_TRACK && ![ShutterConfigType.THREE_GLASS, ShutterConfigType.TWO_GLASS_ONE_MESH].includes(windowConfigState.shutterConfig)) {
+        if (windowConfigState.trackType === TrackType.THREE_TRACK && ![ShutterConfigType.THREE_GLASS, ShutterConfigType.TWO_GLASS_ONE_MESH, ShutterConfigType.FOUR_GLASS_TWO_MESH].includes(windowConfigState.shutterConfig)) {
             dispatch({ type: 'SET_FIELD', field: 'shutterConfig', payload: ShutterConfigType.THREE_GLASS });
         }
     }
@@ -1217,11 +1218,17 @@ const App: React.FC = () => {
             case ShutterConfigType.TWO_GLASS: numSideShutters = 2; break;
             case ShutterConfigType.THREE_GLASS: case ShutterConfigType.TWO_GLASS_ONE_MESH: numSideShutters = 3; break;
             case ShutterConfigType.FOUR_GLASS: numSideShutters = 4; break;
+            case ShutterConfigType.FOUR_GLASS_TWO_MESH: numSideShutters = 6; break;
         }
 
         if (sideConfig.fixedShutters.length !== numSideShutters || sideConfig.slidingHandles.length !== numSideShutters) {
              const newFixedShutters = Array(numSideShutters).fill(false);
-             for(let i=0; i < Math.min(sideConfig.fixedShutters.length, newFixedShutters.length); i++) { newFixedShutters[i] = sideConfig.fixedShutters[i]; }
+             if (sideConfig.shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
+                if (numSideShutters > 0) newFixedShutters[0] = true;
+                if (numSideShutters > 1) newFixedShutters[numSideShutters - 1] = true;
+             } else {
+                for(let i=0; i < Math.min(sideConfig.fixedShutters.length, newFixedShutters.length); i++) { newFixedShutters[i] = sideConfig.fixedShutters[i]; }
+             }
              const newSlidingHandles = Array(numSideShutters).fill(null);
              for(let i=0; i < Math.min(sideConfig.slidingHandles.length, newSlidingHandles.length); i++) { newSlidingHandles[i] = sideConfig.slidingHandles[i]; }
              dispatch({ type: 'SET_SIDE_CONFIG', payload: { side, config: { fixedShutters: newFixedShutters, slidingHandles: newSlidingHandles } } });
@@ -1233,7 +1240,12 @@ const App: React.FC = () => {
     } else if (windowType === WindowType.SLIDING) {
         if (windowConfigState.fixedShutters.length !== numShutters || windowConfigState.slidingHandles.length !== numShutters) {
             const newFixedShutters = Array(numShutters).fill(false);
-            for(let i=0; i < Math.min(windowConfigState.fixedShutters.length, newFixedShutters.length); i++) { newFixedShutters[i] = windowConfigState.fixedShutters[i]; }
+            if (windowConfigState.shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
+                if (numShutters > 0) newFixedShutters[0] = true;
+                if (numShutters > 1) newFixedShutters[numShutters - 1] = true;
+            } else {
+                for(let i=0; i < Math.min(windowConfigState.fixedShutters.length, newFixedShutters.length); i++) { newFixedShutters[i] = windowConfigState.fixedShutters[i]; }
+            }
             const newSlidingHandles = Array(numShutters).fill(null);
             for(let i=0; i < Math.min(windowConfigState.slidingHandles.length, newSlidingHandles.length); i++) { newSlidingHandles[i] = windowConfigState.slidingHandles[i]; }
             dispatch({ type: 'SET_FIELD', field: 'fixedShutters', payload: newFixedShutters });
@@ -1412,7 +1424,14 @@ const App: React.FC = () => {
                     }
                 } else {
                      switch(config.windowType) {
-                        case WindowType.SLIDING: panelCount = config.shutterConfig === '2G' ? 2 : config.shutterConfig === '4G' ? 4 : 3; break;
+                        case WindowType.SLIDING:
+                           switch(config.shutterConfig) {
+                                case ShutterConfigType.TWO_GLASS: panelCount = 2; break;
+                                case ShutterConfigType.THREE_GLASS: case ShutterConfigType.TWO_GLASS_ONE_MESH: panelCount = 3; break;
+                                case ShutterConfigType.FOUR_GLASS: panelCount = 4; break;
+                                case ShutterConfigType.FOUR_GLASS_TWO_MESH: panelCount = 6; break;
+                           }
+                           break;
                         case WindowType.CASEMENT: panelCount = config.doorPositions.length; break;
                         case WindowType.GLASS_PARTITION: panelCount = (config as WindowConfig).partitionPanels.types.filter(t => t.type !== 'fixed').length; break;
                     }

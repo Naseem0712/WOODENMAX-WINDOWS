@@ -1,6 +1,9 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+// FIX: Corrected import path for types from './types' to '../types'.
 import type { WindowConfig, HandleConfig, CornerSideConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType, MirrorShape } from '../types';
+// FIX: Corrected import paths for icons.
 import { PlusIcon } from './icons/PlusIcon';
 import { MinusIcon } from './icons/MinusIcon';
 import { ArrowsPointingInIcon } from './icons/ArrowsPointingInIcon';
@@ -482,29 +485,68 @@ const createWindowElements = (
             }
             case WindowType.SLIDING: {
                 const { shutterConfig, fixedShutters, slidingHandles } = config;
-                const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;
-                const numShutters = is4G ? 4 : (shutterConfig === ShutterConfigType.TWO_GLASS ? 2 : 3);
-                const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
+                const interlock = Number(dims.shutterInterlock) || 0;
+                const meeting = Number(dims.shutterMeeting) || 0;
+                
+                if (shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
+                    const panelWidth = (innerAreaWidth + 3 * interlock) / 4;
+                    const panels = [
+                        { id: 0, type: 'glass', x: 0, z: 5 }, // Fixed Left (Outer Track)
+                        { id: 5, type: 'glass', x: innerAreaWidth - panelWidth, z: 5 }, // Fixed Right (Outer Track)
+                        { id: 1, type: 'glass', x: panelWidth - interlock, z: 10 }, // Sliding Glass Left (Mid Track)
+                        { id: 4, type: 'glass', x: 2 * panelWidth - 2 * interlock, z: 10 }, // Sliding Glass Right (Mid Track)
+                        { id: 2, type: 'mesh',  x: 0, z: 15 }, // Sliding Mesh Left (Inner Track, Parked)
+                        { id: 3, type: 'mesh',  x: innerAreaWidth - panelWidth, z: 15 }, // Sliding Mesh Right (Inner Track, Parked)
+                    ];
 
-                if (is4G) {
-                    const shutterWidth = (innerAreaWidth + (2 * dims.shutterInterlock) + dims.shutterMeeting) / 4;
-                    const positions = [ 0, shutterWidth - dims.shutterInterlock, (2*shutterWidth) - dims.shutterInterlock - dims.shutterMeeting, (3*shutterWidth) - (2*dims.shutterInterlock) - dims.shutterMeeting ];
-                    const profiles = [ { l: dims.shutterHandle, r: dims.shutterInterlock }, { l: dims.shutterInterlock, r: dims.shutterMeeting }, { l: dims.shutterMeeting, r: dims.shutterInterlock }, { l: dims.shutterInterlock, r: dims.shutterHandle } ];
+                    panels.forEach(p => {
+                        const handleConfig = slidingHandles[p.id];
+                        if (handleConfig) {
+                             handleElements.push(<div key={`handle-${p.id}`} style={{ position: 'absolute', zIndex: 30, left: (p.x + panelWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>);
+                        }
+                        
+                        let leftProf = dims.shutterInterlock;
+                        let rightProf = dims.shutterInterlock;
+                        if (p.id === 0 || p.id === 2) leftProf = dims.shutterHandle;
+                        if (p.id === 3 || p.id === 5) rightProf = dims.shutterHandle;
+
+                        innerContent.push(
+                            <div key={p.id} className="absolute" style={{ left: p.x * scale, zIndex: p.z }}>
+                                <SlidingShutter
+                                    panelId={`sliding-${p.id}`}
+                                    config={config}
+                                    width={panelWidth} height={innerAreaHeight}
+                                    topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom}
+                                    leftProfile={leftProf} rightProfile={rightProf}
+                                    scale={scale}
+                                    isMesh={p.type === 'mesh'}
+                                    isFixed={fixedShutters[p.id]} isSliding={!fixedShutters[p.id]}
+                                />
+                            </div>
+                        );
+                    });
+
+                } else if (shutterConfig === ShutterConfigType.FOUR_GLASS) {
+                    const shutterWidth = (innerAreaWidth + (2 * interlock) + meeting) / 4;
+                    const positions = [ 0, shutterWidth - interlock, (2*shutterWidth) - interlock - meeting, (3*shutterWidth) - (2*interlock) - meeting ];
+                    const profiles = [ { l: dims.shutterHandle, r: interlock }, { l: interlock, r: meeting }, { l: meeting, r: interlock }, { l: interlock, r: dims.shutterHandle } ];
                     
                     slidingHandles.forEach((handleConfig, i) => { if (handleConfig) { handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (positions[i] + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>); } });
                     
                     innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} scale={scale} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
                 } else {
+                    const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
+                    const numShutters = hasMesh ? 3 : (shutterConfig === ShutterConfigType.TWO_GLASS ? 2 : 3);
                     const shutterDivider = hasMesh ? 2 : numShutters;
-                    const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * dims.shutterInterlock) / shutterDivider;
+                    const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * interlock) / shutterDivider;
                     innerContent.push(...Array.from({ length: numShutters }).map((_, i) => {
                         const isMeshShutter = hasMesh && i === numShutters - 1;
-                        let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - dims.shutterInterlock);
+                        let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - interlock);
                         
                         const handleConfig = slidingHandles[i];
                         if (handleConfig) { handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>); }
                         
-                        return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : dims.shutterInterlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock} scale={scale} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
+                        return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : interlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : interlock} scale={scale} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
                     }));
                 }
                 break;
@@ -833,7 +875,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
 
   return (
     <div ref={containerRef} className="absolute inset-0 p-6 flex items-center justify-center bg-transparent overflow-auto">
-      <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none" aria-hidden="true"> WoodenMax </div>
+      <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none"> WoodenMax </div>
        <div ref={renderedWindowRef} style={{ margin: 'auto' }}>
             {windowType === WindowType.CORNER && config.leftConfig && config.rightConfig ? (
                 (() => {
@@ -878,9 +920,9 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
       </div>
       
       <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2 no-print">
-         <button onClick={() => setZoom(z => z * 1.2)} aria-label="Zoom in" className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><PlusIcon className="w-6 h-6"/></button>
-         <button onClick={() => setZoom(1)} aria-label="Reset zoom" className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><ArrowsPointingInIcon className="w-5 h-5"/></button>
-         <button onClick={() => setZoom(z => z / 1.2)} aria-label="Zoom out" className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><MinusIcon className="w-6 h-6"/></button>
+         <button onClick={() => setZoom(z => z * 1.2)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><PlusIcon className="w-6 h-6"/></button>
+         <button onClick={() => setZoom(1)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><ArrowsPointingInIcon className="w-5 h-5"/></button>
+         <button onClick={() => setZoom(z => z / 1.2)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><MinusIcon className="w-6 h-6"/></button>
       </div>
     </div>
   );
