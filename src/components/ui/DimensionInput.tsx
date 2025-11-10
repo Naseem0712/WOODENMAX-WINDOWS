@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Input } from './Input';
 
 export type Unit = 'mm' | 'cm' | 'in' | 'ft-in';
 
@@ -66,18 +67,17 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
   const unit = controlledUnit || internalUnit;
   
   const [isFocused, setIsFocused] = useState(false);
-  // This state will hold the user's raw input only while the input is focused.
-  const [rawValue, setRawValue] = useState<string | null>(null);
+  const [displayValue, setDisplayValue] = useState(() => value_mm !== '' ? formatFromMm(Number(value_mm), unit) : '');
 
-  // The value displayed in the input is derived.
-  // If focused, show the raw user input. If not, show the formatted value from props.
-  const displayValue = isFocused && rawValue !== null
-    ? rawValue
-    : (value_mm !== '' ? formatFromMm(Number(value_mm), unit) : '');
+  useEffect(() => {
+    if (!isFocused) {
+      setDisplayValue(value_mm !== '' ? formatFromMm(Number(value_mm), unit) : '');
+    }
+  }, [value_mm, unit, isFocused]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const currentInputValue = e.target.value;
-    setRawValue(currentInputValue); // Store user's raw text for immediate display
+    setDisplayValue(currentInputValue); // Store user's raw text for immediate display
     const newMmValue = parseToMm(currentInputValue, unit);
     onChange_mm(newMmValue); // Always notify parent of the canonical value (or '')
   };
@@ -86,19 +86,16 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
     if (!controlledUnit) {
       setInternalUnit(e.target.value as Unit);
     }
-    // The re-render will cause displayValue to be re-calculated correctly based on the new unit.
   };
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     setIsFocused(true);
-    // When focusing, initialize the raw value with the current formatted value from props.
-    setRawValue(value_mm !== '' ? formatFromMm(Number(value_mm), unit) : '');
     e.target.select();
   };
 
   const handleBlur = () => {
       setIsFocused(false);
-      setRawValue(null); // Clear the raw value. On next render, displayValue will fall back to the formatted prop.
+      // The useEffect will now trigger and sync the value from the parent, showing the correctly formatted value.
   };
 
   return (
@@ -138,36 +135,32 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
       </div>
       {onWeightChange && onLengthChange && (
         <div className="grid grid-cols-2 gap-2 mt-1">
-            <div className="relative">
-                <label htmlFor={`${id}-weight`} className="sr-only">Weight for {label}</label>
-                <input
-                    type="number"
-                    inputMode="decimal"
-                    placeholder="Weight"
-                    id={`${id}-weight`}
-                    name={`${id}-weight`}
-                    value={weightValue}
-                    onChange={e => onWeightChange(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full pl-3 pr-12 py-1 bg-slate-700 border border-slate-600 rounded-md text-white text-xs focus:ring-1 focus:ring-indigo-500"
-                    onFocus={(e) => e.target.select()}
-                />
-                <span className="absolute inset-y-0 right-0 flex items-center pr-2 text-xs text-slate-400 pointer-events-none">kg/m</span>
-            </div>
-             <div className="relative">
-                <label htmlFor={`${id}-length`} className="sr-only">Length for {label}</label>
-                <input
-                    type="number"
-                    inputMode="decimal"
-                    placeholder="Length"
-                    id={`${id}-length`}
-                    name={`${id}-length`}
-                    value={lengthValue}
-                    onChange={e => onLengthChange(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full pl-3 pr-5 py-1 bg-slate-700 border border-slate-600 rounded-md text-white text-xs focus:ring-1 focus:ring-indigo-500"
-                    onFocus={(e) => e.target.select()}
-                />
-                <span className="absolute inset-y-0 right-0 flex items-center pr-2 text-xs text-slate-400 pointer-events-none">m</span>
-            </div>
+            <Input
+                type="number"
+                inputMode="decimal"
+                placeholder="Weight"
+                id={`${id}-weight`}
+                name={`${id}-weight`}
+                label=""
+                aria-label={`Weight for ${label}`}
+                value={weightValue}
+                onChange={e => onWeightChange(e.target.value === '' ? '' : Number(e.target.value))}
+                className="!py-1 !pr-12"
+                unit="kg/m"
+            />
+             <Input
+                type="number"
+                inputMode="decimal"
+                placeholder="Length"
+                id={`${id}-length`}
+                name={`${id}-length`}
+                label=""
+                aria-label={`Length for ${label}`}
+                value={lengthValue}
+                onChange={e => onLengthChange(e.target.value === '' ? '' : Number(e.target.value))}
+                className="!py-1 !pr-5"
+                unit="m"
+            />
         </div>
     )}
     </div>
