@@ -458,45 +458,76 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                     })() : null}
                     {windowType === WindowType.SLIDING ? (() => {
                         const { shutterConfig, fixedShutters, slidingHandles } = config;
-                        const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;
-                        const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
+                        const interlock = Number(dims.shutterInterlock) || 0;
+                        const meeting = Number(dims.shutterMeeting) || 0;
 
-                        let numShutters: number;
-                        switch (shutterConfig) {
-                            case ShutterConfigType.FOUR_GLASS: numShutters = 4; break;
-                            case ShutterConfigType.TWO_GLASS: numShutters = 2; break;
-                            case ShutterConfigType.THREE_GLASS: numShutters = 3; break;
-                            case ShutterConfigType.TWO_GLASS_ONE_MESH: numShutters = 3; break;
-                            default: numShutters = 0;
-                        }
+                        if (shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
+                            const panelWidth = (innerAreaWidth + 3 * interlock) / 4;
+                            const panels = [
+                                { id: 0, type: 'glass', x: 0, z: 5 }, // Fixed Left (Outer Track)
+                                { id: 5, type: 'glass', x: innerAreaWidth - panelWidth, z: 5 }, // Fixed Right (Outer Track)
+                                { id: 1, type: 'glass', x: panelWidth - interlock, z: 10 }, // Sliding Glass Left (Mid Track)
+                                { id: 4, type: 'glass', x: 2 * panelWidth - 2 * interlock, z: 10 }, // Sliding Glass Right (Mid Track)
+                                { id: 2, type: 'mesh',  x: 0, z: 15 }, // Sliding Mesh Left (Inner Track, Parked)
+                                { id: 3, type: 'mesh',  x: innerAreaWidth - panelWidth, z: 15 }, // Sliding Mesh Right (Inner Track, Parked)
+                            ];
+                            
+                            const elements: React.ReactNode[] = [];
+                            panels.forEach(p => {
+                                const handleConfig = slidingHandles[p.id];
+                                if (handleConfig) {
+                                    handleElements.push(<div key={`handle-${p.id}`} style={{ position: 'absolute', zIndex: 30, left: (p.x + panelWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><PrintableHandle config={handleConfig} scale={scale} /></div>);
+                                }
+                                
+                                let leftProf = dims.shutterInterlock;
+                                let rightProf = dims.shutterInterlock;
+                                if (p.id === 0 || p.id === 2) leftProf = dims.shutterHandle;
+                                if (p.id === 3 || p.id === 5) rightProf = dims.shutterHandle;
 
-                        if (is4G) {
-                            const shutterWidth = (innerAreaWidth + (2 * dims.shutterInterlock) + dims.shutterMeeting) / 4;
-                            const positions = [ 0, shutterWidth - dims.shutterInterlock, (2*shutterWidth) - dims.shutterInterlock - dims.shutterMeeting, (3*shutterWidth) - (2*dims.shutterInterlock) - dims.shutterMeeting ];
+                                elements.push(
+                                    <div key={p.id} className="absolute" style={{ left: p.x * scale, zIndex: p.z }}>
+                                        <PrintSlidingShutter
+                                            panelId={`sliding-${p.id}`}
+                                            width={panelWidth} height={innerAreaHeight}
+                                            topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom}
+                                            leftProfile={leftProf} rightProfile={rightProf}
+                                            isMesh={p.type === 'mesh'}
+                                            isFixed={fixedShutters[p.id]} isSliding={!fixedShutters[p.id]}
+                                        />
+                                    </div>
+                                );
+                            });
+                            return elements;
+
+                        } else if (shutterConfig === ShutterConfigType.FOUR_GLASS) {
+                            const shutterWidth = (innerAreaWidth + (2 * interlock) + meeting) / 4;
+                            const positions = [ 0, shutterWidth - interlock, (2*shutterWidth) - interlock - meeting, (3*shutterWidth) - (2*interlock) - meeting ];
                              slidingHandles.forEach((handleConfig, i) => {
                                 if (handleConfig) {
                                     handleElements.push(<div key={`handle-${i}`} style={{ zIndex: 30, position: 'absolute', left: (positions[i] + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><PrintableHandle config={handleConfig} scale={scale} /></div>);
                                 }
                             });
                             const profiles = [
-                                { l: dims.shutterHandle, r: dims.shutterInterlock }, { l: dims.shutterInterlock, r: dims.shutterMeeting },
-                                { l: dims.shutterMeeting, r: dims.shutterInterlock }, { l: dims.shutterInterlock, r: dims.shutterHandle }
+                                { l: dims.shutterHandle, r: interlock }, { l: interlock, r: meeting },
+                                { l: meeting, r: interlock }, { l: interlock, r: dims.shutterHandle }
                             ];
                             return profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><PrintSlidingShutter panelId={`sliding-${i}`} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>);
                         } else {
+                            const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
+                            const numShutters = shutterConfig === ShutterConfigType.TWO_GLASS ? 2 : 3;
                             const shutterDivider = hasMesh ? 2 : numShutters;
-                            const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * dims.shutterInterlock) / shutterDivider;
+                            const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * interlock) / shutterDivider;
                             slidingHandles.forEach((handleConfig, i) => {
                                 if (handleConfig) {
-                                    let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - dims.shutterInterlock);
+                                    let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - interlock);
                                     handleElements.push(<div key={`handle-${i}`} style={{ zIndex: 30, position: 'absolute', left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><PrintableHandle config={handleConfig} scale={scale} /></div>);
                                 }
                             });
                             return Array.from({ length: numShutters }).map((_, i) => {
                                 const isMeshShutter = hasMesh && i === numShutters - 1;
-                                let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - dims.shutterInterlock);
-                                const leftProfile = i === 0 ? dims.shutterHandle : dims.shutterInterlock;
-                                const rightProfile = i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock;
+                                let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - interlock);
+                                const leftProfile = i === 0 ? dims.shutterHandle : interlock;
+                                const rightProfile = i === numShutters - 1 ? dims.shutterHandle : interlock;
                                 return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><PrintSlidingShutter panelId={`sliding-${i}`} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={leftProfile} rightProfile={rightProfile} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
                             });
                         }
@@ -715,12 +746,15 @@ const getItemDetails = (item: QuotationItem) => {
     const panelCounts: { [key: string]: number } = {};
 
     if (windowType === WindowType.SLIDING) {
-        if (shutterConfig === ShutterConfigType.TWO_GLASS) panelCounts['Sliding Shutter'] = 2;
-        else if (shutterConfig === ShutterConfigType.THREE_GLASS) panelCounts['Sliding Shutter'] = 3;
-        else if (shutterConfig === ShutterConfigType.FOUR_GLASS) panelCounts['Sliding Shutter'] = 4;
+        if (shutterConfig === ShutterConfigType.TWO_GLASS) panelCounts['Glass Shutter'] = 2;
+        else if (shutterConfig === ShutterConfigType.THREE_GLASS) panelCounts['Glass Shutter'] = 3;
+        else if (shutterConfig === ShutterConfigType.FOUR_GLASS) panelCounts['Glass Shutter'] = 4;
         else if (shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH) {
-            panelCounts['Sliding Shutter'] = 2;
+            panelCounts['Glass Shutter'] = 2;
             panelCounts['Mesh Shutter'] = 1;
+        } else if (shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
+            panelCounts['Glass Shutter'] = 4;
+            panelCounts['Mesh Shutter'] = 2;
         }
     } else if (windowType === WindowType.CASEMENT) {
         const gridCells = (config.verticalDividers.length + 1) * (config.horizontalDividers.length + 1);
@@ -747,7 +781,15 @@ const getItemDetails = (item: QuotationItem) => {
                 unitsPerWindow = hw.name.toLowerCase().includes('louver') ? louverCells : doorCells;
             } else {
                  switch(windowType) {
-                    case WindowType.SLIDING: unitsPerWindow = shutterConfig === '2G' ? 2 : shutterConfig === '4G' ? 4 : 3; break;
+                    case WindowType.SLIDING:
+                        switch(config.shutterConfig) {
+                            case ShutterConfigType.TWO_GLASS: unitsPerWindow = 2; break;
+                            case ShutterConfigType.THREE_GLASS: 
+                            case ShutterConfigType.TWO_GLASS_ONE_MESH: unitsPerWindow = 3; break;
+                            case ShutterConfigType.FOUR_GLASS: unitsPerWindow = 4; break;
+                            case ShutterConfigType.FOUR_GLASS_TWO_MESH: unitsPerWindow = 6; break;
+                        }
+                        break;
                     case WindowType.CASEMENT: unitsPerWindow = doorPositions.length; break;
                     case WindowType.GLASS_PARTITION: unitsPerWindow = config.partitionPanels.types.filter(t => t.type !== 'fixed').length; break;
                 }
