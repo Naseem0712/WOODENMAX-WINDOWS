@@ -330,11 +330,24 @@ export interface BOMHardware {
   totalQuantity: number;
 }
 
+export interface BOMGlass {
+    description: string;
+    totalAreaSqFt: number;
+    totalAreaSqMt: number;
+}
+
+export interface BOMMesh {
+    totalAreaSqFt: number;
+    totalAreaSqMt: number;
+}
+
 export interface BOMSeries {
   seriesId: string;
   seriesName: string;
   profiles: BOMProfile[];
   hardware: BOMHardware[];
+  glass: BOMGlass[];
+  mesh?: BOMMesh;
 }
 
 export type BOM = BOMSeries[];

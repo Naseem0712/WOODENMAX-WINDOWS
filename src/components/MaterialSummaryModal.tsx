@@ -123,23 +123,73 @@ export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOp
                                         </tbody>
                                     </table>
 
-                                    <h4 className="font-bold mt-4 mb-1 text-sm">Hardware & Accessories</h4>
-                                    <table className="w-full text-left text-[8pt]">
-                                        <thead className="bg-gray-100">
-                                            <tr className="border-b-2 border-black">
-                                                <th className="p-1">Item Name</th>
-                                                <th className="p-1 text-right">Total Quantity</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {seriesData.hardware.map(item => (
-                                                <tr key={item.name} className="border-b border-gray-300">
-                                                    <td className="p-1 font-semibold">{item.name}</td>
-                                                    <td className="p-1 text-right">{item.totalQuantity} pcs</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                    {seriesData.glass.length > 0 && (
+                                        <>
+                                            <h4 className="font-bold mt-4 mb-1 text-sm">Glass Summary</h4>
+                                            <table className="w-full text-left text-[8pt]">
+                                                <thead className="bg-gray-100">
+                                                    <tr className="border-b-2 border-black">
+                                                        <th className="p-1">Glass Description</th>
+                                                        <th className="p-1 text-right">Total Area (sq ft)</th>
+                                                        <th className="p-1 text-right">Total Area (sq mt)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {seriesData.glass.map(item => (
+                                                        <tr key={item.description} className="border-b border-gray-300">
+                                                            <td className="p-1 font-semibold">{item.description}</td>
+                                                            <td className="p-1 text-right">{item.totalAreaSqFt.toFixed(2)} sq ft</td>
+                                                            <td className="p-1 text-right">{item.totalAreaSqMt.toFixed(2)} sq mt</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </>
+                                    )}
+
+                                    {seriesData.mesh && seriesData.mesh.totalAreaSqFt > 0 && (
+                                         <>
+                                            <h4 className="font-bold mt-4 mb-1 text-sm">Mesh Summary</h4>
+                                            <table className="w-full text-left text-[8pt]">
+                                                <thead className="bg-gray-100">
+                                                    <tr className="border-b-2 border-black">
+                                                        <th className="p-1">Material</th>
+                                                        <th className="p-1 text-right">Total Area (sq ft)</th>
+                                                        <th className="p-1 text-right">Total Area (sq mt)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr className="border-b border-gray-300">
+                                                        <td className="p-1 font-semibold">Sliding Mesh</td>
+                                                        <td className="p-1 text-right">{seriesData.mesh.totalAreaSqFt.toFixed(2)} sq ft</td>
+                                                        <td className="p-1 text-right">{seriesData.mesh.totalAreaSqMt.toFixed(2)} sq mt</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </>
+                                    )}
+
+                                    {seriesData.hardware.length > 0 && (
+                                        <>
+                                            <h4 className="font-bold mt-4 mb-1 text-sm">Hardware & Accessories</h4>
+                                            <table className="w-full text-left text-[8pt]">
+                                                <thead className="bg-gray-100">
+                                                    <tr className="border-b-2 border-black">
+                                                        <th className="p-1">Item Name</th>
+                                                        <th className="p-1 text-right">Total Quantity</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {seriesData.hardware.map(item => (
+                                                        <tr key={item.name} className="border-b border-gray-300">
+                                                            <td className="p-1 font-semibold">{item.name}</td>
+                                                            <td className="p-1 text-right">{item.totalQuantity} pcs</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </>
+                                    )}
                                 </div>
                             ))}
                         </div>
