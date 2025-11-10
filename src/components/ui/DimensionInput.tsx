@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 
 export type Unit = 'mm' | 'cm' | 'in' | 'ft-in';
@@ -66,46 +65,40 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
   const [internalUnit, setInternalUnit] = useState<Unit>('mm');
   const unit = controlledUnit || internalUnit;
   
-  const [displayValue, setDisplayValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  // This state will hold the user's raw input only while the input is focused.
+  const [rawValue, setRawValue] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Only update display value from props if the input is not focused
-    // to avoid disrupting user input
-    if (!isFocused && value_mm !== '') {
-        setDisplayValue(formatFromMm(Number(value_mm), unit));
-    } else if (!isFocused && value_mm === '') {
-        setDisplayValue('');
-    }
-  }, [value_mm, unit, isFocused]);
+  // The value displayed in the input is derived.
+  // If focused, show the raw user input. If not, show the formatted value from props.
+  const displayValue = isFocused && rawValue !== null
+    ? rawValue
+    : (value_mm !== '' ? formatFromMm(Number(value_mm), unit) : '');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newDisplayValue = e.target.value;
-    setDisplayValue(newDisplayValue);
-    const newMmValue = parseToMm(newDisplayValue, unit);
-    if (newMmValue !== '') {
-      onChange_mm(newMmValue);
-    }
+    const currentInputValue = e.target.value;
+    setRawValue(currentInputValue); // Store user's raw text for immediate display
+    const newMmValue = parseToMm(currentInputValue, unit);
+    onChange_mm(newMmValue); // Always notify parent of the canonical value (or '')
   };
   
   const handleUnitChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newUnit = e.target.value as Unit;
-    setInternalUnit(newUnit);
-    // When unit changes, re-format the display value from the canonical mm value
-    if (value_mm !== '') {
-        setDisplayValue(formatFromMm(Number(value_mm), newUnit));
+    if (!controlledUnit) {
+      setInternalUnit(e.target.value as Unit);
     }
+    // The re-render will cause displayValue to be re-calculated correctly based on the new unit.
+  };
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    setIsFocused(true);
+    // When focusing, initialize the raw value with the current formatted value from props.
+    setRawValue(value_mm !== '' ? formatFromMm(Number(value_mm), unit) : '');
+    e.target.select();
   };
 
   const handleBlur = () => {
       setIsFocused(false);
-      // On blur, reformat the input to a clean, consistent representation
-      if (value_mm !== '') {
-          setDisplayValue(formatFromMm(Number(value_mm), unit));
-      } else {
-          setDisplayValue('');
-          onChange_mm('');
-      }
+      setRawValue(null); // Clear the raw value. On next render, displayValue will fall back to the formatted prop.
   };
 
   return (
@@ -121,10 +114,7 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
           className={`w-full pl-3 ${controlledUnit ? 'pr-3' : 'pr-20'} py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
           value={displayValue}
           onChange={handleInputChange}
-          onFocus={(e) => {
-            setIsFocused(true);
-            e.target.select();
-          }}
+          onFocus={handleFocus}
           onBlur={handleBlur}
           {...props}
         />
