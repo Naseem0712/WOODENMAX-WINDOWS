@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input } from './Input';
 
 export type Unit = 'mm' | 'cm' | 'in' | 'ft-in';
@@ -18,24 +18,16 @@ const parseToMm = (displayValue: string, unit: Unit): number | '' => {
     if (displayValue.trim() === '') return '';
 
     if (unit === 'ft-in') {
-        // Regex to capture feet and inches from formats like 8'2", 8ft 2in, 8 2
         const match = displayValue.match(/(\d+\.?\d*)\s*(?:'|ft|feet)?\s*(\d+\.?\d*)?\s*(?:"|in|inch)?/);
         if (match) {
             const feet = parseFloat(match[1] || '0');
             const inches = parseFloat(match[2] || '0');
             return (feet * 12 + inches) * 25.4;
         }
-        // Fallback for single number entry
         const num = parseFloat(displayValue);
-        return isNaN(num) ? '' : (num * 12 * 25.4); // Assume feet if single number
+        return isNaN(num) ? '' : (num * 12 * 25.4);
     }
     
-    // For other units, allow trailing decimals by not parsing if it ends with a dot
-    if (displayValue.endsWith('.') || displayValue.endsWith('.0')) {
-        const num = parseFloat(displayValue);
-        if (isNaN(num)) return '';
-    }
-
     const num = parseFloat(displayValue);
     if (isNaN(num)) return '';
 
@@ -63,7 +55,6 @@ const formatFromMm = (mmValue: number, unit: Unit): string => {
         case 'mm':
         default: value = mmValue; break;
     }
-    // Use toFixed for decimals, but parseInt if it's a whole number to avoid ".00"
     return parseFloat(value.toFixed(2)).toString();
 };
 
@@ -72,34 +63,43 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
   const [internalUnit, setInternalUnit] = useState<Unit>('mm');
   const unit = controlledUnit || internalUnit;
   
-  const [draftValue, setDraftValue] = useState<string | null>(null);
-  const isEditing = draftValue !== null;
+  const [internalValue, setInternalValue] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
 
-  const displayValue = isEditing 
-    ? draftValue 
-    : (value_mm !== '' ? formatFromMm(Number(value_mm), unit) : '');
+  // Sync internalValue with the prop value, but only if the input is not focused.
+  useEffect(() => {
+    if (!isFocused) {
+      setInternalValue(value_mm !== '' ? formatFromMm(Number(value_mm), unit) : '');
+    }
+  }, [value_mm, unit, isFocused]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const currentInputValue = e.target.value;
-    setDraftValue(currentInputValue);
-    const newMmValue = parseToMm(currentInputValue, unit);
-    onChange_mm(newMmValue);
+    // Just update the internal value while typing.
+    setInternalValue(e.target.value);
   };
   
   const handleUnitChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (!controlledUnit) {
-      setInternalUnit(e.target.value as Unit);
+      const newUnit = e.target.value as Unit;
+      setInternalUnit(newUnit);
+      // When unit changes, immediately reformat the display from the source of truth (value_mm).
+      const formatted = value_mm !== '' ? formatFromMm(Number(value_mm), newUnit) : '';
+      setInternalValue(formatted);
     }
   };
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    const currentDisplay = value_mm !== '' ? formatFromMm(Number(value_mm), unit) : '';
-    setDraftValue(currentDisplay);
+    setIsFocused(true);
     e.target.select();
   };
 
   const handleBlur = () => {
-      setDraftValue(null);
+    setIsFocused(false);
+    // On blur, parse the internal value and "commit" the change to the parent if it's different.
+    const newMmValue = parseToMm(internalValue, unit);
+    if (String(newMmValue) !== String(value_mm)) {
+      onChange_mm(newMmValue);
+    }
   };
 
   return (
@@ -113,7 +113,7 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
           type="text"
           inputMode={unit === 'ft-in' ? 'text' : 'decimal'}
           className={`w-full pl-3 ${controlledUnit ? 'pr-3' : 'pr-20'} py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
-          value={displayValue}
+          value={internalValue}
           onChange={handleInputChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
@@ -149,7 +149,7 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
                 label=""
                 aria-label={`Weight for ${label}`}
                 value={weightValue}
-                onChange={e => onWeightChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                onChange={e => onWeightChange && onWeightChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
                 className="!py-1 !pr-12"
                 unit="kg/m"
             />
@@ -162,7 +162,7 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
                 label=""
                 aria-label={`Length for ${label}`}
                 value={lengthValue}
-                onChange={e => onLengthChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                onChange={e => onLengthChange && onLengthChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
                 className="!py-1 !pr-5"
                 unit="m"
             />

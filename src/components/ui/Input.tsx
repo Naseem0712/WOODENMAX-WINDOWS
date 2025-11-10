@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
@@ -6,30 +6,52 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input: React.FC<InputProps> = ({ label, id, unit, className, value, onChange, onFocus, onBlur, ...props }) => {
-  const [draftValue, setDraftValue] = useState<string | null>(null);
+  const [internalValue, setInternalValue] = useState(String(value ?? ''));
+  const [isFocused, setIsFocused] = useState(false);
 
-  const isEditing = draftValue !== null;
-  const displayValue = isEditing ? draftValue : String(value ?? '');
+  // Sync with prop value when not focused. This allows the component to be updated from the outside,
+  // but prevents the parent's state from overwriting what the user is currently typing.
+  useEffect(() => {
+    if (!isFocused) {
+      setInternalValue(String(value ?? ''));
+    }
+  }, [value, isFocused]);
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    setDraftValue(String(value ?? ''));
+    setIsFocused(true);
     e.target.select();
     if (onFocus) {
       onFocus(e);
     }
   };
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Only update the internal state during typing. Do not call parent's onChange here.
+    setInternalValue(e.target.value);
+  };
+  
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    setDraftValue(null);
+    setIsFocused(false);
+    
+    // Create a new event object for the parent onChange because we need to pass our internalValue.
+    const syntheticEvent = {
+      ...e,
+      target: {
+        ...e.target,
+        value: internalValue,
+      },
+    };
+    
+    // On blur, we "commit" the change by calling the parent's onChange, but only if the value differs.
+    // This prevents unnecessary re-renders if the user just clicks in and out.
+    if (internalValue !== String(value ?? '')) {
+      if (onChange) {
+        onChange(syntheticEvent as React.ChangeEvent<HTMLInputElement>);
+      }
+    }
+
     if (onBlur) {
       onBlur(e);
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setDraftValue(e.target.value);
-    if (onChange) {
-      onChange(e);
     }
   };
   
@@ -44,7 +66,7 @@ export const Input: React.FC<InputProps> = ({ label, id, unit, className, value,
         <input
           id={id}
           className={`${baseClasses} ${className || ''}`}
-          value={displayValue}
+          value={internalValue} // The input is always controlled by its internal state.
           onChange={handleChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
