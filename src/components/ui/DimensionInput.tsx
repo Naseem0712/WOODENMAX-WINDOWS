@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Input } from './Input';
 
 export type Unit = 'mm' | 'cm' | 'in' | 'ft-in';
@@ -30,6 +30,12 @@ const parseToMm = (displayValue: string, unit: Unit): number | '' => {
         return isNaN(num) ? '' : (num * 12 * 25.4); // Assume feet if single number
     }
     
+    // For other units, allow trailing decimals by not parsing if it ends with a dot
+    if (displayValue.endsWith('.') || displayValue.endsWith('.0')) {
+        const num = parseFloat(displayValue);
+        if (isNaN(num)) return '';
+    }
+
     const num = parseFloat(displayValue);
     if (isNaN(num)) return '';
 
@@ -66,20 +72,18 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
   const [internalUnit, setInternalUnit] = useState<Unit>('mm');
   const unit = controlledUnit || internalUnit;
   
-  const [isFocused, setIsFocused] = useState(false);
-  const [displayValue, setDisplayValue] = useState(() => value_mm !== '' ? formatFromMm(Number(value_mm), unit) : '');
+  const [draftValue, setDraftValue] = useState<string | null>(null);
+  const isEditing = draftValue !== null;
 
-  useEffect(() => {
-    if (!isFocused) {
-      setDisplayValue(value_mm !== '' ? formatFromMm(Number(value_mm), unit) : '');
-    }
-  }, [value_mm, unit, isFocused]);
+  const displayValue = isEditing 
+    ? draftValue 
+    : (value_mm !== '' ? formatFromMm(Number(value_mm), unit) : '');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const currentInputValue = e.target.value;
-    setDisplayValue(currentInputValue); // Store user's raw text for immediate display
+    setDraftValue(currentInputValue);
     const newMmValue = parseToMm(currentInputValue, unit);
-    onChange_mm(newMmValue); // Always notify parent of the canonical value (or '')
+    onChange_mm(newMmValue);
   };
   
   const handleUnitChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -89,13 +93,13 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
   };
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    setIsFocused(true);
+    const currentDisplay = value_mm !== '' ? formatFromMm(Number(value_mm), unit) : '';
+    setDraftValue(currentDisplay);
     e.target.select();
   };
 
   const handleBlur = () => {
-      setIsFocused(false);
-      // The useEffect will now trigger and sync the value from the parent, showing the correctly formatted value.
+      setDraftValue(null);
   };
 
   return (
@@ -107,12 +111,13 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
         <input
           id={id}
           type="text"
-          inputMode="decimal"
+          inputMode={unit === 'ft-in' ? 'text' : 'decimal'}
           className={`w-full pl-3 ${controlledUnit ? 'pr-3' : 'pr-20'} py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
           value={displayValue}
           onChange={handleInputChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
+          autoComplete="off"
           {...props}
         />
         {!controlledUnit && (
@@ -144,7 +149,7 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
                 label=""
                 aria-label={`Weight for ${label}`}
                 value={weightValue}
-                onChange={e => onWeightChange(e.target.value === '' ? '' : Number(e.target.value))}
+                onChange={e => onWeightChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
                 className="!py-1 !pr-12"
                 unit="kg/m"
             />
@@ -157,7 +162,7 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
                 label=""
                 aria-label={`Length for ${label}`}
                 value={lengthValue}
-                onChange={e => onLengthChange(e.target.value === '' ? '' : Number(e.target.value))}
+                onChange={e => onLengthChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
                 className="!py-1 !pr-5"
                 unit="m"
             />

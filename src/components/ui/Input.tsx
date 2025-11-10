@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
@@ -6,19 +6,13 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input: React.FC<InputProps> = ({ label, id, unit, className, value, onChange, onFocus, onBlur, ...props }) => {
-  const [internalValue, setInternalValue] = useState(String(value ?? ''));
-  const [isFocused, setIsFocused] = useState(false);
+  const [draftValue, setDraftValue] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Sync with the parent component's value, but only when the input is not focused.
-    // This prevents the parent's state updates from interrupting the user while they are typing.
-    if (!isFocused) {
-      setInternalValue(String(value ?? ''));
-    }
-  }, [value, isFocused]);
+  const isEditing = draftValue !== null;
+  const displayValue = isEditing ? draftValue : String(value ?? '');
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    setIsFocused(true);
+    setDraftValue(String(value ?? ''));
     e.target.select();
     if (onFocus) {
       onFocus(e);
@@ -26,18 +20,16 @@ export const Input: React.FC<InputProps> = ({ label, id, unit, className, value,
   };
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    setIsFocused(false);
+    setDraftValue(null);
     if (onBlur) {
       onBlur(e);
     }
-    // After blurring, the `useEffect` hook will run and sync the input's display
-    // with the canonical value from the parent component.
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInternalValue(e.target.value); // Update the visual state of the input immediately.
+    setDraftValue(e.target.value);
     if (onChange) {
-      onChange(e); // Propagate the event to the parent component to update its state.
+      onChange(e);
     }
   };
   
@@ -52,10 +44,11 @@ export const Input: React.FC<InputProps> = ({ label, id, unit, className, value,
         <input
           id={id}
           className={`${baseClasses} ${className || ''}`}
-          value={internalValue}
+          value={displayValue}
           onChange={handleChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
+          autoComplete="off"
           {...props}
         />
         {unit && (
