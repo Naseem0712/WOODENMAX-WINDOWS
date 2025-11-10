@@ -813,6 +813,97 @@ const getInitialConfig = (): ConfigState => {
 type MobilePanelState = 'none' | 'configure' | 'quotation';
 type AppView = 'designer' | 'guides';
 
+interface DesignerViewProps {
+  installPrompt: BeforeInstallPromptEvent | null;
+  handleInstallClick: () => void;
+  panelRef: React.RefObject<HTMLDivElement>;
+  isDesktopPanelOpen: boolean;
+  setIsDesktopPanelOpen: (isOpen: boolean) => void;
+  commonControlProps: any; // Using any for brevity, but it's the complex object
+  canvasKey: string;
+  windowConfig: WindowConfig;
+  handleRemoveVerticalDivider: (index: number) => void;
+  handleRemoveHorizontalDivider: (index: number) => void;
+  quantity: number | '';
+  setQuantity: (value: number | '') => void;
+  areaType: AreaType;
+  setAreaType: (type: AreaType) => void;
+  rate: number | '';
+  setRate: (value: number | '') => void;
+  onSave: () => void;
+  onUpdate: () => void;
+  onCancelEdit: () => void;
+  editingItemId: string | null;
+  onBatchAdd: () => void;
+  windowTitle: string;
+  setWindowTitle: (title: string) => void;
+  hardwareCostPerWindow: number;
+  quotationItemCount: number;
+  onViewQuotation: () => void;
+  activeMobilePanel: MobilePanelState;
+  handleOpenConfigure: () => void;
+  handleOpenQuote: () => void;
+  handleCloseMobilePanels: () => void;
+}
+
+const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
+  const {
+    installPrompt, handleInstallClick, panelRef, isDesktopPanelOpen, setIsDesktopPanelOpen,
+    commonControlProps, canvasKey, windowConfig, handleRemoveVerticalDivider, handleRemoveHorizontalDivider,
+    quantity, setQuantity, areaType, setAreaType, rate, setRate,
+    onSave, onUpdate, onCancelEdit, editingItemId,
+    onBatchAdd, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount,
+    onViewQuotation, activeMobilePanel, handleOpenConfigure, handleOpenQuote, handleCloseMobilePanels
+  } = props;
+
+  return (
+    <>
+      <header className="bg-slate-800 p-3 flex items-center shadow-md z-40 no-print">
+            <Logo className="h-10 w-10 mr-4 flex-shrink-0" />
+            <div className="flex-grow">
+                <h1 className="text-2xl font-bold text-white tracking-wider">WoodenMax Architectural Elements</h1>
+                <p className="text-sm text-indigo-300">Powered by Real Vibe Studio</p>
+            </div>
+            <div className='flex items-center gap-2'>
+              <Button onClick={() => window.location.hash = '#/guides'} variant="secondary" className="hidden sm:inline-flex"> <DocumentTextIcon className="w-5 h-5 mr-2" /> Features & Guides </Button>
+              {installPrompt && ( <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse"> <DownloadIcon className="w-5 h-5 mr-2" /> Add to Home Screen </Button> )}
+            </div>
+        </header>
+        <main className="flex flex-row flex-grow min-h-0">
+            <div ref={panelRef} className={`hidden lg:block flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
+                <div className={`h-full overflow-hidden ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
+                    <ControlsPanel {...commonControlProps} idPrefix="desktop-" onClose={() => setIsDesktopPanelOpen(false)} />
+                </div>
+            </div>
+            <div className="relative flex-1 flex flex-col min-w-0">
+                {!isDesktopPanelOpen && ( <button onClick={() => setIsDesktopPanelOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex" aria-label="Expand panel"> <ChevronLeftIcon className="w-5 h-5 rotate-180" /> </button> )}
+              <div className="flex-grow relative">
+                 <WindowCanvas key={canvasKey} config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} onToggleElevationDoor={() => {}} />
+              </div>
+              <div className="flex-shrink-0 no-print hidden lg:block">
+                  <QuotationPanel idPrefix="desktop-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} />
+              </div>
+              <div className="lg:hidden p-2 bg-slate-800 border-t-2 border-slate-700 grid grid-cols-2 gap-2 no-print">
+                  <Button onClick={handleOpenConfigure} variant="secondary" className="h-12"> <AdjustmentsIcon className="w-5 h-5 mr-2" /> Configure </Button>
+                  <Button onClick={handleOpenQuote} variant="secondary" className="h-12"> <ListBulletIcon className="w-5 h-5 mr-2" /> Quotation </Button>
+              </div>
+            </div>
+        </main>
+        {/* Mobile Configure Panel */}
+        <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${activeMobilePanel === 'configure' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={handleCloseMobilePanels}></div>
+        <div className={`lg:hidden fixed bottom-0 left-0 right-0 max-h-[85vh] flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'configure' ? 'translate-y-0' : 'translate-y-full'}`}>
+           <ControlsPanel {...commonControlProps} idPrefix="mobile-" onClose={handleCloseMobilePanels} />
+        </div>
+        
+        {/* Mobile Quotation Panel */}
+        <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${activeMobilePanel === 'quotation' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={handleCloseMobilePanels}></div>
+        <div className={`lg:hidden fixed bottom-0 left-0 right-0 flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'quotation' ? 'translate-y-0' : 'translate-y-full'}`}>
+            <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} onClose={handleCloseMobilePanels} />
+        </div>
+    </>
+  );
+});
+
 const App: React.FC = () => {
   
   const [windowConfigState, dispatch] = useReducer(configReducer, getInitialConfig());
@@ -1517,53 +1608,6 @@ const App: React.FC = () => {
   
   const loadingFallback = <div className="fixed inset-0 bg-slate-900 bg-opacity-80 flex items-center justify-center z-[100] no-print"><div className="text-white">Loading...</div></div>;
 
-  const DesignerView = () => (
-    <>
-      <header className="bg-slate-800 p-3 flex items-center shadow-md z-40 no-print">
-            <Logo className="h-10 w-10 mr-4 flex-shrink-0" />
-            <div className="flex-grow">
-                <h1 className="text-2xl font-bold text-white tracking-wider">WoodenMax Architectural Elements</h1>
-                <p className="text-sm text-indigo-300">Powered by Real Vibe Studio</p>
-            </div>
-            <div className='flex items-center gap-2'>
-              <Button onClick={() => window.location.hash = '#/guides'} variant="secondary" className="hidden sm:inline-flex"> <DocumentTextIcon className="w-5 h-5 mr-2" /> Features & Guides </Button>
-              {installPrompt && ( <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse"> <DownloadIcon className="w-5 h-5 mr-2" /> Add to Home Screen </Button> )}
-            </div>
-        </header>
-        <main className="flex flex-row flex-grow min-h-0">
-            <div ref={panelRef} className={`hidden lg:block flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
-                <div className={`h-full overflow-hidden ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
-                    <ControlsPanel {...commonControlProps} idPrefix="desktop-" onClose={() => setIsDesktopPanelOpen(false)} />
-                </div>
-            </div>
-            <div className="relative flex-1 flex flex-col min-w-0">
-                {!isDesktopPanelOpen && ( <button onClick={() => setIsDesktopPanelOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex" aria-label="Expand panel"> <ChevronLeftIcon className="w-5 h-5 rotate-180" /> </button> )}
-              <div className="flex-grow relative">
-                 <WindowCanvas key={canvasKey} config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} onToggleElevationDoor={() => {}} />
-              </div>
-              <div className="flex-shrink-0 no-print hidden lg:block">
-                  <QuotationPanel idPrefix="desktop-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onUpdate={handleUpdateQuotationItem} onCancelEdit={handleCancelEdit} editingItemId={editingItemId} onBatchAdd={handleBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={handleViewQuotation} />
-              </div>
-              <div className="lg:hidden p-2 bg-slate-800 border-t-2 border-slate-700 grid grid-cols-2 gap-2 no-print">
-                  <Button onClick={handleOpenConfigure} variant="secondary" className="h-12"> <AdjustmentsIcon className="w-5 h-5 mr-2" /> Configure </Button>
-                  <Button onClick={handleOpenQuote} variant="secondary" className="h-12"> <ListBulletIcon className="w-5 h-5 mr-2" /> Quotation </Button>
-              </div>
-            </div>
-        </main>
-        {/* Mobile Configure Panel */}
-        <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${activeMobilePanel === 'configure' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={handleCloseMobilePanels}></div>
-        <div className={`lg:hidden fixed bottom-0 left-0 right-0 max-h-[85vh] flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'configure' ? 'translate-y-0' : 'translate-y-full'}`}>
-           <ControlsPanel {...commonControlProps} idPrefix="mobile-" onClose={handleCloseMobilePanels} />
-        </div>
-        
-        {/* Mobile Quotation Panel */}
-        <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${activeMobilePanel === 'quotation' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={handleCloseMobilePanels}></div>
-        <div className={`lg:hidden fixed bottom-0 left-0 right-0 flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'quotation' ? 'translate-y-0' : 'translate-y-full'}`}>
-            <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={handleSaveToQuotation} onUpdate={handleUpdateQuotationItem} onCancelEdit={handleCancelEdit} editingItemId={editingItemId} onBatchAdd={handleBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItems.length} onViewQuotation={handleViewQuotation} onClose={handleCloseMobilePanels} />
-        </div>
-    </>
-  );
-
   return (
     <>
       {isQuotationModalOpen && (
@@ -1578,7 +1622,38 @@ const App: React.FC = () => {
       <div className={`flex flex-col h-screen font-sans bg-slate-900 overflow-hidden ${isPreviewing ? 'hidden' : ''}`}>
         <Suspense fallback={loadingFallback}>
             {appView === 'designer' ? (
-                <DesignerView />
+                <DesignerView
+                    installPrompt={installPrompt}
+                    handleInstallClick={handleInstallClick}
+                    panelRef={panelRef}
+                    isDesktopPanelOpen={isDesktopPanelOpen}
+                    setIsDesktopPanelOpen={setIsDesktopPanelOpen}
+                    commonControlProps={commonControlProps}
+                    canvasKey={canvasKey}
+                    windowConfig={windowConfig}
+                    handleRemoveVerticalDivider={handleRemoveVerticalDivider}
+                    handleRemoveHorizontalDivider={handleRemoveHorizontalDivider}
+                    quantity={quantity}
+                    setQuantity={setQuantity}
+                    areaType={areaType}
+                    setAreaType={setAreaType}
+                    rate={rate}
+                    setRate={setRate}
+                    onSave={handleSaveToQuotation}
+                    onUpdate={handleUpdateQuotationItem}
+                    onCancelEdit={handleCancelEdit}
+                    editingItemId={editingItemId}
+                    onBatchAdd={handleBatchAdd}
+                    windowTitle={windowTitle}
+                    setWindowTitle={setWindowTitle}
+                    hardwareCostPerWindow={hardwareCostPerWindow}
+                    quotationItemCount={quotationItems.length}
+                    onViewQuotation={handleViewQuotation}
+                    activeMobilePanel={activeMobilePanel}
+                    handleOpenConfigure={handleOpenConfigure}
+                    handleOpenQuote={handleOpenQuote}
+                    handleCloseMobilePanels={handleCloseMobilePanels}
+                />
             ) : (
                 <GuidesViewer 
                     activeSlug={guideSlug} 
