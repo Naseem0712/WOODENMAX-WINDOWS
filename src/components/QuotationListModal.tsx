@@ -13,6 +13,7 @@ import { MaterialSummaryModal } from './MaterialSummaryModal';
 import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
 import { PencilIcon } from './icons/PencilIcon';
 import { TrashIcon } from './icons/TrashIcon';
+import { sanitizeFilenameSegment } from '../utils/pdfFilename';
 
 interface QuotationListModalProps {
   isOpen: boolean;
@@ -119,7 +120,8 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
     const link = document.createElement('a');
     link.href = url;
     const date = new Date().toISOString().slice(0, 10);
-    link.download = `WoodenMax-Quotation-${settings.customer.name || 'Export'}-${date}.json`;
+    const customer = sanitizeFilenameSegment(settings.customer.name, 'Customer');
+    link.download = `WoodenMax-Quotation-${customer}-${date}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

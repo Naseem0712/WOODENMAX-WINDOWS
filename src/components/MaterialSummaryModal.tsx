@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import type { BOM, QuotationSettings } from '../types';
 import { Button } from './ui/Button';
+import { bomPdfFilename, printDocumentTitleForBom } from '../utils/pdfFilename';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { PrinterIcon } from './icons/PrinterIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
@@ -26,6 +27,7 @@ export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOp
 
     const quoteDate = new Date().toLocaleDateString('en-GB');
     const quoteNumber = `WM-BOM-${Date.now().toString().slice(-6)}`;
+    const pdfDateStamp = new Date().toISOString().slice(0, 10);
 
     const handleExportPdf = () => {
         const element = printContainerRef.current?.querySelector<HTMLElement>('.a4-page');
@@ -35,12 +37,21 @@ export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOp
         element.classList.add('pdf-export-mode');
 
         const opt = {
-            margin: 0,
-            filename: `WoodenMax-Window-Designer-BOM-${settings.customer.name || quoteNumber}.pdf`,
-            image: { type: 'jpeg' as const, quality: 0.98 },
-            html2canvas: { scale: 2, logging: false, useCORS: true, backgroundColor: '#ffffff' },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
-            pagebreak: { mode: ['css', 'legacy'] }
+            margin: [8, 8, 8, 8] as [number, number, number, number],
+            filename: bomPdfFilename(settings.customer.name, pdfDateStamp),
+            image: { type: 'jpeg' as const, quality: 0.95 },
+            html2canvas: {
+                scale: 2,
+                logging: false,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                letterRendering: true,
+                scrollX: 0,
+                scrollY: 0,
+            },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const, compress: true },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] as ('css' | 'legacy' | 'avoid-all')[] },
         };
         
         import('html2pdf.js').then(({ default: html2pdf }) => {
@@ -56,7 +67,21 @@ export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOp
         });
     };
 
-    const handlePrint = () => { window.print(); };
+    const handlePrint = () => {
+        const prevTitle = document.title;
+        document.title = printDocumentTitleForBom(settings.customer.name);
+        let finished = false;
+        const finish = () => {
+            if (finished) return;
+            finished = true;
+            document.title = prevTitle;
+            window.removeEventListener('afterprint', finish);
+            window.clearTimeout(fallbackTimer);
+        };
+        const fallbackTimer = window.setTimeout(finish, 12000);
+        window.addEventListener('afterprint', finish);
+        window.print();
+    };
 
     return (
         <div className="fixed inset-0 bg-slate-900 z-50 flex flex-col print-preview-modal">

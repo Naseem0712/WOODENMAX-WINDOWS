@@ -14,6 +14,7 @@ import {
   mirrorHandleForPartitionHandleX,
 } from '../utils/handleDefaults';
 import { PROFILE_TEXTURE_TILE, profileTexturePosition } from '../utils/profileTexture';
+import { quotationPdfFilename, printDocumentTitleForQuotation } from '../utils/pdfFilename';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
   return config.profileColor.startsWith('#') ? config.profileTexture || undefined : undefined;
@@ -919,6 +920,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
 
   const quoteDate = useMemo(() => new Date().toLocaleDateString('en-GB'), []);
   const quoteNumber = useMemo(() => `WM-${Date.now().toString().slice(-6)}`, []);
+  const pdfDateStamp = useMemo(() => new Date().toISOString().slice(0, 10), []);
   
   const subTotal = items.reduce((total, item) => {
     const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
@@ -947,21 +949,26 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
     element.classList.add('pdf-export-mode');
     
     const opt = {
-        margin: 0,
-        filename: `Quotation-${settings.customer.name || 'WoodenMax'}-${quoteNumber}.pdf`,
-        image: { type: 'jpeg' as const, quality: 0.98 },
+        margin: [8, 8, 8, 8] as [number, number, number, number],
+        filename: quotationPdfFilename(settings.customer.name, pdfDateStamp),
+        image: { type: 'jpeg' as const, quality: 0.95 },
         html2canvas: {
             scale: 2,
             logging: false,
             useCORS: true,
+            allowTaint: true,
             backgroundColor: '#ffffff',
+            letterRendering: true,
+            scrollX: 0,
+            scrollY: 0,
         },
         jsPDF: {
             unit: 'mm',
             format: 'a4',
             orientation: 'portrait' as const,
+            compress: true,
         },
-        pagebreak: { mode: ['css', 'legacy'] }
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] as ('css' | 'legacy' | 'avoid-all')[] },
     };
 
     import('html2pdf.js').then(({ default: html2pdf }) => {
@@ -978,6 +985,18 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
   };
   
   const handlePrint = () => {
+    const prevTitle = document.title;
+    document.title = printDocumentTitleForQuotation(settings.customer.name);
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      document.title = prevTitle;
+      window.removeEventListener('afterprint', finish);
+      window.clearTimeout(fallbackTimer);
+    };
+    const fallbackTimer = window.setTimeout(finish, 12000);
+    window.addEventListener('afterprint', finish);
     window.print();
   };
 
@@ -1037,7 +1056,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                 <div className="print-header" style={{height: 'auto'}}>
                     <div className="flex justify-between items-start">
                         <div className="flex items-start gap-4">
-                            <img src={settings.company.logo || 'https://via.placeholder.com/80'} alt="Company Logo" className="w-20 h-20 object-contain"/>
+                            <img src={settings.company.logo || '/logo.jpg'} alt="Company Logo" className="w-20 h-20 object-contain" />
                             <div>
                                 <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
                                 <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>

@@ -21,6 +21,7 @@ import {
   type DesignSnapshot,
 } from './utils/windowTypeDesignSnapshots';
 import { SITE_ORIGIN } from './constants/site';
+import { applyRouteSeo, getMetaDescription } from './seo/meta';
 
 const BatchAddModal = lazy(() => import('./components/BatchAddModal').then(module => ({ default: module.BatchAddModal })));
 const GuidesViewer = lazy(() => import('./components/GuidesViewer').then(module => ({ default: module.GuidesViewer })));
@@ -382,7 +383,7 @@ const DEFAULT_LOUVERS_SERIES: ProfileSeries = {
 };
 
 const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
-    company: { logo: '', name: 'WoodenMax', address: '123 Wood Lane, Timber Town', email: 'info@woodenmax.com', website: 'www.woodenmax.com' },
+    company: { logo: '/logo.jpg', name: 'WoodenMax', address: '123 Wood Lane, Timber Town', email: 'info@woodenmax.com', website: 'www.woodenmax.in' },
     customer: { name: '', address: '', contactPerson: '', architectName: '' },
     financials: { gstPercentage: 18, discount: 0, discountType: 'percentage' },
     bankDetails: { name: '', accountNumber: '', ifsc: '', branch: '', accountType: 'current' },
@@ -879,15 +880,37 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
 
   return (
     <>
-      <header className="bg-slate-800 p-3 flex items-center shadow-md z-40 no-print">
-            <Logo className="h-10 w-10 mr-4 flex-shrink-0" />
-            <div className="flex-grow">
-                <h1 className="text-2xl font-bold text-white tracking-wider">WoodenMax Architectural Elements</h1>
-                <p className="text-sm text-indigo-300">Free online & offline window design & quotations · {new URL(SITE_ORIGIN).hostname}</p>
+      <header className="no-print z-40 flex flex-col gap-2 border-b border-slate-200/90 bg-gradient-to-b from-white to-slate-100 px-3 py-2.5 shadow-sm sm:flex-row sm:items-center sm:gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
+              <h1 className="sr-only">
+                WoodenMax Window Designer — free aluminium &amp; uPVC window &amp; door design with PDF quotations and BOM
+              </h1>
+              <div className="shrink-0 rounded-lg bg-white px-2 py-1.5 shadow-sm ring-1 ring-slate-200/90">
+                <Logo className="h-9 w-auto max-h-9 max-w-[min(100%,200px)] object-contain sm:h-10 sm:max-h-10" alt="WoodenMax logo" />
+              </div>
+              <p className="min-w-0 flex-1 text-xs font-medium leading-snug text-slate-700 sm:text-sm">
+                Reshaping spaces — free window &amp; door design with instant quotations.
+              </p>
             </div>
-            <div className='flex items-center gap-2'>
-              <Button onClick={onOpenGuides} variant="secondary" className="hidden sm:inline-flex"> <DocumentTextIcon className="w-5 h-5 mr-2" /> Features & Guides </Button>
-              {installPrompt && ( <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse"> <DownloadIcon className="w-5 h-5 mr-2" /> Add to Home Screen </Button> )}
+            <div className="flex shrink-0 items-center justify-end gap-2 sm:ml-auto">
+              <Button onClick={onOpenGuides} variant="secondary" className="hidden sm:inline-flex">
+                <DocumentTextIcon className="mr-2 h-5 w-5" /> Features &amp; Guides
+              </Button>
+              <Button
+                onClick={onOpenGuides}
+                variant="secondary"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-0 sm:hidden"
+                aria-label="Features and guides"
+              >
+                <DocumentTextIcon className="h-6 w-6" />
+              </Button>
+              {installPrompt && (
+                <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse whitespace-nowrap text-xs sm:text-sm">
+                  <DownloadIcon className="mr-1.5 h-4 w-4 sm:mr-2 sm:h-5 sm:w-5" />
+                  <span className="hidden sm:inline">Add to Home Screen</span>
+                  <span className="sm:hidden">Install app</span>
+                </Button>
+              )}
             </div>
         </header>
         <main className="flex flex-row flex-grow min-h-0">
@@ -904,22 +927,36 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
               <div className="flex-shrink-0 no-print hidden lg:block">
                   <QuotationPanel idPrefix="desktop-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} />
               </div>
-              <div className="lg:hidden p-2 bg-slate-800 border-t-2 border-slate-700 grid grid-cols-2 gap-2 no-print">
-                  <Button onClick={handleOpenConfigure} variant="secondary" className="h-12"> <AdjustmentsIcon className="w-5 h-5 mr-2" /> Configure </Button>
-                  <Button onClick={handleOpenQuote} variant="secondary" className="h-12"> <ListBulletIcon className="w-5 h-5 mr-2" /> Quotation </Button>
+              <div className="no-print grid grid-cols-2 gap-3 border-t-2 border-slate-700 bg-slate-800 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
+                  <Button onClick={handleOpenConfigure} variant="secondary" className="min-h-[48px] justify-center text-sm font-semibold">
+                    <AdjustmentsIcon className="mr-2 h-5 w-5 shrink-0" /> Configure
+                  </Button>
+                  <Button onClick={handleOpenQuote} variant="secondary" className="min-h-[48px] justify-center text-sm font-semibold">
+                    <ListBulletIcon className="mr-2 h-5 w-5 shrink-0" /> Quotation
+                  </Button>
               </div>
             </div>
         </main>
         {/* Mobile Configure Panel */}
         <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${activeMobilePanel === 'configure' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={handleCloseMobilePanels}></div>
-        <div className={`lg:hidden fixed bottom-0 left-0 right-0 max-h-[85vh] flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'configure' ? 'translate-y-0' : 'translate-y-full'}`}>
-           <ControlsPanel {...commonControlProps} idPrefix="mobile-" onClose={handleCloseMobilePanels} />
+        <div className={`no-print fixed bottom-0 left-0 right-0 z-50 flex max-h-[90vh] h-[min(90vh,100dvh)] flex-col rounded-t-xl bg-slate-800 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_30px_rgba(0,0,0,0.35)] transition-transform duration-300 ease-in-out lg:hidden ${activeMobilePanel === 'configure' ? 'translate-y-0' : 'translate-y-full'}`}>
+           <div className="flex shrink-0 justify-center py-2" aria-hidden="true">
+             <div className="h-1.5 w-12 rounded-full bg-slate-600" />
+           </div>
+           <div className="min-h-0 flex-1 overflow-hidden">
+             <ControlsPanel {...commonControlProps} idPrefix="mobile-" onClose={handleCloseMobilePanels} />
+           </div>
         </div>
         
         {/* Mobile Quotation Panel */}
         <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${activeMobilePanel === 'quotation' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={handleCloseMobilePanels}></div>
-        <div className={`lg:hidden fixed bottom-0 left-0 right-0 flex flex-col transform transition-transform duration-300 ease-in-out z-50 bg-slate-800 rounded-t-lg no-print ${activeMobilePanel === 'quotation' ? 'translate-y-0' : 'translate-y-full'}`}>
-            <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} onClose={handleCloseMobilePanels} />
+        <div className={`no-print fixed bottom-0 left-0 right-0 z-50 flex max-h-[92vh] h-[min(92vh,100dvh)] flex-col rounded-t-xl bg-slate-800 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_30px_rgba(0,0,0,0.35)] transition-transform duration-300 ease-in-out lg:hidden ${activeMobilePanel === 'quotation' ? 'translate-y-0' : 'translate-y-full'}`}>
+            <div className="flex shrink-0 justify-center py-2" aria-hidden="true">
+              <div className="h-1.5 w-12 rounded-full bg-slate-600" />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} onClose={handleCloseMobilePanels} />
+            </div>
         </div>
     </>
   );
@@ -1085,20 +1122,31 @@ const App: React.FC = () => {
         [WindowType.MIRROR]: 'Online Mirror Design Tool | Round, Square, Capsule & Custom Shapes',
     };
     
+    let pageTitle = 'WoodenMax Window Designer | Aluminium & uPVC Window & Door Design + Quotations';
+
     if (appView === 'guides') {
-        const guideTitle = guideSlug.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        document.title = `${guideTitle} Guide | WoodenMax Designer`;
+        const guideTitle = guideSlug.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+        pageTitle = `${guideTitle} | Guides & Help | WoodenMax Window Designer`;
         canonicalUrl = `${SITE_ORIGIN}/guides/${guideSlug}`;
     } else if (windowType) {
-        const pageTitle = titleMap[windowType];
-        if (pageTitle) {
-            document.title = `${pageTitle} | WoodenMax`;
+        const mapped = titleMap[windowType];
+        if (mapped) {
+            pageTitle = `${mapped} | WoodenMax`;
         } else {
-             const typeLabel = windowType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-             document.title = `${typeLabel} Design Tool | WoodenMax Designer`;
+            const typeLabel = windowType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+            pageTitle = `${typeLabel} Design Tool | WoodenMax Window Designer`;
         }
         canonicalUrl = `${SITE_ORIGIN}/design/${windowType}`;
     }
+
+    document.title = pageTitle;
+
+    const description = getMetaDescription({
+      appView: appView === 'guides' ? 'guides' : 'designer',
+      windowType,
+      guideSlug,
+    });
+    applyRouteSeo({ title: pageTitle, description, canonicalUrl });
 
     let link = document.querySelector<HTMLLinkElement>("link[rel='canonical']");
     if (!link) {

@@ -7,9 +7,9 @@ export const guides: Record<string, GuideContent> = {
     'index': {
         title: '🌟 Welcome to WoodenMax Designer',
         html: `
-            <h2>Free online & offline window design & quotation app — for everyone who builds</h2>
+            <h2>Free online &amp; offline aluminium &amp; uPVC window design &amp; quotation software for architects, fabricators &amp; homeowners</h2>
             <p><em>WoodenMax Architectural Elements · <a href="https://window.woodenmax.in" target="_blank" rel="noopener noreferrer">window.woodenmax.in</a> · <a href="mailto:info@woodenmax.com">info@woodenmax.com</a></em></p>
-            <p>WoodenMax Designer is a <strong>100% free</strong> Progressive Web App (PWA) for <strong>developers, architects, purchase departments, site planners, contractors, fabricators, and homeowners</strong>. Design <strong>aluminium windows, sliding doors, casements, ventilators, glass partitions (including shower and bathroom areas), louvers, elevation façades, corner windows, mirrors</strong>, and generate <strong>professional quotations and BOM-style summaries</strong> — without login, without subscription.</p>
+            <p>WoodenMax Designer is a <strong>100% free</strong> Progressive Web App (PWA) for <strong>developers, architects, purchase departments, site planners, contractors, fabricators, and homeowners</strong>. Design <strong>aluminium and uPVC windows and doors</strong> — sliding, casements, ventilators, glass partitions (including shower and bathroom areas), louvers, elevation façades, corner windows, mirrors — and generate <strong>professional quotations and BOM-style summaries</strong> (set your uPVC or aluminium profile rates in the quotation panel). No login, no subscription.</p>
             <h3>Who is this for?</h3>
             <ul>
                 <li><strong>Developers & project teams</strong> — fast takeoff-ready sizes, quantities, and rates for tenders and BOQs.</li>
@@ -19,7 +19,7 @@ export const guides: Record<string, GuideContent> = {
                 <li><strong>Homeowners & visitors</strong> — explore options for <strong>windows, doors, showers, partitions, louvers, ventilators</strong> before you talk to a vendor.</li>
             </ul>
             <h3>🧱 What you can design (keywords)</h3>
-            <p><strong>Sliding windows & doors</strong> (2-track, 3-track, mesh options), <strong>casement windows & doors</strong> (openable, grid layouts), <strong>bathroom ventilators</strong> and <strong>exhaust ventilation</strong>, <strong>glass partitions</strong> and <strong>shower enclosures</strong>, <strong>aluminium louvers</strong> (elevation, duct cover, ventilation), <strong>L-type corner</strong> glazing, <strong>mirrors</strong> (round, oval, capsule, custom), <strong>Georgian bars</strong> and decorative grids — all in one flow.</p>
+            <p><strong>Sliding &amp; casement windows &amp; doors</strong> — aluminium or <strong>uPVC</strong> (2-track, 3-track, mesh options), <strong>bathroom ventilators</strong> and <strong>exhaust ventilation</strong>, <strong>glass partitions</strong> and <strong>shower enclosures</strong>, <strong>louvers</strong> (elevation, duct cover, ventilation), <strong>L-type corner</strong> glazing, <strong>mirrors</strong> (round, oval, capsule, custom), <strong>Georgian bars</strong> and decorative grids — all in one flow.</p>
             <h3>⚙️ Powerful features</h3>
             <ul>
                 <li>🧩 <strong>Hardware & material lists</strong> — hinges, rollers, locks, handles, screws, and related items for your layout.</li>

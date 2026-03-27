@@ -7,11 +7,11 @@ interface ContentModalProps {
   onClose: () => void;
 }
 
-const Section: React.FC<{title: string, children: React.ReactNode}> = ({title, children}) => (
-    <div className="mb-6">
-        <h3 className="text-xl font-bold text-indigo-300 mb-2 border-b-2 border-indigo-500/30 pb-1">{title}</h3>
-        <div className="space-y-3 text-slate-300 leading-relaxed">{children}</div>
-    </div>
+const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+    <section className="mb-8">
+        <h2 className="mb-3 border-b-2 border-indigo-500/30 pb-2 text-xl font-bold text-indigo-300">{title}</h2>
+        <div className="space-y-3 leading-relaxed text-slate-300">{children}</div>
+    </section>
 );
 
 export const ContentModal: React.FC<ContentModalProps> = ({ isOpen, onClose }) => {
@@ -29,7 +29,7 @@ export const ContentModal: React.FC<ContentModalProps> = ({ isOpen, onClose }) =
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-4 border-b border-slate-700">
-          <h2 className="text-2xl font-bold text-white">Features & Guides</h2>
+          <h1 className="text-2xl font-bold text-white">WoodenMax Window Designer — Help &amp; FAQ</h1>
           <Button onClick={onClose} variant="secondary" className="p-2 rounded-full h-10 w-10">
             <XMarkIcon className="w-6 h-6" />
           </Button>
@@ -48,22 +48,26 @@ export const ContentModal: React.FC<ContentModalProps> = ({ isOpen, onClose }) =
             </Section>
 
             <Section title="Frequently Asked Questions (FAQ)">
-                <div className="space-y-4">
+                <div className="space-y-5">
                     <div>
-                        <p className="font-semibold text-slate-100">What is the WoodenMax Design Tool?</p>
-                        <p>This is a powerful, <strong>free online tool</strong> created by WoodenMax for designing custom architectural elements like aluminium/uPVC windows, doors, glass partitions, and louvers. It serves as an all-in-one <strong>window design tool</strong> and <strong>quotation software</strong>.</p>
+                        <h3 className="mb-1 text-base font-semibold text-slate-100">What is the WoodenMax Window Designer?</h3>
+                        <p>This is a powerful, <strong>free online tool</strong> for <strong>aluminium and uPVC</strong> windows and doors — sliding, casement and more — plus glass partitions and louvers. Use your own profile dimensions and rates for <strong>uPVC window quotations</strong> or aluminium systems. It works as an all-in-one <strong>window design tool</strong> and <strong>quotation software</strong>.</p>
                     </div>
                     <div>
-                        <p className="font-semibold text-slate-100">Who is this tool for?</p>
-                        <p>It's designed for professionals in the construction and design industry, including <strong>fabricators, architects, contractors, and builders</strong>. It helps streamline the design-to-quote process, reducing errors and saving time.</p>
+                        <h3 className="mb-1 text-base font-semibold text-slate-100">Who is this tool for?</h3>
+                        <p>It is designed for professionals in the construction and design industry, including <strong>fabricators, architects, contractors, and builders</strong>. It helps streamline the design-to-quote process, reducing errors and saving time.</p>
                     </div>
                     <div>
-                        <p className="font-semibold text-slate-100">Can I generate a cutting list for fabrication?</p>
-                        <p>Yes. The tool functions as a <strong>window cutting list software</strong>. After adding items to your quotation, you can export a complete <strong>Bill of Materials (BOM)</strong>. This summary details all required profile lengths, hardware quantities, and weights, making it an essential <strong>aluminium window calculator</strong> for production.</p>
+                        <h3 className="mb-1 text-base font-semibold text-slate-100">Can I generate a cutting list for fabrication?</h3>
+                        <p>Yes. The tool functions as <strong>window cutting list software</strong>. After adding items to your quotation, you can export a complete <strong>Bill of Materials (BOM)</strong>. This summary details all required profile lengths, hardware quantities, and weights, making it an essential <strong>aluminium window calculator</strong> for production.</p>
                     </div>
-                     <div>
-                        <p className="font-semibold text-slate-100">What types of windows can I design?</p>
-                        <p>You can design a wide variety of systems, including <strong>2-track sliding windows</strong>, <strong>3-track sliding windows</strong> (with options for glass and mesh), <strong>casement windows</strong>, and <strong>fixed windows</strong>. The tool is flexible enough to handle many common profile series.</p>
+                    <div>
+                        <h3 className="mb-1 text-base font-semibold text-slate-100">What types of windows can I design?</h3>
+                        <p>You can design a wide variety of systems, including <strong>2-track sliding windows</strong>, <strong>3-track sliding windows</strong> (with options for glass and mesh), <strong>casement windows</strong>, and <strong>fixed windows</strong>. The same flows work for typical <strong>aluminium</strong> and <strong>uPVC</strong> layouts when you match profile dimensions and rates to your supplier series.</p>
+                    </div>
+                    <div>
+                        <h3 className="mb-1 text-base font-semibold text-slate-100">Does this work for uPVC window quotations?</h3>
+                        <p>Yes. Enter your <strong>uPVC profile</strong> sizes, hardware and rates in the quotation panel — the app sizes glass and openings the same way; your quote line items and PDF reflect your <strong>uPVC window</strong> pricing.</p>
                     </div>
                 </div>
             </Section>
