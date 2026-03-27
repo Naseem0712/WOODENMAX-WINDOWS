@@ -1,4 +1,4 @@
-import React, { RefObject, useEffect, useRef } from 'react';
+import { RefObject, useEffect, useRef } from 'react';
 
 export function useRubberBandScroll(targetRef: RefObject<HTMLElement>) {
     const startY = useRef(0);

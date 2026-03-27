@@ -1,12 +1,23 @@
 
-import React, { useMemo, useRef, useState, useEffect } from 'react';
-import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, HardwareItem } from '../types';
+import React, { useMemo, useRef, useState, useEffect, useId } from 'react';
+import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig } from '../types';
 import { Button } from './ui/Button';
 import { PrinterIcon } from './icons/PrinterIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { FixedPanelPosition, ShutterConfigType, WindowType, MirrorShape } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { Input } from './ui/Input';
+import { WindowHandleVisual } from './WindowHandleVisual';
+import {
+  slidingMemberSideStandard,
+  mirrorHandleForSlidingMember,
+  mirrorHandleForPartitionHandleX,
+} from '../utils/handleDefaults';
+import { PROFILE_TEXTURE_TILE, profileTexturePosition } from '../utils/profileTexture';
+
+function profileOverlayTexture(config: WindowConfig): string | undefined {
+  return config.profileColor.startsWith('#') ? config.profileTexture || undefined : undefined;
+}
 
 interface PrintPreviewProps {
   isOpen: boolean;
@@ -15,6 +26,8 @@ interface PrintPreviewProps {
   settings: QuotationSettings;
   setSettings: (settings: QuotationSettings) => void;
 }
+
+const mmToPx = (mm: number, scale: number) => Math.round(mm * scale * 100) / 100;
 
 const numWords = {
     a: ['', 'one ', 'two ', 'three ', 'four ', 'five ', 'six ', 'seven ', 'eight ', 'nine ', 'ten ', 'eleven ', 'twelve ', 'thirteen ', 'fourteen ', 'fifteen ', 'sixteen ', 'seventeen ', 'eighteen ', 'nineteen '],
@@ -60,39 +73,76 @@ const PrintDimensionLabel: React.FC<{ value: number; unit?: string, className?: 
     </span>
 );
 
+const PRINT_SHUTTER_LETTER: Record<'fixed' | 'sliding' | 'hinged' | 'door' | 'louvers' | 'exhaust_fan', string> = {
+    fixed: 'F',
+    sliding: 'S',
+    hinged: 'H',
+    door: 'D',
+    louvers: 'L',
+    exhaust_fan: 'E',
+};
+
 const PrintShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | 'door' | 'louvers' | 'exhaust_fan', width?: number, height?: number }> = ({ type, width, height }) => {
     if (!type) return null;
-    
-    const containerSize = Math.min(width || 100, height || 100);
-    const baseFontSizePt = 8;
-    const scaleFactor = Math.min(1, containerSize / 50); 
-    const fontSize = baseFontSizePt * scaleFactor;
-    const finalFontSize = Math.max(fontSize, 4); 
 
-    const text = type.replace('_', ' ').toUpperCase();
-    
+    const containerSize = Math.min(width || 100, height || 100);
+    const baseFontSizePt = 10;
+    const scaleFactor = Math.min(1, containerSize / 50);
+    const fontSize = baseFontSizePt * scaleFactor;
+    const finalFontSize = Math.max(fontSize, 5);
+
+    const text = PRINT_SHUTTER_LETTER[type];
+
     const style: React.CSSProperties = {
         fontSize: `${finalFontSize}pt`,
         lineHeight: 1,
-        wordBreak: 'break-word',
     };
 
-    const baseStyle = "absolute inset-0 flex items-center justify-center text-black font-bold tracking-normal pointer-events-none opacity-80 z-10 p-1 text-center";
+    const baseStyle = "absolute inset-0 flex items-center justify-center text-black font-bold tracking-wide pointer-events-none opacity-90 z-10 p-1 text-center";
 
     return <div className={baseStyle} style={style}>{text}</div>;
-}
+};
 
-// FIX: Corrected component which was malformed due to a copy-paste error.
-const PrintProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = ({ style, color }) => {
-    const isTexture = color && !color.startsWith('#');
-    const isHorizontal = (style.width as number) > (style.height as number);
-    const backgroundStyle = isTexture ? {
-        backgroundImage: `url(${color})`,
-        backgroundSize: isHorizontal ? 'auto 100%' : '100% auto',
-        backgroundRepeat: 'repeat',
-    } : { backgroundColor: color };
+const PrintProfilePiece: React.FC<{ style: React.CSSProperties; color: string; texture?: string }> = ({ style, color, texture }) => {
+    const isLegacyTextureOnly = Boolean(color && !color.startsWith('#'));
+    const texPos = profileTexturePosition(style);
 
-    return <div style={{ position: 'absolute', boxSizing: 'border-box', ...style, ...backgroundStyle }} />;
+    if (isLegacyTextureOnly) {
+        return (
+            <div
+                style={{
+                    position: 'absolute',
+                    boxSizing: 'border-box',
+                    ...style,
+                    backgroundImage: `url(${color})`,
+                    backgroundRepeat: 'repeat',
+                    backgroundSize: PROFILE_TEXTURE_TILE,
+                    backgroundPosition: texPos,
+                }}
+            />
+        );
+    }
+
+    const baseColor = color.startsWith('#') ? color : '#8b939e';
+    return (
+        <div style={{ position: 'absolute', boxSizing: 'border-box', ...style, backgroundColor: baseColor, overflow: 'hidden' }}>
+            {texture ? (
+                <div
+                    style={{
+                        position: 'absolute',
+                        inset: 0,
+                        backgroundImage: `url(${texture})`,
+                        backgroundRepeat: 'repeat',
+                        backgroundSize: PROFILE_TEXTURE_TILE,
+                        backgroundPosition: texPos,
+                        mixBlendMode: 'multiply',
+                        opacity: 0.82,
+                        pointerEvents: 'none',
+                    }}
+                />
+            ) : null}
+        </div>
+    );
 };
 
 const PrintGlassGrid: React.FC<{
@@ -120,14 +170,14 @@ const PrintGlassGrid: React.FC<{
         for (let i = 0; i < pattern.horizontal.count; i++) {
             const top = (pattern.horizontal.offset + i * pattern.horizontal.gap) * scale - barThicknessScaled / 2;
             if (top > height * scale || top < -barThicknessScaled) continue;
-            elements.push(<PrintProfilePiece key={`h-grid-${i}`} color={profileColor} style={{ top, left: 0, width: width * scale, height: barThicknessScaled }} />);
+            elements.push(<PrintProfilePiece key={`h-grid-${i}`} color={profileColor} texture={profileOverlayTexture(config)} style={{ top, left: 0, width: width * scale, height: barThicknessScaled }} />);
         }
 
         // Vertical bars
         for (let i = 0; i < pattern.vertical.count; i++) {
             const left = (pattern.vertical.offset + i * pattern.vertical.gap) * scale - barThicknessScaled / 2;
             if (left > width * scale || left < -barThicknessScaled) continue;
-            elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={profileColor} style={{ left, top: 0, width: barThicknessScaled, height: height * scale }} />);
+            elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={profileColor} texture={profileOverlayTexture(config)} style={{ left, top: 0, width: barThicknessScaled, height: height * scale }} />);
         }
 
         return <>{elements}</>;
@@ -148,13 +198,13 @@ const PrintGlassGrid: React.FC<{
         if (rows > 0) {
             const vGap = (height * scale) / (rows + 1);
             for (let i = 1; i <= rows; i++) {
-                elements.push(<PrintProfilePiece key={`h-grid-${i}`} color={profileColor} style={{ top: i * vGap - barThicknessScaled / 2, left: 0, width: width * scale, height: barThicknessScaled }} />);
+                elements.push(<PrintProfilePiece key={`h-grid-${i}`} color={profileColor} texture={profileOverlayTexture(config)} style={{ top: i * vGap - barThicknessScaled / 2, left: 0, width: width * scale, height: barThicknessScaled }} />);
             }
         }
         if (cols > 0) {
             const hGap = (width * scale) / (cols + 1);
             for (let i = 1; i <= cols; i++) {
-                elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={profileColor} style={{ left: i * hGap - barThicknessScaled / 2, top: 0, width: barThicknessScaled, height: height * scale }} />);
+                elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={profileColor} texture={profileOverlayTexture(config)} style={{ left: i * hGap - barThicknessScaled / 2, top: 0, width: barThicknessScaled, height: height * scale }} />);
             }
         }
         return <>{elements}</>;
@@ -174,38 +224,21 @@ const PrintableMiteredFrame: React.FC<{
     rightSize?: number;
     scale: number;
     color: string;
-}> = ({ width, height, profileSize = 0, topSize, bottomSize, leftSize, rightSize, scale, color }) => {
-    const ts = (topSize ?? profileSize) * scale;
-    const bs = (bottomSize ?? profileSize) * scale;
-    const ls = (leftSize ?? profileSize) * scale;
-    const rs = (rightSize ?? profileSize) * scale;
-    const isTexture = color && !color.startsWith('#');
+    texture?: string;
+}> = ({ width, height, profileSize = 0, topSize, bottomSize, leftSize, rightSize, scale, color, texture }) => {
+    const ts = mmToPx(topSize ?? profileSize, scale);
+    const bs = mmToPx(bottomSize ?? profileSize, scale);
+    const ls = mmToPx(leftSize ?? profileSize, scale);
+    const rs = mmToPx(rightSize ?? profileSize, scale);
+    const wPx = mmToPx(width, scale);
+    const hPx = mmToPx(height, scale);
+    const isLegacyTexture = Boolean(color && !color.startsWith('#'));
+    const baseHex = color.startsWith('#') ? color : '#8b939e';
+    const hexWithOverlay = !isLegacyTexture && Boolean(texture) && color.startsWith('#');
 
-    if (!isTexture) {
-        return (
-            <div style={{
-                position: 'absolute',
-                width: width * scale,
-                height: height * scale,
-                boxSizing: 'border-box',
-                borderStyle: 'solid',
-                borderColor: color,
-                borderTopWidth: ts,
-                borderBottomWidth: bs,
-                borderLeftWidth: ls,
-                borderRightWidth: rs,
-            }} />
-        );
-    }
-    
-    const backgroundStyle = { backgroundImage: `url(${color})`, backgroundRepeat: 'repeat' };
-    const horizontalBgStyle = { backgroundSize: 'auto 100%' };
-    const verticalBgStyle = { backgroundSize: '100% auto' };
-
-    const baseDivStyle: React.CSSProperties = {
-        position: 'absolute',
-        boxSizing: 'border-box',
-        ...backgroundStyle
+    const tileBase: React.CSSProperties = {
+        backgroundSize: PROFILE_TEXTURE_TILE,
+        backgroundRepeat: 'repeat',
     };
 
     const clipTs = Math.max(0, ts);
@@ -213,32 +246,97 @@ const PrintableMiteredFrame: React.FC<{
     const clipLs = Math.max(0, ls);
     const clipRs = Math.max(0, rs);
 
+    const clipTop = `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)`;
+    const clipBottom = `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)`;
+    const clipLeft = `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)`;
+    const clipRight = `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))`;
+
+    if (isLegacyTexture) {
+        const backgroundStyle = { backgroundImage: `url(${color})`, backgroundRepeat: 'repeat' as const };
+        const baseDivStyle: React.CSSProperties = {
+            position: 'absolute',
+            boxSizing: 'border-box',
+            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.25)',
+            ...backgroundStyle,
+        };
+        const posTop = '0px 0px';
+        const posBottom = `0px ${-(hPx - clipBs)}px`;
+        const posLeft = '0px 0px';
+        const posRight = `-${wPx - clipRs}px 0px`;
+
+        return (
+            <div className="absolute" style={{ width: wPx, height: hPx, borderRadius: 0 }}>
+                <div style={{ ...baseDivStyle, ...tileBase, backgroundPosition: posTop, top: 0, left: 0, width: '100%', height: clipTs, zIndex: 1, clipPath: clipTop }} />
+                <div style={{ ...baseDivStyle, ...tileBase, backgroundPosition: posBottom, bottom: 0, left: 0, width: '100%', height: clipBs, zIndex: 1, clipPath: clipBottom }} />
+                <div style={{ ...baseDivStyle, ...tileBase, backgroundPosition: posLeft, top: 0, left: 0, width: clipLs, height: '100%', zIndex: 2, clipPath: clipLeft }} />
+                <div style={{ ...baseDivStyle, ...tileBase, backgroundPosition: posRight, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 2, clipPath: clipRight }} />
+            </div>
+        );
+    }
+
+    if (hexWithOverlay) {
+        const solidBase: React.CSSProperties = {
+            position: 'absolute',
+            boxSizing: 'border-box',
+            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.25)',
+            backgroundColor: baseHex,
+        };
+        const texOverlay: React.CSSProperties = {
+            position: 'absolute',
+            boxSizing: 'border-box',
+            backgroundImage: `url(${texture})`,
+            backgroundRepeat: 'repeat',
+            backgroundSize: PROFILE_TEXTURE_TILE,
+            mixBlendMode: 'multiply',
+            opacity: 0.82,
+        };
+
+        const posTop = '0px 0px';
+        const posBottom = `0px ${-(hPx - clipBs)}px`;
+        const posLeft = '0px 0px';
+        const posRight = `-${wPx - clipRs}px 0px`;
+
+        return (
+            <div className="absolute" style={{ width: wPx, height: hPx, borderRadius: 0 }}>
+                <div style={{ ...solidBase, top: 0, left: 0, width: '100%', height: clipTs, zIndex: 1, clipPath: clipTop }} />
+                <div style={{ ...texOverlay, backgroundPosition: posTop, top: 0, left: 0, width: '100%', height: clipTs, zIndex: 3, clipPath: clipTop }} />
+                <div style={{ ...solidBase, bottom: 0, left: 0, width: '100%', height: clipBs, zIndex: 1, clipPath: clipBottom }} />
+                <div style={{ ...texOverlay, backgroundPosition: posBottom, bottom: 0, left: 0, width: '100%', height: clipBs, zIndex: 3, clipPath: clipBottom }} />
+                <div style={{ ...solidBase, top: 0, left: 0, width: clipLs, height: '100%', zIndex: 2, clipPath: clipLeft }} />
+                <div style={{ ...texOverlay, backgroundPosition: posLeft, top: 0, left: 0, width: clipLs, height: '100%', zIndex: 4, clipPath: clipLeft }} />
+                <div style={{ ...solidBase, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 2, clipPath: clipRight }} />
+                <div style={{ ...texOverlay, backgroundPosition: posRight, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 4, clipPath: clipRight }} />
+            </div>
+        );
+    }
+
     return (
-        <div className="absolute" style={{ width: width * scale, height: height * scale }}>
-            {/* Top */}
-            <div style={{...baseDivStyle, ...horizontalBgStyle, top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
-            {/* Bottom */}
-            <div style={{...baseDivStyle, ...horizontalBgStyle, bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
-            {/* Left */}
-            <div style={{...baseDivStyle, ...verticalBgStyle, top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
-            {/* Right */}
-            <div style={{...baseDivStyle, ...verticalBgStyle, top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
-        </div>
+        <div
+            style={{
+                position: 'absolute',
+                width: wPx,
+                height: hPx,
+                boxSizing: 'border-box',
+                borderStyle: 'solid',
+                borderColor: baseHex,
+                borderRadius: 0,
+                borderTopWidth: ts,
+                borderBottomWidth: bs,
+                borderLeftWidth: ls,
+                borderRightWidth: rs,
+                backgroundColor: 'transparent',
+            }}
+        />
     );
 };
 
-const PrintableHandle: React.FC<{ config: HandleConfig | null, scale: number }> = ({ config, scale }) => {
+const PrintableHandle: React.FC<{ config: HandleConfig | null; scale: number; mirrored?: boolean }> = ({ config, scale, mirrored }) => {
     if (!config) return null;
-    const handleWidth = 25; // mm
-    const handleHeight = config.length || 150; // mm
-    const isVertical = config.orientation === 'vertical';
-    const style: React.CSSProperties = {
-        position: 'absolute',
-        backgroundColor: '#333', // Dark grey for print
-        width: (isVertical ? handleWidth : handleHeight) * scale,
-        height: (isVertical ? handleHeight : handleWidth) * scale,
-    };
-    return <div style={style} />;
+    const gid = useId().replace(/:/g, '');
+    const variant = config.variant ?? (config.orientation === 'horizontal' ? 'sliding' : 'casement');
+    const raw = config.length ?? (variant === 'sliding' ? 125 : 158);
+    const lenMm = Math.min(420, Math.max(96, raw));
+    return <WindowHandleVisual variant={variant} lenMm={lenMm} color="#8892a0" gid={gid} scale={scale} print mirrored={mirrored} />;
 };
 
 const PrintableMirrorPanel: React.FC<{ style: React.CSSProperties }> = ({ style }) => {
@@ -268,7 +366,9 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         return (
             <div className="flex items-start" style={{ width: totalW * scale, height: numHeight * scale, margin: 'auto' }}>
                 <PrintableWindow config={cornerConfigLeft} externalScale={scale} />
-                <div style={{ width: postW * scale, height: numHeight * scale, backgroundColor: config.profileColor }} />
+                <div className="relative" style={{ width: postW * scale, height: numHeight * scale }}>
+                    <PrintProfilePiece color={config.profileColor} texture={profileOverlayTexture(config)} style={{ left: 0, top: 0, width: '100%', height: '100%' }} />
+                </div>
                 <PrintableWindow config={cornerConfigRight} externalScale={scale} />
             </div>
         );
@@ -283,6 +383,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     const scale = externalScale || Math.min(containerWidthPx / effectiveWidth, containerHeightPx / numHeight);
 
     const { series, fixedPanels, profileColor, windowType, glassTexture } = config;
+    const pt = profileOverlayTexture(config);
     const dims = {
         outerFrame: Number(series.dimensions.outerFrame) || 0,
         outerFrameVertical: Number(series.dimensions.outerFrameVertical) || 0,
@@ -295,7 +396,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         glassGridProfile: Number(config.glassGrid?.barThickness) || Number(series.dimensions.glassGridProfile) || 0,
     };
 
-    const glassStyle = { backgroundColor: '#E2E8F0', boxSizing: 'border-box' as const, border: '0.5px solid #999' };
+    const glassStyle = { backgroundColor: '#E2E8F0', boxSizing: 'border-box' as const };
 
     const topFix = fixedPanels.find(p => p.position === FixedPanelPosition.TOP);
     const bottomFix = fixedPanels.find(p => p.position === FixedPanelPosition.BOTTOM);
@@ -342,7 +443,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     // Outer frame
     if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
-        profileElements.push(<PrintableMiteredFrame key="outer-frame" width={effectiveWidth} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
+        profileElements.push(<PrintableMiteredFrame key="outer-frame" width={effectiveWidth} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} texture={pt} />);
     }
     
     const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) ? dims.outerFrame : 0;
@@ -353,23 +454,23 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     
     // Fixed Panel frames and glass
     if (leftFix) {
-        profileElements.push(<PrintProfilePiece key="divider-left" color={profileColor} style={{ top: frameOffset * scale, left: (holeX1 - dims.fixedFrame) * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffset) * scale }} />);
+        profileElements.push(<PrintProfilePiece key="divider-left" color={profileColor} texture={pt} style={{ top: frameOffset * scale, left: (holeX1 - dims.fixedFrame) * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffset) * scale }} />);
         labelElements.push(<PrintDimensionLabel key="label-left" value={leftFix.size} className="top-1/2 -translate-y-1/2" style={{left: leftFix.size * scale / 2, transform: 'translateX(-50%)'}}/>)
     }
-    if (rightFix) profileElements.push(<PrintProfilePiece key="divider-right" color={profileColor} style={{ top: frameOffset * scale, left: holeX2 * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffset) * scale }} />);
+    if (rightFix) profileElements.push(<PrintProfilePiece key="divider-right" color={profileColor} texture={pt} style={{ top: frameOffset * scale, left: holeX2 * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffset) * scale }} />);
     
     const hDividerX = leftFix ? holeX1 : frameOffset;
     const hDividerWidth = (rightFix ? holeX2 : numWidth - frameOffset) - hDividerX;
 
     if (topFix) {
-        profileElements.push(<PrintProfilePiece key="divider-top" color={profileColor} style={{ top: (holeY1 - dims.fixedFrame) * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
+        profileElements.push(<PrintProfilePiece key="divider-top" color={profileColor} texture={pt} style={{ top: (holeY1 - dims.fixedFrame) * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
         const glassW = hDividerWidth;
         const glassH = holeY1 - frameOffset - dims.fixedFrame;
         glassElements.push(<GlassPanel key="glass-top" panelId="fixed-top" style={{ top: frameOffset * scale, left: hDividerX * scale, width: glassW * scale, height: glassH * scale }} glassWidthPx={glassW*scale} glassHeightPx={glassH*scale}><PrintShutterIndicator type="fixed"/></GlassPanel>);
         labelElements.push(<PrintDimensionLabel key="label-top" value={topFix.size} className="left-1/2 -translate-x-1/2" style={{top: topFix.size * scale / 2}}/>)
     }
     if (bottomFix) {
-        profileElements.push(<PrintProfilePiece key="divider-bottom" color={profileColor} style={{ top: holeY2 * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
+        profileElements.push(<PrintProfilePiece key="divider-bottom" color={profileColor} texture={pt} style={{ top: holeY2 * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
         const glassW = hDividerWidth;
         const glassH = numHeight - holeY2 - frameOffset - dims.fixedFrame;
         glassElements.push(<GlassPanel key="glass-bottom" panelId="fixed-bottom" style={{ top: (holeY2 + dims.fixedFrame) * scale, left: hDividerX * scale, width: glassW * scale, height: glassH * scale }} glassWidthPx={glassW*scale} glassHeightPx={glassH*scale}><PrintShutterIndicator type="fixed"/></GlassPanel>);
@@ -397,32 +498,41 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         const glassWidth = width - leftProfile - rightProfile;
         const glassHeight = height - topProfile - bottomProfile;
         const meshStyle: React.CSSProperties = isMesh ? {backgroundColor: '#ccc', opacity: 0.6, backgroundImage: `linear-gradient(45deg, #aaa 25%, transparent 25%), linear-gradient(-45deg, #aaa 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #aaa 75%), linear-gradient(-45deg, transparent 75%, #aaa 75%)`, backgroundSize: '3px 3px' } : {};
-        
+        const wPx = mmToPx(width, scale);
+        const hPx = mmToPx(height, scale);
+        const lPx = mmToPx(leftProfile, scale);
+        const tPx = mmToPx(topProfile, scale);
+        const rPx = mmToPx(rightProfile, scale);
+        const bPx = mmToPx(bottomProfile, scale);
+
         return (
-            <div className="absolute" style={{ width: width * scale, height: height * scale }}>
+            <div className="absolute" style={{ width: wPx, height: hPx }}>
                 <PrintableMiteredFrame 
                     width={width} 
                     height={height} 
                     scale={scale} 
                     color={profileColor} 
+                    texture={pt}
                     topSize={topProfile} 
                     bottomSize={bottomProfile} 
                     leftSize={leftProfile} 
                     rightSize={rightProfile} 
                 />
-                <GlassPanel panelId={panelId} style={{ left: leftProfile * scale, top: topProfile * scale, width: glassWidth * scale, height: glassHeight * scale, ...meshStyle }} glassWidthPx={glassWidth*scale} glassHeightPx={glassHeight*scale}>
-                    <PrintShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
-                </GlassPanel>
+                <div className="absolute overflow-hidden" style={{ left: lPx, top: tPx, right: rPx, bottom: bPx }}>
+                    <GlassPanel panelId={panelId} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', ...meshStyle }} glassWidthPx={glassWidth*scale} glassHeightPx={glassHeight*scale}>
+                        <PrintShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : 'fixed'} />
+                    </GlassPanel>
+                </div>
             </div>
         );
     };
 
     return (
-        <div className="relative" style={{ width: effectiveWidth * scale, height: numHeight * scale, margin: 'auto' }}>
+        <div className="relative" style={{ width: mmToPx(effectiveWidth, scale), height: mmToPx(numHeight, scale), margin: 'auto' }}>
             {glassElements}
             {profileElements}
             {innerAreaWidth > 0 && innerAreaHeight > 0 && (
-                <div className="absolute" style={{ top: holeY1 * scale, left: holeX1 * scale, width: innerAreaWidth * scale, height: innerAreaHeight * scale }}>
+                <div className="absolute overflow-hidden" style={{ top: mmToPx(holeY1, scale), left: mmToPx(holeX1, scale), width: mmToPx(innerAreaWidth, scale), height: mmToPx(innerAreaHeight, scale) }}>
                     {windowType === WindowType.MIRROR ? (() => {
                         const { mirrorConfig } = config;
                         
@@ -477,7 +587,9 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                             const positions = [ 0, shutterWidth - dims.shutterInterlock, (2*shutterWidth) - dims.shutterInterlock - dims.shutterMeeting, (3*shutterWidth) - (2*dims.shutterInterlock) - dims.shutterMeeting ];
                              slidingHandles.forEach((handleConfig, i) => {
                                 if (handleConfig) {
-                                    handleElements.push(<div key={`handle-${i}`} style={{ zIndex: 30, position: 'absolute', left: (positions[i] + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><PrintableHandle config={handleConfig} scale={scale} /></div>);
+                                    const side = slidingMemberSideStandard(i, 4);
+                                    const mirrored = mirrorHandleForSlidingMember(side);
+                                    handleElements.push(<div key={`handle-${i}`} style={{ zIndex: 30, position: 'absolute', left: (positions[i] + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><PrintableHandle config={handleConfig} scale={scale} mirrored={mirrored} /></div>);
                                 }
                             });
                             const profiles = [
@@ -491,7 +603,9 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                             slidingHandles.forEach((handleConfig, i) => {
                                 if (handleConfig) {
                                     let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - dims.shutterInterlock);
-                                    handleElements.push(<div key={`handle-${i}`} style={{ zIndex: 30, position: 'absolute', left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><PrintableHandle config={handleConfig} scale={scale} /></div>);
+                                    const side = slidingMemberSideStandard(i, numShutters);
+                                    const mirrored = mirrorHandleForSlidingMember(side);
+                                    handleElements.push(<div key={`handle-${i}`} style={{ zIndex: 30, position: 'absolute', left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><PrintableHandle config={handleConfig} scale={scale} mirrored={mirrored} /></div>);
                                 }
                             });
                             return Array.from({ length: numShutters }).map((_, i) => {
@@ -505,7 +619,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                     })() : null}
 
                     {(windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) && (() => {
-                        const { verticalDividers, horizontalDividers, doorPositions, ventilatorGrid } = config;
+                        const { verticalDividers, horizontalDividers } = config;
                         const gridCols = verticalDividers.length + 1;
                         const gridRows = horizontalDividers.length + 1;
                         const elements: React.ReactNode[] = [];
@@ -524,26 +638,30 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                 
                                 const doorInfo = config.doorPositions.find(p => p.row === r && p.col === c);
                                 if (doorInfo?.handle) {
-                                    handleElements.push(<div key={`handle-casement-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (cellX + cellW * doorInfo.handle.x / 100) * scale, top: (cellY + cellH * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><PrintableHandle config={doorInfo.handle} scale={scale} /></div>);
+                                    const mirrored = mirrorHandleForPartitionHandleX(doorInfo.handle.x);
+                                    handleElements.push(<div key={`handle-casement-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (cellX + cellW * doorInfo.handle.x / 100) * scale, top: (cellY + cellH * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><PrintableHandle config={doorInfo.handle} scale={scale} mirrored={mirrored} /></div>);
                                 }
                                 const cell = config.ventilatorGrid[r]?.[c];
                                 if (cell?.type === 'door' && cell.handle) {
-                                     handleElements.push(<div key={`handle-vent-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (cellX + cellW * cell.handle.x / 100) * scale, top: (cellY + cellH * cell.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><PrintableHandle config={cell.handle} scale={scale} /></div>);
+                                     const mirrored = mirrorHandleForPartitionHandleX(cell.handle.x);
+                                     handleElements.push(<div key={`handle-vent-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (cellX + cellW * cell.handle.x / 100) * scale, top: (cellY + cellH * cell.handle.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><PrintableHandle config={cell.handle} scale={scale} mirrored={mirrored} /></div>);
                                 }
                                 
                                 const cellType = cell?.type;
                                 let content = <GlassPanel key={`cell-${r}-${c}`} panelId={`cell-${r}-${c}`} style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}} glassWidthPx={cellW*scale} glassHeightPx={cellH*scale}><PrintShutterIndicator type="fixed"/></GlassPanel>;
 
                                 if ((windowType === WindowType.CASEMENT && doorInfo) || cellType === 'door') {
-                                    content = (<div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>
-                                        <PrintableMiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
-                                        <GlassPanel panelId={`cell-door-${r}-${c}`} style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellW - 2 * dims.casementShutter)*scale, height: (cellH - 2 * dims.casementShutter)*scale }} glassWidthPx={(cellW - 2*dims.casementShutter)*scale} glassHeightPx={(cellH - 2*dims.casementShutter)*scale}><PrintShutterIndicator type="door"/></GlassPanel>
+                                    content = (<div key={`cell-${r}-${c}`} className="absolute" style={{left: mmToPx(cellX, scale), top: mmToPx(cellY, scale), width: mmToPx(cellW, scale), height: mmToPx(cellH, scale)}}>
+                                        <PrintableMiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} texture={pt} />
+                                        <div className="absolute overflow-hidden" style={{ left: mmToPx(dims.casementShutter, scale), top: mmToPx(dims.casementShutter, scale), right: mmToPx(dims.casementShutter, scale), bottom: mmToPx(dims.casementShutter, scale) }}>
+                                          <GlassPanel panelId={`cell-door-${r}-${c}`} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidthPx={(cellW - 2*dims.casementShutter)*scale} glassHeightPx={(cellH - 2*dims.casementShutter)*scale}><PrintShutterIndicator type="door"/></GlassPanel>
+                                        </div>
                                       </div>);
                                 } else if (cellType === 'louvers') {
                                     const louvers: React.ReactNode[] = [];
                                     if (dims.louverBlade > 0) {
                                         const numLouvers = Math.floor(cellH / dims.louverBlade);
-                                        for (let i=0; i < numLouvers; i++) louvers.push(<PrintProfilePiece key={`louver-${i}`} color={profileColor} style={{left: 0, top: (i * dims.louverBlade)*scale, width: cellW*scale, height: dims.louverBlade*scale }}/>)
+                                        for (let i=0; i < numLouvers; i++) louvers.push(<PrintProfilePiece key={`louver-${i}`} color={profileColor} texture={pt} style={{left: 0, top: (i * dims.louverBlade)*scale, width: cellW*scale, height: dims.louverBlade*scale }}/>)
                                     }
                                     content = <div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>{louvers}<PrintShutterIndicator type="louvers" width={cellW*scale} height={cellH*scale}/></div>;
                                 } else if (cellType === 'exhaust_fan') {
@@ -553,8 +671,8 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                             }
                         }
 
-                        horizontalDividers.forEach((pos) => elements.push(<PrintProfilePiece key={`hmullion-${pos}`} color={profileColor} style={{ left: 0, top: (pos * innerAreaHeight - dims.mullion / 2) * scale, width: innerAreaWidth * scale, height: dims.mullion * scale, zIndex: 10 }}/>));
-                        verticalDividers.forEach((pos) => elements.push(<PrintProfilePiece key={`vmullion-${pos}`} color={profileColor} style={{ top: 0, left: (pos * innerAreaWidth - dims.mullion / 2) * scale, width: dims.mullion * scale, height: innerAreaHeight * scale, zIndex: 10 }}/>));
+                        horizontalDividers.forEach((pos) => elements.push(<PrintProfilePiece key={`hmullion-${pos}`} color={profileColor} texture={pt} style={{ left: 0, top: (pos * innerAreaHeight - dims.mullion / 2) * scale, width: innerAreaWidth * scale, height: dims.mullion * scale, zIndex: 10 }}/>));
+                        verticalDividers.forEach((pos) => elements.push(<PrintProfilePiece key={`vmullion-${pos}`} color={profileColor} texture={pt} style={{ top: 0, left: (pos * innerAreaWidth - dims.mullion / 2) * scale, width: dims.mullion * scale, height: innerAreaHeight * scale, zIndex: 10 }}/>));
                         return elements;
                     })()}
 
@@ -576,8 +694,8 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                         const panels: React.ReactNode[] = [];
                         
                         if (partitionPanels.hasTopChannel) {
-                            panels.push(<PrintProfilePiece key="track-top" color={profileColor} style={{ top: 0, left: 0, width: innerAreaWidth * scale, height: dims.topTrack * scale }} />);
-                            panels.push(<PrintProfilePiece key="track-bottom" color={profileColor} style={{ bottom: 0, left: 0, width: innerAreaWidth * scale, height: dims.bottomTrack * scale }} />);
+                            panels.push(<PrintProfilePiece key="track-top" color={profileColor} texture={pt} style={{ top: 0, left: 0, width: innerAreaWidth * scale, height: dims.topTrack * scale }} />);
+                            panels.push(<PrintProfilePiece key="track-bottom" color={profileColor} texture={pt} style={{ top: (innerAreaHeight - dims.bottomTrack) * scale, left: 0, width: innerAreaWidth * scale, height: dims.bottomTrack * scale }} />);
                         }
                         const panelAreaY = partitionPanels.hasTopChannel ? dims.topTrack : 0;
                         const panelAreaHeight = innerAreaHeight - (partitionPanels.hasTopChannel ? dims.topTrack + dims.bottomTrack : 0);
@@ -593,28 +711,33 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                             const zIndex = type === 'sliding' ? 10 + i : 5;
 
                              if (handle) {
-                                handleElements.push(<div key={`handle-part-${i}`} style={{ position: 'absolute', zIndex: 30, left: (panelX + currentPanelWidth * handle.x / 100) * scale, top: (panelAreaY + panelAreaHeight * handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><PrintableHandle config={handle} scale={scale} /></div>);
+                                const mirrored = mirrorHandleForPartitionHandleX(handle.x);
+                                handleElements.push(<div key={`handle-part-${i}`} style={{ position: 'absolute', zIndex: 30, left: (panelX + currentPanelWidth * handle.x / 100) * scale, top: (panelAreaY + panelAreaHeight * handle.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><PrintableHandle config={handle} scale={scale} mirrored={mirrored} /></div>);
                             }
                             
                              const isFramed = framing === 'full' || type === 'hinged';
                              const frameSize = dims.casementShutter;
 
                             panels.push(
-                                <div key={`panel-${i}`} className="absolute" style={{left: panelX*scale, top: panelAreaY*scale, width: currentPanelWidth*scale, height: panelAreaHeight*scale, zIndex}}>
-                                  {isFramed && <PrintableMiteredFrame width={currentPanelWidth} height={panelAreaHeight} profileSize={frameSize} scale={scale} color={profileColor} />}
-                                  <GlassPanel 
-                                    panelId={`partition-${i}`}
-                                    style={{
-                                      left: (isFramed ? frameSize : 0) * scale, 
-                                      top: (isFramed ? frameSize : 0) * scale, 
-                                      width: (currentPanelWidth - (isFramed ? 2 * frameSize : 0)) * scale, 
-                                      height: (panelAreaHeight - (isFramed ? 2 * frameSize : 0)) * scale
-                                    }} 
-                                    glassWidthPx={(currentPanelWidth - (isFramed ? 2 * frameSize : 0))*scale}
-                                    glassHeightPx={(panelAreaHeight - (isFramed ? 2 * frameSize : 0))*scale}
+                                <div key={`panel-${i}`} className="absolute" style={{left: mmToPx(panelX, scale), top: mmToPx(panelAreaY, scale), width: mmToPx(currentPanelWidth, scale), height: mmToPx(panelAreaHeight, scale), zIndex}}>
+                                  {isFramed && <PrintableMiteredFrame width={currentPanelWidth} height={panelAreaHeight} profileSize={frameSize} scale={scale} color={profileColor} texture={pt} />}
+                                  <div
+                                    className="absolute overflow-hidden"
+                                    style={
+                                      isFramed
+                                        ? { left: mmToPx(frameSize, scale), top: mmToPx(frameSize, scale), right: mmToPx(frameSize, scale), bottom: mmToPx(frameSize, scale) }
+                                        : { top: 0, left: 0, right: 0, bottom: 0 }
+                                    }
                                   >
-                                     <PrintShutterIndicator type={type} />
-                                  </GlassPanel>
+                                    <GlassPanel 
+                                      panelId={`partition-${i}`}
+                                      style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }}
+                                      glassWidthPx={(currentPanelWidth - (isFramed ? 2 * frameSize : 0))*scale}
+                                      glassHeightPx={(panelAreaHeight - (isFramed ? 2 * frameSize : 0))*scale}
+                                    >
+                                       <PrintShutterIndicator type={type} />
+                                    </GlassPanel>
+                                  </div>
                                 </div>
                             );
 

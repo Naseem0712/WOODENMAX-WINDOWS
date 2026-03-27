@@ -1,17 +1,36 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# WoodenMax Window Designer
 
-# Run and deploy your AI Studio app
+Free **online & offline** (PWA) app to design aluminium windows, doors, partitions, louvers, ventilators, and more — with quotations and material-style summaries.
 
-This contains everything you need to run your app locally.
+**Live app:** [window.woodenmax.in](https://window.woodenmax.in)  
+**Company:** [woodenmax.com](https://www.woodenmax.com) · **Email:** info@woodenmax.com
 
-## Run Locally
+## Prerequisites
 
-**Prerequisites:**  Node.js
+- Node.js 18+ (recommended LTS)
 
+## Local development
 
-1. Install dependencies:
-   `npm install`
-2. Run the app:
-   `npm run dev`
+```bash
+npm install
+npm run dev
+```
+
+## Production build
+
+```bash
+npm run build
+```
+
+Output: `dist/`. Use any static host; configure SPA fallback so client routes (`/design/...`, `/guides/...`) serve `index.html`.
+
+- **Cloudflare Pages:** build command `npm run build`, output directory `dist`. `public/_redirects` is copied for SPA rewrites.
+- **Vercel:** `vercel.json` includes SPA rewrites.
+
+## Tech stack
+
+React 18, TypeScript, Vite, react-router-dom, PWA (vite-plugin-pwa).
+
+## Repository
+
+[github.com/Naseem0712/WOODENMAX-WINDOWS](https://github.com/Naseem0712/WOODENMAX-WINDOWS)

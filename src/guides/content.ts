@@ -5,58 +5,38 @@ interface GuideContent {
 
 export const guides: Record<string, GuideContent> = {
     'index': {
-        title: '🌟 Welcome to RealVibe Studio',
+        title: '🌟 Welcome to WoodenMax Designer',
         html: `
-            <h2>Smart Window & Design Tool for Professionals & Homeowners</h2>
-            <p><em>Created by Expert Designer – WoodenMax | 15+ Years of Experience</em></p>
-            <p>Welcome to RealVibe Studio, India’s most advanced AI-powered design and quotation system built with over 15 years of real fabrication and installation experience. Every feature of this tool is designed to make professional-quality window, door, and glass structure designing simple, fast, and fully automated — even for non-technical users.</p>
-            <h3>⚙️ Powerful Features You’ll Love</h3>
-            <h4>🧱 All-in-One Design System</h4>
-            <p>Design any type of structure with full flexibility:<br>
-            Sliding Windows, Casement Doors, Ventilators, Glass Partitions, Louvers, Mirrors, Georgian Bars, Corner Windows, and more — all customizable with glass thickness, type, hardware, and profiles of your choice.</p>
-            <p>Upload your own textures and instantly preview realistic 3D visuals of your design.</p>
-            <h4>⚡ AI-Powered Auto Calculation & Export</h4>
-            <p>Forget manual work — RealVibe Studio does all the hard work for you!<br>
-            With just one click, you can:</p>
+            <h2>Free online & offline window design & quotation app — for everyone who builds</h2>
+            <p><em>WoodenMax Architectural Elements · <a href="https://window.woodenmax.in" target="_blank" rel="noopener noreferrer">window.woodenmax.in</a> · <a href="mailto:info@woodenmax.com">info@woodenmax.com</a></em></p>
+            <p>WoodenMax Designer is a <strong>100% free</strong> Progressive Web App (PWA) for <strong>developers, architects, purchase departments, site planners, contractors, fabricators, and homeowners</strong>. Design <strong>aluminium windows, sliding doors, casements, ventilators, glass partitions (including shower and bathroom areas), louvers, elevation façades, corner windows, mirrors</strong>, and generate <strong>professional quotations and BOM-style summaries</strong> — without login, without subscription.</p>
+            <h3>Who is this for?</h3>
             <ul>
-                <li>🧩 <strong>Export Complete Hardware List</strong> – Hinges, rollers, locks, handles, screws, etc.</li>
-                <li>✂️ <strong>Generate Section Cutting Details</strong> – Get accurate cutting plans with total stock length and waste calculation.</li>
-                <li>📦 <strong>Get Required Stock Summary</strong> – Instantly calculate required profiles, glass sheets, and hardware quantity.</li>
-                <li>📜 <strong>Auto Cutting Plan Export</strong> – Download detailed cutting plans and section details ready for fabrication.</li>
+                <li><strong>Developers & project teams</strong> — fast takeoff-ready sizes, quantities, and rates for tenders and BOQs.</li>
+                <li><strong>Architects & interior designers</strong> — visualize track types, grids, glass options, and hardware for client presentations.</li>
+                <li><strong>Purchase & procurement</strong> — compare line items, rates, and quantities before placing orders.</li>
+                <li><strong>Planners & site supervisors</strong> — clear labels and exports for coordination with fabrication.</li>
+                <li><strong>Homeowners & visitors</strong> — explore options for <strong>windows, doors, showers, partitions, louvers, ventilators</strong> before you talk to a vendor.</li>
             </ul>
-            <p>All this happens automatically — no manual entry, no guesswork.</p>
-            <h4>⏱️ 1–2 Minute Design Automation</h4>
-            <p>Just input your size — and in 1–2 minutes, your complete design, quotation, hardware list, and cutting plan are ready to export!<br>
-            Users can easily reuse previous designs, update sizes or materials, and auto-generate new quotations within seconds.</p>
-            <h4>💾 Smart Export & Correction System</h4>
-            <p>Save your work as a .json project file.</p>
-            <p>When you need to make corrections, just upload it again, modify, and re-export instantly — no need to rebuild your quotation or design from scratch.</p>
-            <p>Export in multiple formats: PDF, JSON, Image, and Cutting Plan Sheets.</p>
-            <h4>📱 Works Online & Offline</h4>
-            <p>RealVibe Studio works like a real desktop software –</p>
+            <h3>🧱 What you can design (keywords)</h3>
+            <p><strong>Sliding windows & doors</strong> (2-track, 3-track, mesh options), <strong>casement windows & doors</strong> (openable, grid layouts), <strong>bathroom ventilators</strong> and <strong>exhaust ventilation</strong>, <strong>glass partitions</strong> and <strong>shower enclosures</strong>, <strong>aluminium louvers</strong> (elevation, duct cover, ventilation), <strong>L-type corner</strong> glazing, <strong>mirrors</strong> (round, oval, capsule, custom), <strong>Georgian bars</strong> and decorative grids — all in one flow.</p>
+            <h3>⚙️ Powerful features</h3>
             <ul>
-                <li>✅ Install it directly on your Home Screen (Mobile, Laptop, Tablet, or PC).</li>
-                <li>✅ No Login or Signup Needed.</li>
-                <li>✅ No Data Privacy Risk.</li>
-                <li>✅ Lightweight & Fast, runs even without internet.</li>
-                <li>✅ 100% browser-based Progressive Web App (PWA) – easy to install, easy to use.</li>
+                <li>🧩 <strong>Hardware & material lists</strong> — hinges, rollers, locks, handles, screws, and related items for your layout.</li>
+                <li>✂️ <strong>Cutting & section thinking</strong> — stock lengths, profiles, and fabrication-oriented detail for your workflow.</li>
+                <li>📦 <strong>Quotation list</strong> — add multiple sizes and systems; edit, duplicate, and export.</li>
+                <li>💾 <strong>JSON backup</strong> — save and reload designs for revisions without starting from zero.</li>
+                <li>📱 <strong>Works online & offline</strong> — install to Home Screen; runs in the browser like a lightweight desktop tool.</li>
             </ul>
-            <p>Once installed, it opens instantly like a professional design software — anytime, anywhere.</p>
-            <h3>💡 Why Choose RealVibe Studio</h3>
+            <h3>💡 Why WoodenMax</h3>
             <ul>
-                <li>✔️ Designed by an expert with 15+ years of fabrication & installation experience</li>
-                <li>✔️ 100% AI-integrated smart automation for speed & precision</li>
-                <li>✔️ Real-time quotation with or without rates</li>
-                <li>✔️ Works offline on all devices</li>
-                <li>✔️ Instant export for cutting, hardware, and material planning</li>
-                <li>✔️ Perfect for fabricators, designers, architects, and contractors</li>
+                <li>✔️ Built around real fabrication and site experience — not a toy renderer.</li>
+                <li>✔️ Free for end users — no paywall to design or quote.</li>
+                <li>✔️ Privacy-friendly — no forced account; your data stays in your browser unless you export it.</li>
+                <li>✔️ One place for <strong>windows, doors, showers, louvers, ventilators, casements, partitions</strong> — and your quotation.</li>
             </ul>
-            <h3>🚀 Start Designing Smarter</h3>
-            <p>Experience the future of smart designing —<br>
-            No manual calculations, no complex tools, just one platform for everything.</p>
-            <p>👉 Visit: <a href="https://www.realvibestudio.in" target="_blank" rel="noopener noreferrer">https://www.realvibestudio.in</a></p>
-            <p>Design. Visualize. Calculate. Export.<br>
-            All in just a few clicks — only with RealVibe Studio.</p>
+            <h3>🚀 Start now</h3>
+            <p>Open <a href="https://window.woodenmax.in" target="_blank" rel="noopener noreferrer">window.woodenmax.in</a>, pick a design type, enter sizes, configure glass and profiles, then save to your quotation. Questions? Write to <a href="mailto:info@woodenmax.com">info@woodenmax.com</a>.</p>
         `
     },
     'sliding': {

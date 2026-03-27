@@ -70,7 +70,7 @@ export const ContentModal: React.FC<ContentModalProps> = ({ isOpen, onClose }) =
             
             <Section title="About WoodenMax">
                 <p>
-                    <strong>WoodenMax Architectural Elements</strong> is a leader in innovative building solutions. This platform, hosted at <strong>realvibestudio.in</strong>, is part of our commitment to empowering industry professionals with free, state-of-the-art digital tools.
+                    <strong>WoodenMax Architectural Elements</strong> is a leader in innovative building solutions. This free app runs at <strong>window.woodenmax.in</strong> and is part of our commitment to empowering developers, architects, purchase teams, planners, contractors, and homeowners with professional, state-of-the-art digital tools.
                 </p>
                 <p>
                     Beyond this software, we specialize in manufacturing high-quality <strong>iron and profiles pergolas, retractable pergolas, metal louvers,</strong> and custom <strong>fabricated structures</strong> like modular homes and shops.

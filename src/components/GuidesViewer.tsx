@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { NavLink } from 'react-router-dom';
 import { guides } from '../guides/content';
 import { Button } from './ui/Button';
 import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
@@ -40,12 +41,16 @@ export const GuidesViewer: React.FC<GuidesViewerProps> = ({ activeSlug, onClose 
                                 if (!guide) return null;
                                 return (
                                     <li key={slug}>
-                                        <a 
-                                            href={`#/guides/${slug}`} 
-                                            className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeSlug === slug ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                                        <NavLink
+                                            to={`/guides/${slug}`}
+                                            className={({ isActive }) =>
+                                                `block px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                                    isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                                                }`
+                                            }
                                         >
                                             {guide.title}
-                                        </a>
+                                        </NavLink>
                                     </li>
                                 );
                             })}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback, lazy, Suspense } from 'react';
-import type { FixedPanel, ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, PartitionPanelConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig, LouverPatternItem } from './types';
+import { useNavigate, useLocation } from 'react-router-dom';
+import type { ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType, MirrorShape } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
@@ -13,6 +14,13 @@ import { AdjustmentsIcon } from './components/icons/AdjustmentsIcon';
 import { ListBulletIcon } from './components/icons/ListBulletIcon';
 import { DocumentTextIcon } from './components/icons/DocumentTextIcon';
 import { QuotationListModal } from './components/QuotationListModal';
+import {
+  saveSnapshotForType,
+  getSnapshotForType,
+  clearSnapshotForType,
+  type DesignSnapshot,
+} from './utils/windowTypeDesignSnapshots';
+import { SITE_ORIGIN } from './constants/site';
 
 const BatchAddModal = lazy(() => import('./components/BatchAddModal').then(module => ({ default: module.BatchAddModal })));
 const GuidesViewer = lazy(() => import('./components/GuidesViewer').then(module => ({ default: module.GuidesViewer })));
@@ -417,6 +425,7 @@ const initialConfig: ConfigState = {
     customGlassName: '',
     glassSpecialType: 'none',
     profileColor: '#374151',
+    profileTexture: '',
     glassGrid: defaultGlassGrid,
     windowType: WindowType.SLIDING,
     laminatedGlassConfig: {
@@ -628,6 +637,7 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
                 width: state.width,
                 height: state.height,
                 profileColor: state.profileColor,
+                profileTexture: state.profileTexture,
                 glassType: state.glassType,
                 glassThickness: state.glassThickness,
                 glassSpecialType: state.glassSpecialType,
@@ -713,6 +723,7 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
               ...parsed,
               glassGrid: { ...initialConfig.glassGrid, ...(parsed.glassGrid || {}) },
               glassTexture: parsed.glassTexture || '',
+              profileTexture: parsed.profileTexture ?? '',
               partitionPanels: { ...initialConfig.partitionPanels, ...(parsed.partitionPanels || {}) },
               laminatedGlassConfig: { ...initialConfig.laminatedGlassConfig, ...(parsed.laminatedGlassConfig || {}) },
               dguGlassConfig: { ...initialConfig.dguGlassConfig, ...(parsed.dguGlassConfig || {}) },
@@ -723,12 +734,16 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
               orientation: parsed.orientation || initialConfig.orientation,
             };
             finalConfig.partitionPanels.types = finalConfig.partitionPanels.types || [];
-            finalConfig.leftConfig.slidingHandles = finalConfig.leftConfig.slidingHandles || [];
-            finalConfig.leftConfig.doorPositions = finalConfig.leftConfig.doorPositions || [];
-            finalConfig.leftConfig.ventilatorGrid = finalConfig.leftConfig.ventilatorGrid || [];
-            finalConfig.rightConfig.slidingHandles = finalConfig.rightConfig.slidingHandles || [];
-            finalConfig.rightConfig.doorPositions = finalConfig.rightConfig.doorPositions || [];
-            finalConfig.rightConfig.ventilatorGrid = finalConfig.rightConfig.ventilatorGrid || [];
+            if (finalConfig.leftConfig) {
+                finalConfig.leftConfig.slidingHandles = finalConfig.leftConfig.slidingHandles || [];
+                finalConfig.leftConfig.doorPositions = finalConfig.leftConfig.doorPositions || [];
+                finalConfig.leftConfig.ventilatorGrid = finalConfig.leftConfig.ventilatorGrid || [];
+            }
+            if (finalConfig.rightConfig) {
+                finalConfig.rightConfig.slidingHandles = finalConfig.rightConfig.slidingHandles || [];
+                finalConfig.rightConfig.doorPositions = finalConfig.rightConfig.doorPositions || [];
+                finalConfig.rightConfig.ventilatorGrid = finalConfig.rightConfig.ventilatorGrid || [];
+            }
             return finalConfig;
         }
         case 'RESET_DESIGN': {
@@ -785,12 +800,16 @@ const getInitialConfig = (): ConfigState => {
 
       // Ensure critical arrays inside nested objects are present
       finalConfig.partitionPanels.types = finalConfig.partitionPanels.types || [];
-      finalConfig.leftConfig.slidingHandles = finalConfig.leftConfig.slidingHandles || [];
-      finalConfig.leftConfig.doorPositions = finalConfig.leftConfig.doorPositions || [];
-      finalConfig.leftConfig.ventilatorGrid = finalConfig.leftConfig.ventilatorGrid || [];
-      finalConfig.rightConfig.slidingHandles = finalConfig.rightConfig.slidingHandles || [];
-      finalConfig.rightConfig.doorPositions = finalConfig.rightConfig.doorPositions || [];
-      finalConfig.rightConfig.ventilatorGrid = finalConfig.rightConfig.ventilatorGrid || [];
+      if (finalConfig.leftConfig) {
+        finalConfig.leftConfig.slidingHandles = finalConfig.leftConfig.slidingHandles || [];
+        finalConfig.leftConfig.doorPositions = finalConfig.leftConfig.doorPositions || [];
+        finalConfig.leftConfig.ventilatorGrid = finalConfig.leftConfig.ventilatorGrid || [];
+      }
+      if (finalConfig.rightConfig) {
+        finalConfig.rightConfig.slidingHandles = finalConfig.rightConfig.slidingHandles || [];
+        finalConfig.rightConfig.doorPositions = finalConfig.rightConfig.doorPositions || [];
+        finalConfig.rightConfig.ventilatorGrid = finalConfig.rightConfig.ventilatorGrid || [];
+      }
       
       // Specific migrations for older state shapes
       if (typeof finalConfig.partitionPanels.hasTopChannel === 'undefined') {
@@ -814,6 +833,7 @@ type MobilePanelState = 'none' | 'configure' | 'quotation';
 type AppView = 'designer' | 'guides';
 
 interface DesignerViewProps {
+  onOpenGuides: () => void;
   installPrompt: BeforeInstallPromptEvent | null;
   handleInstallClick: () => void;
   panelRef: React.RefObject<HTMLDivElement>;
@@ -848,6 +868,7 @@ interface DesignerViewProps {
 
 const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
   const {
+    onOpenGuides,
     installPrompt, handleInstallClick, panelRef, isDesktopPanelOpen, setIsDesktopPanelOpen,
     commonControlProps, canvasKey, windowConfig, handleRemoveVerticalDivider, handleRemoveHorizontalDivider,
     quantity, setQuantity, areaType, setAreaType, rate, setRate,
@@ -862,10 +883,10 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
             <Logo className="h-10 w-10 mr-4 flex-shrink-0" />
             <div className="flex-grow">
                 <h1 className="text-2xl font-bold text-white tracking-wider">WoodenMax Architectural Elements</h1>
-                <p className="text-sm text-indigo-300">Powered by Real Vibe Studio</p>
+                <p className="text-sm text-indigo-300">Free online & offline window design & quotations · {new URL(SITE_ORIGIN).hostname}</p>
             </div>
             <div className='flex items-center gap-2'>
-              <Button onClick={() => window.location.hash = '#/guides'} variant="secondary" className="hidden sm:inline-flex"> <DocumentTextIcon className="w-5 h-5 mr-2" /> Features & Guides </Button>
+              <Button onClick={onOpenGuides} variant="secondary" className="hidden sm:inline-flex"> <DocumentTextIcon className="w-5 h-5 mr-2" /> Features & Guides </Button>
               {installPrompt && ( <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse"> <DownloadIcon className="w-5 h-5 mr-2" /> Add to Home Screen </Button> )}
             </div>
         </header>
@@ -905,7 +926,9 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
 });
 
 const App: React.FC = () => {
-  
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [windowConfigState, dispatch] = useReducer(configReducer, getInitialConfig());
   const { windowType } = windowConfigState;
 
@@ -988,47 +1011,68 @@ const App: React.FC = () => {
   const [canvasKey, setCanvasKey] = useState(() => uuidv4());
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // --- ROUTING & SEO EFFECTS ---
+  const configRef = useRef(windowConfigState);
+  const seriesRef = useRef(series);
   useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.replace('#/', '');
-      const parts = hash.split('/');
+    configRef.current = windowConfigState;
+  }, [windowConfigState]);
+  useEffect(() => {
+    seriesRef.current = series;
+  }, [series]);
 
-      if (parts[0] === 'guides') {
-        setAppView('guides');
-        setGuideSlug(parts[1] || 'index');
-      } else {
-        setAppView('designer');
-        const targetType = hash || WindowType.SLIDING;
-        const foundType = Object.values(WindowType).find(t => t === targetType) as WindowType | undefined;
-        
-        if (foundType && foundType !== windowConfigState.windowType) {
-          dispatch({ type: 'SET_WINDOW_TYPE', payload: foundType });
-        } else if (!foundType && hash) { // If hash exists but is invalid
-          window.location.replace(`#/${WindowType.SLIDING}`);
-        }
-      }
+  const persistSnapshotAndSwitchWindowType = useCallback((newType: WindowType) => {
+    const oldType = configRef.current.windowType;
+    if (oldType === newType) return;
+
+    const snapshot: DesignSnapshot = {
+      config: JSON.parse(JSON.stringify(configRef.current)) as ConfigState,
+      series: JSON.parse(JSON.stringify(seriesRef.current)) as ProfileSeries,
     };
-    
-    handleHashChange(); // Initial load check
-    
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [windowConfigState.windowType]);
+    saveSnapshotForType(oldType, snapshot);
 
-  // This effect syncs the URL if the state changes for some other reason, e.g. initial load from localStorage
-  useEffect(() => {
-    if (appView === 'designer') {
-        const hash = window.location.hash.replace('#/', '');
-        if (windowType !== hash) {
-            window.history.replaceState(null, '', `#/${windowType}`);
-        }
+    const restored = getSnapshotForType(newType);
+    if (restored) {
+      dispatch({ type: 'LOAD_CONFIG', payload: restored.config });
+      setSeries(restored.series);
+    } else {
+      dispatch({ type: 'SET_WINDOW_TYPE', payload: newType });
+      setSeries(SERIES_MAP[newType] || DEFAULT_SLIDING_SERIES);
     }
-  }, [windowType, appView]);
+  }, [dispatch]);
 
-  // This effect updates the page title and canonical URL for SEO
+  // --- ROUTING (pathname) & SEO ---
   useEffect(() => {
-    const baseUrl = "https://www.realvibestudio.in/";
+    const path = location.pathname;
+    if (path === '/' || path === '') {
+      navigate(`/design/${configRef.current.windowType}`, { replace: true });
+      return;
+    }
+    if (path.startsWith('/guides')) {
+      const parts = path.split('/').filter(Boolean);
+      const slug = parts[1] || 'index';
+      setAppView('guides');
+      setGuideSlug(slug);
+      return;
+    }
+    if (path.startsWith('/design')) {
+      setAppView('designer');
+      const parts = path.split('/').filter(Boolean);
+      const seg = parts[1];
+      const foundType = seg ? Object.values(WindowType).find((t) => t === seg) : undefined;
+      if (foundType && foundType !== configRef.current.windowType) {
+        persistSnapshotAndSwitchWindowType(foundType);
+      } else if (seg && !foundType) {
+        navigate('/design/sliding', { replace: true });
+      } else if (!seg) {
+        navigate(`/design/${configRef.current.windowType}`, { replace: true });
+      }
+      return;
+    }
+    navigate(`/design/${configRef.current.windowType}`, { replace: true });
+  }, [location.pathname, navigate, persistSnapshotAndSwitchWindowType]);
+
+  useEffect(() => {
+    const baseUrl = `${SITE_ORIGIN}/`;
     let canonicalUrl = baseUrl;
 
     const titleMap: Partial<Record<WindowType, string>> = {
@@ -1044,7 +1088,7 @@ const App: React.FC = () => {
     if (appView === 'guides') {
         const guideTitle = guideSlug.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         document.title = `${guideTitle} Guide | WoodenMax Designer`;
-        canonicalUrl = `${baseUrl}#/guides/${guideSlug}`;
+        canonicalUrl = `${SITE_ORIGIN}/guides/${guideSlug}`;
     } else if (windowType) {
         const pageTitle = titleMap[windowType];
         if (pageTitle) {
@@ -1053,7 +1097,7 @@ const App: React.FC = () => {
              const typeLabel = windowType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
              document.title = `${typeLabel} Design Tool | WoodenMax Designer`;
         }
-        canonicalUrl = `${baseUrl}#/${windowType}`;
+        canonicalUrl = `${SITE_ORIGIN}/design/${windowType}`;
     }
 
     let link = document.querySelector<HTMLLinkElement>("link[rel='canonical']");
@@ -1079,6 +1123,9 @@ const App: React.FC = () => {
         // but it will be saved to quotation items for printing
         if (stateToSave.profileColor && stateToSave.profileColor.startsWith('data:image')) {
             stateToSave.profileColor = '#374151'; // Reset to default to avoid storage errors
+        }
+        if (stateToSave.profileTexture && stateToSave.profileTexture.startsWith('data:image')) {
+            stateToSave.profileTexture = '';
         }
         if (stateToSave.glassTexture) {
             stateToSave.glassTexture = ''; // Do not persist texture data
@@ -1303,12 +1350,12 @@ const App: React.FC = () => {
         if(windowType === WindowType.CORNER) {
             dispatch({ type: 'SET_SIDE_CONFIG', payload: { side: activeCornerSide, config: { windowType: selected.type as CornerSideConfig['windowType'] } } });
         } else {
-            // This will trigger the hash change logic via useEffect
-            window.location.hash = `/${selected.type}`;
+            // Path change: routing effect syncs type via persistSnapshotAndSwitchWindowType
+            navigate(`/design/${selected.type}`);
         }
       }
     }
-  }, [availableSeries, windowType, windowConfig, activeCornerSide]);
+  }, [availableSeries, windowType, windowConfig, activeCornerSide, navigate]);
   
   const handleSeriesSave = useCallback((name: string) => {
     if (name && name.trim() !== '') {
@@ -1376,9 +1423,10 @@ const App: React.FC = () => {
 
   const handleResetDesign = useCallback(() => {
     if (window.confirm("Are you sure you want to reset the current design? All changes will be lost.")) {
+        clearSnapshotForType(windowConfigState.windowType);
         dispatch({ type: 'RESET_DESIGN' });
     }
-  }, []);
+  }, [windowConfigState.windowType]);
 
   const hardwareCostPerWindow = useMemo(() => {
     const calculateSideCost = (config: WindowConfig | CornerSideConfig | undefined) => {
@@ -1511,15 +1559,15 @@ const App: React.FC = () => {
     if (field === 'series') {
       setSeries(value);
     } else if (field === 'windowType') {
-      window.location.hash = `/${value}`;
+      navigate(`/design/${value}`);
     }
     else {
-      if (field === 'profileColor' || field === 'glassTexture') {
+      if (field === 'profileColor' || field === 'profileTexture' || field === 'glassTexture') {
         setCanvasKey(uuidv4());
       }
       dispatch({ type: 'SET_FIELD', field: field as keyof ConfigState, payload: value });
     }
-  }, []);
+  }, [navigate]);
 
   const setSideConfig = useCallback((config: Partial<CornerSideConfig>) => {
     dispatch({ type: 'SET_SIDE_CONFIG', payload: { side: activeCornerSide, config } });
@@ -1538,8 +1586,9 @@ const App: React.FC = () => {
         setEditingItemId(id);
         setIsQuotationModalOpen(false);
         setActiveMobilePanel('none');
+        navigate(`/design/${itemToEdit.config.windowType}`);
     }
-  }, [quotationItems]);
+  }, [quotationItems, navigate]);
 
   const handleUpdateQuotationItem = useCallback(() => {
     if (!editingItemId) return;
@@ -1642,6 +1691,7 @@ const App: React.FC = () => {
         <Suspense fallback={loadingFallback}>
             {appView === 'designer' ? (
                 <DesignerView
+                    onOpenGuides={() => navigate('/guides/index')}
                     installPrompt={installPrompt}
                     handleInstallClick={handleInstallClick}
                     panelRef={panelRef}
@@ -1676,7 +1726,7 @@ const App: React.FC = () => {
             ) : (
                 <GuidesViewer 
                     activeSlug={guideSlug} 
-                    onClose={() => window.location.hash = `#/${windowType}`}
+                    onClose={() => navigate(`/design/${windowType}`)}
                 />
             )}
         </Suspense>

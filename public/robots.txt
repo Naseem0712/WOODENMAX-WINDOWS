@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://www.realvibestudio.in/sitemap.xml
+Sitemap: https://window.woodenmax.in/sitemap.xml

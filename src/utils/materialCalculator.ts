@@ -1,4 +1,4 @@
-import type { WindowConfig, QuotationItem, ProfileDimensions, BOM, BOMSeries, BOMHardware, BOMProfile, GlassType, BOMGlass, BOMMesh } from '../types';
+import type { WindowConfig, QuotationItem, ProfileDimensions, BOM, BOMSeries, BOMProfile, GlassType } from '../types';
 import { WindowType, ShutterConfigType, FixedPanelPosition } from '../types';
 
 const FEET_TO_MM = 304.8;
@@ -119,8 +119,8 @@ function calculateUsage(config: WindowConfig): {
     }
 
     if (config.windowType === WindowType.CORNER && config.leftConfig && config.rightConfig) {
-        const leftConfig: WindowConfig = { ...config, ...config.leftConfig, width: config.leftWidth, height: config.height, windowType: config.leftConfig.windowType, fixedPanels: [] };
-        const rightConfig: WindowConfig = { ...config, ...config.rightConfig, width: config.rightWidth, height: config.height, windowType: config.rightConfig.windowType, fixedPanels: [] };
+        const leftConfig: WindowConfig = { ...config, ...config.leftConfig, width: config.leftWidth ?? 0, height: config.height ?? 0, windowType: config.leftConfig.windowType, fixedPanels: [] };
+        const rightConfig: WindowConfig = { ...config, ...config.rightConfig, width: config.rightWidth ?? 0, height: config.height ?? 0, windowType: config.rightConfig.windowType, fixedPanels: [] };
         
         const leftUsage = calculateUsage(leftConfig);
         const rightUsage = calculateUsage(rightConfig);

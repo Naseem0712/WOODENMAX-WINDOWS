@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import type { BOM, BOMSeries, QuotationSettings } from '../types';
+import type { BOM, QuotationSettings } from '../types';
 import { Button } from './ui/Button';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { PrinterIcon } from './icons/PrinterIcon';

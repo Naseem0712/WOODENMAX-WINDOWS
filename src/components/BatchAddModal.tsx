@@ -21,7 +21,7 @@ interface BatchAddModalProps {
   onSave: (items: BatchAddItem[]) => void;
 }
 
-export const BatchAddModal: React.FC<BatchAddModalProps> = ({ isOpen, onClose, baseConfig, baseRate, onSave }) => {
+export const BatchAddModal: React.FC<BatchAddModalProps> = ({ isOpen, onClose, baseConfig: _baseConfig, baseRate, onSave }) => {
   const [rows, setRows] = useState<BatchAddItem[]>([]);
   const [unit, setUnit] = useState<Unit>('mm');
 

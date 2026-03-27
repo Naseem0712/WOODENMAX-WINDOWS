@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, GlassGridConfig, LouverPatternItem } from '../types';
+import { NavLink } from 'react-router-dom';
+import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig } from '../types';
+import { getDefaultHandleConfig } from '../utils/handleDefaults';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType, MirrorShape } from '../types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -13,7 +15,19 @@ import { CollapsibleCard } from './ui/CollapsibleCard';
 import { SearchableSelect } from './ui/SearchableSelect';
 import { UploadIcon } from './icons/UploadIcon';
 import { useRubberBandScroll } from '../hooks/useRubberBandScroll';
+import {
+  getOrderedProfileDimensionKeys,
+  getAddableProfileDimensionKeys,
+  dimensionKeyLabel,
+} from '../utils/profileDimensionKeys';
 
+const PROFILE_QUICK_PRESETS: { name: string; value: string }[] = [
+  { name: 'Grey', value: '#6b7280' },
+  { name: 'Black', value: '#2f3238' },
+  { name: 'Brown', value: '#5c4033' },
+  { name: 'Champion gold', value: '#d4a84b' },
+  { name: 'Off white', value: '#f5f5f0' },
+];
 
 interface ControlsPanelProps {
   config: WindowConfig;
@@ -61,17 +75,6 @@ interface ControlsPanelProps {
   idPrefix?: string;
 }
 
-function getContrastYIQ(hexcolor: string){
-    if (!hexcolor || !hexcolor.startsWith('#')) return 'white';
-    hexcolor = hexcolor.replace("#", "");
-    if (hexcolor.length !== 6) return 'black';
-    const r = parseInt(hexcolor.substr(0,2),16);
-    const g = parseInt(hexcolor.substr(2,2),16);
-    const b = parseInt(hexcolor.substr(4,2),16);
-    const yiq = ((r*299)+(g*587)+(b*114))/1000;
-    return (yiq >= 128) ? 'black' : 'white';
-}
-
 const Slider: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string, unit?: string }> = ({ id, label, unit, ...props }) => (
     <div className='flex-1'>
         <label htmlFor={id} className="block text-xs font-medium text-slate-300 mb-1">{label} <span className='text-slate-400'>{props.value}{unit}</span></label>
@@ -102,6 +105,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
   const [selectedPanelId, setSelectedPanelId] = useState<string>('');
   const glassTextureUploadRef = useRef<HTMLInputElement>(null);
   const profileTextureUploadRef = useRef<HTMLInputElement>(null);
+  const profileOverlayUploadRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   useRubberBandScroll(scrollContainerRef);
   
@@ -110,6 +114,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
   // Georgian Bars Logic
   const [activeGeorgianPanelId, setActiveGeorgianPanelId] = useState('default');
   const [georgianUnit, setGeorgianUnit] = useState<Unit>('mm');
+  const [addDimNonce, setAddDimNonce] = useState(0);
 
   const availableGeorgianPanels = useMemo(() => {
     const panels: { id: string, name: string }[] = [];
@@ -177,15 +182,16 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
     }
   };
   
-  const handleProfileTextureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileOverlayUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onloadend = () => {
-            setConfig('profileColor', reader.result as string);
+            setConfig('profileTexture', reader.result as string);
         };
         reader.readAsDataURL(file);
     }
+    e.target.value = '';
   };
 
   const handleToggleCard = (title: string) => {
@@ -246,6 +252,13 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
     setConfig('series', { ...series, dimensions: { ...series.dimensions, [key]: value } });
   };
 
+  const handleRemoveExtraDimension = (key: keyof ProfileDimensions) => {
+    setConfig('series', {
+      ...series,
+      extraDimensionKeys: (series.extraDimensionKeys ?? []).filter((k) => k !== key),
+    });
+  };
+
   const handleProfileDetailChange = (field: 'weights' | 'lengths', key: keyof ProfileDimensions, value: number | '') => {
       setConfig('series', { ...series, [field]: { ...(series[field] || {}), [key]: value } });
   };
@@ -261,10 +274,10 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
   const handleConfirmSave = () => { if (newSeriesName.trim()) { onSeriesSave(newSeriesName.trim()); setIsSavingSeries(false); setNewSeriesName(''); } };
   
   const handleInitiateAddPreset = () => {
-    const isTexture = !config.profileColor.startsWith('#');
+    const isTexture = !config.profileColor.startsWith('#') || Boolean(config.profileTexture);
     setNewPreset({
         name: '',
-        value: config.profileColor,
+        value: config.profileTexture || config.profileColor,
         type: isTexture ? 'texture' : 'color'
     });
     setIsAddingPreset(true);
@@ -322,8 +335,19 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
           <div className="grid grid-cols-4 bg-slate-700 rounded-md p-1 gap-1">
               {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.LOUVERS, WindowType.CORNER, WindowType.MIRROR].map(type => {
                   const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                  const isActive = (isCorner && type === WindowType.CORNER) || (!isCorner && windowType === type);
-                  return <a key={type} href={`#/${type}`} className={`block text-center p-2 text-xs font-semibold rounded capitalize ${isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>{typeLabel}</a>
+                  return (
+                    <NavLink
+                      key={type}
+                      to={`/design/${type}`}
+                      className={({ isActive }) =>
+                        `block text-center p-2 text-xs font-semibold rounded capitalize ${
+                          isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'
+                        }`
+                      }
+                    >
+                      {typeLabel}
+                    </NavLink>
+                  );
               })}
           </div>
       </CollapsibleCard>
@@ -332,8 +356,8 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         {isCorner ? (
             <>
                 <div className="grid grid-cols-2 gap-4">
-                    <DimensionInput id={`${idPrefix}left-width`} name="left-width" label="Left Wall Width" value_mm={config.leftWidth} onChange_mm={v => setConfig('leftWidth', v)} placeholder="e.g., 1200" />
-                    <DimensionInput id={`${idPrefix}right-width`} name="right-width" label="Right Wall Width" value_mm={config.rightWidth} onChange_mm={v => setConfig('rightWidth', v)} placeholder="e.g., 1200" />
+                    <DimensionInput id={`${idPrefix}left-width`} name="left-width" label="Left Wall Width" value_mm={config.leftWidth ?? ''} onChange_mm={v => setConfig('leftWidth', v)} placeholder="e.g., 1200" />
+                    <DimensionInput id={`${idPrefix}right-width`} name="right-width" label="Right Wall Width" value_mm={config.rightWidth ?? ''} onChange_mm={v => setConfig('rightWidth', v)} placeholder="e.g., 1200" />
                 </div>
                  <DimensionInput id={`${idPrefix}corner-post-width`} name="corner-post-width" label="Corner Post Width" value_mm={config.cornerPostWidth} onChange_mm={v => setConfig('cornerPostWidth', v)} placeholder="e.g., 100" />
             </>
@@ -538,17 +562,23 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
               {selectedPanelId && (
                   <div className="p-2 bg-slate-700 rounded-md space-y-3">
                       <label className="flex items-center space-x-2 cursor-pointer">
-                          <input type="checkbox" id={`${idPrefix}handle-enable`} name="handle-enable" checked={!!currentHandle} onChange={e => onUpdateHandle(selectedPanelId, e.target.checked ? { x: 50, y: 50, orientation: 'vertical', length: 150 } : null)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
+                          <input type="checkbox" id={`${idPrefix}handle-enable`} name="handle-enable" checked={!!currentHandle} onChange={e => onUpdateHandle(selectedPanelId, e.target.checked ? getDefaultHandleConfig(selectedPanelId, displayConfig) : null)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
                           <span className="text-sm text-slate-200">Enable Handle</span>
                       </label>
+                      <p className="text-xs text-slate-400 leading-snug">
+                        Position uses the crosshair at the handle centre (default 50% / 50%). Size grows <span className="text-slate-300">up and down</span> from that point. Sliding levers sit on frame members by default.
+                      </p>
                       {currentHandle && (
                           <div className="space-y-3">
-                              <Slider id={`${idPrefix}handle-pos-x`} name="handle-pos-x" label={`Horizontal Position: ${currentHandle.x}%`} value={currentHandle.x} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, x: parseInt(e.target.value)})}/>
-                              <Slider id={`${idPrefix}handle-pos-y`} name="handle-pos-y" label={`Vertical Position: ${currentHandle.y}%`} value={currentHandle.y} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, y: parseInt(e.target.value)})}/>
-                              <Slider id={`${idPrefix}handle-length`} name="handle-length" label={`Length: ${currentHandle.length || 150}mm`} value={currentHandle.length || 150} min={50} max={500} step={10} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, length: parseInt(e.target.value)})}/>
+                              <Button variant="secondary" className="w-full text-sm" onClick={() => onUpdateHandle(selectedPanelId, getDefaultHandleConfig(selectedPanelId, displayConfig))}>
+                                Reset to recommended position
+                              </Button>
+                              <Slider id={`${idPrefix}handle-pos-x`} name="handle-pos-x" label={`Horizontal — ${currentHandle.x}% (left ↔ right of panel)`} value={currentHandle.x} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, x: parseInt(e.target.value)})}/>
+                              <Slider id={`${idPrefix}handle-pos-y`} name="handle-pos-y" label={`Vertical — ${currentHandle.y}% (crosshair / centre height)`} value={currentHandle.y} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, y: parseInt(e.target.value)})}/>
+                              <Slider id={`${idPrefix}handle-length`} name="handle-length" label={`Overall size — ${currentHandle.length || 158} mm (height; balanced above & below crosshair)`} value={currentHandle.length || 158} min={100} max={420} step={5} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, length: parseInt(e.target.value)})}/>
                                <div className="grid grid-cols-2 gap-2">
-                                <Button variant={currentHandle.orientation === 'vertical' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, {...currentHandle, orientation: 'vertical'})}>Vertical</Button>
-                                <Button variant={currentHandle.orientation === 'horizontal' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, {...currentHandle, orientation: 'horizontal'})}>Horizontal</Button>
+                                <Button variant={currentHandle.orientation === 'vertical' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, { ...currentHandle, orientation: 'vertical', variant: 'casement' })}>Vertical (lever)</Button>
+                                <Button variant={currentHandle.orientation === 'horizontal' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, { ...currentHandle, orientation: 'horizontal', variant: 'sliding' })}>Horizontal (pull bar)</Button>
                               </div>
                           </div>
                       )}
@@ -639,10 +669,40 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
             </div>
         )}
         <div className='mt-4 pt-4 border-t border-slate-700'>
-            <h4 className="text-base font-semibold text-slate-200 mb-2">Profile Color / Texture</h4>
+            <h4 className="text-base font-semibold text-slate-200 mb-2">Profile color</h4>
+            <p className="text-xs text-slate-400 mb-2">Quick colors (tap to apply)</p>
+            <div className="flex flex-wrap gap-2 mb-4">
+                {PROFILE_QUICK_PRESETS.map((p) => (
+                    <button
+                        key={p.value}
+                        type="button"
+                        title={p.name}
+                        onClick={() => setConfig('profileColor', p.value)}
+                        className="relative w-12 h-12 rounded-md border-2 transition-colors"
+                        style={{
+                            borderColor: config.profileColor === p.value ? '#4f46e5' : 'transparent',
+                            backgroundColor: p.value,
+                        }}
+                    >
+                        <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-1 rounded opacity-0 hover:opacity-100 pointer-events-none whitespace-nowrap z-10">{p.name}</span>
+                    </button>
+                ))}
+            </div>
+            <h4 className="text-base font-semibold text-slate-200 mb-2">Texture over color</h4>
+            <p className="text-xs text-slate-400 mb-2">Works with any solid profile color above — multiplies a wood-grain or finish image on top.</p>
+            <div className="flex flex-wrap gap-2 mb-2">
+                <Button variant="secondary" className="flex-1 min-w-[140px]" onClick={() => profileOverlayUploadRef.current?.click()}>
+                    <UploadIcon className="w-4 h-4 mr-2" /> Upload texture overlay
+                </Button>
+                <input type="file" ref={profileOverlayUploadRef} onChange={handleProfileOverlayUpload} className="hidden" accept="image/*" />
+                {config.profileTexture ? (
+                    <Button variant="danger" onClick={() => setConfig('profileTexture', '')}>Remove overlay</Button>
+                ) : null}
+            </div>
+            <h4 className="text-base font-semibold text-slate-200 mb-2 mt-4">Saved swatches</h4>
             <div className="flex flex-wrap gap-2">
                 {savedColors.map(color => (
-                    <button key={color.id} onClick={() => setConfig('profileColor', color.value)} onContextMenu={(e) => { e.preventDefault(); if (window.confirm(`Delete color "${color.name}"?`)) { handleDeleteColor(color.id); } }} className="relative group w-12 h-12 rounded-md border-2" style={{ borderColor: config.profileColor === color.value ? '#4f46e5' : 'transparent', background: color.type === 'color' ? color.value : `url(${color.value})`, backgroundSize: 'cover' }}>
+                    <button key={color.id} onClick={() => { if (color.type === 'color') setConfig('profileColor', color.value); else setConfig('profileTexture', color.value); }} onContextMenu={(e) => { e.preventDefault(); if (window.confirm(`Delete color "${color.name}"?`)) { handleDeleteColor(color.id); } }} className="relative group w-12 h-12 rounded-md border-2" style={{ borderColor: (color.type === 'color' ? config.profileColor === color.value : config.profileTexture === color.value) ? '#4f46e5' : 'transparent', background: color.type === 'color' ? color.value : `url(${color.value})`, backgroundSize: 'cover' }}>
                         <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{color.name}</span>
                     </button>
                 ))}
@@ -739,15 +799,67 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         )}
         <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
           <h4 className="text-base font-semibold text-slate-200">Profile Dimensions</h4>
-          {Object.keys(series.dimensions).filter(key => {
-              if (windowType === WindowType.LOUVERS) return key === 'louverProfile';
-              return true;
-          }).map(key => {
-            const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+          <p className="text-xs text-slate-400 mb-2">
+            Only sections used for this window type are listed. Add another profile size if your series needs it.
+          </p>
+          {getOrderedProfileDimensionKeys(series).map((key) => {
+            const label = dimensionKeyLabel(key);
+            const isExtra = (series.extraDimensionKeys ?? []).includes(key);
             return (
-                <DimensionInput key={key} id={`${idPrefix}dim-${key}`} name={`dim-${key}`} label={label} value_mm={series.dimensions[key as keyof typeof series.dimensions]} onChange_mm={v => handleDimensionChange(key as keyof ProfileSeries['dimensions'], v)} weightValue={series.weights?.[key as keyof ProfileDimensions]} onWeightChange={v => handleProfileDetailChange('weights', key as keyof ProfileDimensions, v)} lengthValue={series.lengths?.[key as keyof ProfileDimensions]} onLengthChange={v => handleProfileDetailChange('lengths', key as keyof ProfileDimensions, v)} />
-            )
+              <div key={key} className="flex gap-2 items-end">
+                <div className="flex-1 min-w-0">
+                  <DimensionInput
+                    id={`${idPrefix}dim-${key}`}
+                    name={`dim-${key}`}
+                    label={label}
+                    value_mm={series.dimensions[key] ?? ''}
+                    onChange_mm={(v) => handleDimensionChange(key, v)}
+                    weightValue={series.weights?.[key]}
+                    onWeightChange={(v) => handleProfileDetailChange('weights', key, v)}
+                    lengthValue={series.lengths?.[key]}
+                    onLengthChange={(v) => handleProfileDetailChange('lengths', key, v)}
+                  />
+                </div>
+                {isExtra ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="shrink-0 h-10 px-2"
+                    title="Remove this section from the list"
+                    aria-label={`Remove ${label}`}
+                    onClick={() => handleRemoveExtraDimension(key)}
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </Button>
+                ) : null}
+              </div>
+            );
           })}
+          {getAddableProfileDimensionKeys(series).length > 0 ? (
+            <Select
+              key={addDimNonce}
+              id={`${idPrefix}add-profile-dimension`}
+              label=""
+              value=""
+              onChange={(e) => {
+                const v = e.target.value as keyof ProfileDimensions;
+                if (v) {
+                  setConfig('series', {
+                    ...series,
+                    extraDimensionKeys: [...(series.extraDimensionKeys ?? []), v],
+                  });
+                  setAddDimNonce((n) => n + 1);
+                }
+              }}
+            >
+              <option value="">Add dimension…</option>
+              {getAddableProfileDimensionKeys(series).map((k) => (
+                <option key={k} value={k}>
+                  {dimensionKeyLabel(k)}
+                </option>
+              ))}
+            </Select>
+          ) : null}
         </div>
         <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
           <h4 className="text-base font-semibold text-slate-200">Hardware Items</h4>

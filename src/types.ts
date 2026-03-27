@@ -86,6 +86,8 @@ export interface ProfileSeries {
   name: string;
   type: WindowType;
   dimensions: ProfileDimensions;
+  /** Extra profile dimension fields shown in Configure (beyond defaults for `type`). */
+  extraDimensionKeys?: (keyof ProfileDimensions)[];
   weights?: ProfileDetails;
   lengths?: ProfileDetails;
   hardwareItems: HardwareItem[];
@@ -134,11 +136,15 @@ export enum AreaType {
     SQMT = 'sqmt',
 }
 
+export type HandleVariant = 'sliding' | 'casement';
+
 export interface HandleConfig {
-  x: number; // 0-100 percentage
-  y: number; // 0-100 percentage
+  x: number; // 0-100 percentage (of panel width)
+  y: number; // 0-100 percentage (of panel height)
   orientation: 'vertical' | 'horizontal';
   length?: number;
+  /** Visual style; sliding = pull bar, casement = lever — set by recommended defaults */
+  variant?: HandleVariant;
 }
 
 export type VentilatorCellType = 'glass' | 'louvers' | 'door' | 'exhaust_fan';
@@ -220,6 +226,8 @@ export interface WindowConfig {
   glassThickness: number | '';
   customGlassName: string;
   profileColor: string;
+  /** Optional wood-grain / finish image layered over `profileColor` (hex) with multiply blend. */
+  profileTexture?: string;
   glassGrid: GlassGridConfig;
   legacyGlassGrid?: { rows: number, cols: number }; // For migration
   

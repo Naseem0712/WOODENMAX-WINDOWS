@@ -1,7 +1,7 @@
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useId } from 'react';
 // FIX: Corrected import path for types from './types' to '../types'.
-import type { WindowConfig, HandleConfig, CornerSideConfig } from '../types';
+import type { WindowConfig, HandleConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType, MirrorShape } from '../types';
 // FIX: Corrected import paths for icons.
 import { PlusIcon } from './icons/PlusIcon';
@@ -9,6 +9,18 @@ import { MinusIcon } from './icons/MinusIcon';
 import { ArrowsPointingInIcon } from './icons/ArrowsPointingInIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { PhotoIcon } from './icons/PhotoIcon';
+import { WindowHandleVisual } from './WindowHandleVisual';
+import {
+  slidingMemberSideStandard,
+  slidingMemberSide4G2M,
+  mirrorHandleForSlidingMember,
+  mirrorHandleForPartitionHandleX,
+} from '../utils/handleDefaults';
+import { PROFILE_TEXTURE_TILE, profileTexturePosition } from '../utils/profileTexture';
+
+function profileOverlayTexture(config: WindowConfig): string | undefined {
+  return config.profileColor.startsWith('#') ? config.profileTexture || undefined : undefined;
+}
 
 interface WindowCanvasProps {
   config: WindowConfig;
@@ -16,6 +28,9 @@ interface WindowCanvasProps {
   onRemoveHorizontalDivider: (index: number) => void;
   onToggleElevationDoor: (row: number, col: number) => void;
 }
+
+/** Convert mm at current canvas scale to CSS px; rounded so frame borders and glass insets stay aligned. */
+const mmToPx = (mm: number, scale: number) => Math.round(mm * scale * 100) / 100;
 
 const DimensionLabel: React.FC<{ value: number; unit?: string, className?: string, style?: React.CSSProperties }> = ({ value, unit = "mm", className, style }) => (
     <span className={`absolute bg-slate-900 bg-opacity-60 text-slate-200 text-base font-mono px-1.5 py-0.5 rounded ${className}`} style={style}>
@@ -52,34 +67,56 @@ const ShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | null }
     return null;
 }
 
-const Handle: React.FC<{ config: HandleConfig, scale: number, color: string }> = ({ config, scale, color }) => {
-    const handleWidth = 25; // mm
-    const handleHeight = config.length || 150; // mm
-    const isVertical = config.orientation === 'vertical';
-    const style: React.CSSProperties = {
-        position: 'absolute',
-        backgroundColor: color,
-        border: '1px solid rgba(0,0,0,0.5)',
-        boxShadow: '1px 1px 3px rgba(0,0,0,0.3)',
-        borderRadius: '3px',
-        width: (isVertical ? handleWidth : handleHeight) * scale,
-        height: (isVertical ? handleHeight : handleWidth) * scale,
-    };
-    return <div style={style} />;
+const Handle: React.FC<{ config: HandleConfig; scale: number; color: string; mirrored?: boolean }> = ({ config, scale, color, mirrored }) => {
+    const gid = useId().replace(/:/g, '');
+    const variant = config.variant ?? (config.orientation === 'horizontal' ? 'sliding' : 'casement');
+    const raw = config.length ?? (variant === 'sliding' ? 125 : 158);
+    const lenMm = Math.min(420, Math.max(96, raw));
+    const metalTint = color.startsWith('#') ? color : '#8b939e';
+    return <WindowHandleVisual variant={variant} lenMm={lenMm} color={metalTint} gid={gid} scale={scale} mirrored={mirrored} />;
 };
 
 
-const ProfilePiece: React.FC<{style: React.CSSProperties, color: string}> = React.memo(({ style, color }) => {
-    const isTexture = color && !color.startsWith('#');
-    const isHorizontal = (style.width as number) > (style.height as number);
-    
-    const backgroundStyle = isTexture ? {
-        backgroundImage: `url(${color})`,
-        backgroundRepeat: 'repeat',
-        backgroundSize: isHorizontal ? 'auto 100%' : '100% auto',
-    } : { backgroundColor: color };
-    
-    return <div style={{ boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)', position: 'absolute', ...style, ...backgroundStyle }} />;
+const ProfilePiece: React.FC<{ style: React.CSSProperties; color: string; texture?: string }> = React.memo(({ style, color, texture }) => {
+    const isLegacyTextureOnly = Boolean(color && !color.startsWith('#'));
+    const texPos = profileTexturePosition(style);
+
+    if (isLegacyTextureOnly) {
+        return (
+            <div
+                style={{
+                    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)',
+                    position: 'absolute',
+                    ...style,
+                    backgroundImage: `url(${color})`,
+                    backgroundRepeat: 'repeat',
+                    backgroundSize: PROFILE_TEXTURE_TILE,
+                    backgroundPosition: texPos,
+                }}
+            />
+        );
+    }
+
+    const baseColor = color.startsWith('#') ? color : '#8b939e';
+    return (
+        <div style={{ boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)', position: 'absolute', ...style, backgroundColor: baseColor, overflow: 'hidden' }}>
+            {texture ? (
+                <div
+                    style={{
+                        position: 'absolute',
+                        inset: 0,
+                        backgroundImage: `url(${texture})`,
+                        backgroundRepeat: 'repeat',
+                        backgroundSize: PROFILE_TEXTURE_TILE,
+                        backgroundPosition: texPos,
+                        mixBlendMode: 'multiply',
+                        opacity: 0.82,
+                        pointerEvents: 'none',
+                    }}
+                />
+            ) : null}
+        </div>
+    );
 });
 
 const GlassGrid: React.FC<{
@@ -103,14 +140,14 @@ const GlassGrid: React.FC<{
     for (let i = 0; i < pattern.horizontal.count; i++) {
         const top = (pattern.horizontal.offset + i * pattern.horizontal.gap) * scale - barThicknessScaled / 2;
         if (top > height * scale || top < -barThicknessScaled) continue;
-        elements.push(<ProfilePiece key={`h-grid-${i}`} color={config.profileColor} style={{ top, left: 0, width: width * scale, height: barThicknessScaled }} />);
+        elements.push(<ProfilePiece key={`h-grid-${i}`} color={config.profileColor} texture={profileOverlayTexture(config)} style={{ top, left: 0, width: width * scale, height: barThicknessScaled }} />);
     }
 
     // Vertical bars
     for (let i = 0; i < pattern.vertical.count; i++) {
         const left = (pattern.vertical.offset + i * pattern.vertical.gap) * scale - barThicknessScaled / 2;
         if (left > width * scale || left < -barThicknessScaled) continue;
-        elements.push(<ProfilePiece key={`v-grid-${i}`} color={config.profileColor} style={{ left, top: 0, width: barThicknessScaled, height: height * scale }} />);
+        elements.push(<ProfilePiece key={`v-grid-${i}`} color={config.profileColor} texture={profileOverlayTexture(config)} style={{ left, top: 0, width: barThicknessScaled, height: height * scale }} />);
     }
 
     return <>{elements}</>;
@@ -126,41 +163,21 @@ const MiteredFrame: React.FC<{
     rightSize?: number;
     scale: number;
     color: string;
-}> = React.memo(({ width, height, profileSize = 0, topSize, bottomSize, leftSize, rightSize, scale, color }) => {
-    const ts = (topSize ?? profileSize) * scale;
-    const bs = (bottomSize ?? profileSize) * scale;
-    const ls = (leftSize ?? profileSize) * scale;
-    const rs = (rightSize ?? profileSize) * scale;
-    const isTexture = color && !color.startsWith('#');
+    texture?: string;
+}> = React.memo(({ width, height, profileSize = 0, topSize, bottomSize, leftSize, rightSize, scale, color, texture }) => {
+    const ts = mmToPx(topSize ?? profileSize, scale);
+    const bs = mmToPx(bottomSize ?? profileSize, scale);
+    const ls = mmToPx(leftSize ?? profileSize, scale);
+    const rs = mmToPx(rightSize ?? profileSize, scale);
+    const wPx = mmToPx(width, scale);
+    const hPx = mmToPx(height, scale);
+    const isLegacyTexture = Boolean(color && !color.startsWith('#'));
+    const baseHex = color.startsWith('#') ? color : '#8b939e';
+    const hexWithOverlay = !isLegacyTexture && Boolean(texture) && color.startsWith('#');
 
-    // For solid colors, use CSS borders which create perfect mitered joints and are well-supported by html2canvas.
-    if (!isTexture) {
-        return (
-            <div style={{
-                position: 'absolute',
-                width: width * scale,
-                height: height * scale,
-                boxSizing: 'border-box',
-                borderStyle: 'solid',
-                borderColor: color,
-                borderTopWidth: ts,
-                borderBottomWidth: bs,
-                borderLeftWidth: ls,
-                borderRightWidth: rs,
-            }} />
-        );
-    }
-
-    // For textures, fall back to the clip-path method with improved texture orientation.
-    const backgroundStyle = { backgroundImage: `url(${color})`, backgroundRepeat: 'repeat' };
-    const horizontalBgStyle = { backgroundSize: 'auto 100%' };
-    const verticalBgStyle = { backgroundSize: '100% auto' };
-
-    const baseDivStyle: React.CSSProperties = {
-        position: 'absolute',
-        boxSizing: 'border-box',
-        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)',
-        ...backgroundStyle
+    const tileBase: React.CSSProperties = {
+        backgroundSize: PROFILE_TEXTURE_TILE,
+        backgroundRepeat: 'repeat',
     };
 
     const clipTs = Math.max(0, ts);
@@ -168,17 +185,138 @@ const MiteredFrame: React.FC<{
     const clipLs = Math.max(0, ls);
     const clipRs = Math.max(0, rs);
 
+    const clipTop = `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)`;
+    const clipBottom = `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)`;
+    const clipLeft = `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)`;
+    const clipRight = `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))`;
+
+    if (isLegacyTexture) {
+        const backgroundStyle = { backgroundImage: `url(${color})`, backgroundRepeat: 'repeat' as const };
+        const baseDivStyle: React.CSSProperties = {
+            position: 'absolute',
+            boxSizing: 'border-box',
+            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.25)',
+            ...backgroundStyle,
+        };
+
+        const posTop = '0px 0px';
+        const posBottom = `0px ${-(hPx - clipBs)}px`;
+        const posLeft = '0px 0px';
+        const posRight = `-${wPx - clipRs}px 0px`;
+
+        return (
+            <div className="absolute" style={{ width: wPx, height: hPx, borderRadius: 0 }}>
+                <div
+                    style={{
+                        ...baseDivStyle,
+                        ...tileBase,
+                        backgroundPosition: posTop,
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: clipTs,
+                        zIndex: 1,
+                        clipPath: clipTop,
+                    }}
+                />
+                <div
+                    style={{
+                        ...baseDivStyle,
+                        ...tileBase,
+                        backgroundPosition: posBottom,
+                        bottom: 0,
+                        left: 0,
+                        width: '100%',
+                        height: clipBs,
+                        zIndex: 1,
+                        clipPath: clipBottom,
+                    }}
+                />
+                <div
+                    style={{
+                        ...baseDivStyle,
+                        ...tileBase,
+                        backgroundPosition: posLeft,
+                        top: 0,
+                        left: 0,
+                        width: clipLs,
+                        height: '100%',
+                        zIndex: 2,
+                        clipPath: clipLeft,
+                    }}
+                />
+                <div
+                    style={{
+                        ...baseDivStyle,
+                        ...tileBase,
+                        backgroundPosition: posRight,
+                        top: 0,
+                        right: 0,
+                        width: clipRs,
+                        height: '100%',
+                        zIndex: 2,
+                        clipPath: clipRight,
+                    }}
+                />
+            </div>
+        );
+    }
+
+    if (hexWithOverlay) {
+        const solidBase: React.CSSProperties = {
+            position: 'absolute',
+            boxSizing: 'border-box',
+            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.25)',
+            backgroundColor: baseHex,
+        };
+        const texOverlay: React.CSSProperties = {
+            position: 'absolute',
+            boxSizing: 'border-box',
+            backgroundImage: `url(${texture})`,
+            backgroundRepeat: 'repeat',
+            backgroundSize: PROFILE_TEXTURE_TILE,
+            mixBlendMode: 'multiply',
+            opacity: 0.82,
+        };
+
+        const posTop = '0px 0px';
+        const posBottom = `0px ${-(hPx - clipBs)}px`;
+        const posLeft = '0px 0px';
+        const posRight = `-${wPx - clipRs}px 0px`;
+
+        return (
+            <div className="absolute" style={{ width: wPx, height: hPx, borderRadius: 0 }}>
+                <div style={{ ...solidBase, top: 0, left: 0, width: '100%', height: clipTs, zIndex: 1, clipPath: clipTop }} />
+                <div style={{ ...texOverlay, backgroundPosition: posTop, top: 0, left: 0, width: '100%', height: clipTs, zIndex: 3, clipPath: clipTop }} />
+                <div style={{ ...solidBase, bottom: 0, left: 0, width: '100%', height: clipBs, zIndex: 1, clipPath: clipBottom }} />
+                <div style={{ ...texOverlay, backgroundPosition: posBottom, bottom: 0, left: 0, width: '100%', height: clipBs, zIndex: 3, clipPath: clipBottom }} />
+                <div style={{ ...solidBase, top: 0, left: 0, width: clipLs, height: '100%', zIndex: 2, clipPath: clipLeft }} />
+                <div style={{ ...texOverlay, backgroundPosition: posLeft, top: 0, left: 0, width: clipLs, height: '100%', zIndex: 4, clipPath: clipLeft }} />
+                <div style={{ ...solidBase, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 2, clipPath: clipRight }} />
+                <div style={{ ...texOverlay, backgroundPosition: posRight, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 4, clipPath: clipRight }} />
+            </div>
+        );
+    }
+
+    // Solid: CSS borders give clean 45° mitred corners at joints (border-radius 0).
     return (
-        <div className="absolute" style={{ width: width * scale, height: height * scale }}>
-            {/* Top */}
-            <div style={{...baseDivStyle, ...horizontalBgStyle, top: 0, left: 0, width: '100%', height: clipTs, clipPath: `polygon(0 0, 100% 0, calc(100% - ${clipRs}px) 100%, ${clipLs}px 100%)` }} />
-            {/* Bottom */}
-            <div style={{...baseDivStyle, ...horizontalBgStyle, bottom: 0, left: 0, width: '100%', height: clipBs, clipPath: `polygon(${clipLs}px 0, calc(100% - ${clipRs}px) 0, 100% 100%, 0 100%)` }} />
-            {/* Left */}
-            <div style={{...baseDivStyle, ...verticalBgStyle, top: 0, left: 0, width: clipLs, height: '100%', clipPath: `polygon(0 0, 100% ${clipTs}px, 100% calc(100% - ${clipBs}px), 0 100%)` }} />
-            {/* Right */}
-            <div style={{...baseDivStyle, ...verticalBgStyle, top: 0, right: 0, width: clipRs, height: '100%', clipPath: `polygon(0 ${clipTs}px, 100% 0, 100% 100%, 0 calc(100% - ${clipBs}px))` }} />
-        </div>
+        <div
+            style={{
+                position: 'absolute',
+                width: wPx,
+                height: hPx,
+                boxSizing: 'border-box',
+                borderStyle: 'solid',
+                borderColor: baseHex,
+                borderRadius: 0,
+                borderTopWidth: ts,
+                borderBottomWidth: bs,
+                borderLeftWidth: ls,
+                borderRightWidth: rs,
+                backgroundColor: 'transparent',
+                boxShadow: 'inset 0 2px 5px rgba(255,255,255,0.12), inset 0 -3px 8px rgba(0,0,0,0.15)',
+            }}
+        />
     );
 });
 
@@ -199,9 +337,15 @@ const SlidingShutter: React.FC<{
     
     const glassWidth = width - leftProfile - rightProfile;
     const glassHeight = height - topProfile - bottomProfile;
+    const wPx = mmToPx(width, scale);
+    const hPx = mmToPx(height, scale);
+    const lPx = mmToPx(leftProfile, scale);
+    const tPx = mmToPx(topProfile, scale);
+    const rPx = mmToPx(rightProfile, scale);
+    const bPx = mmToPx(bottomProfile, scale);
 
     return (
-        <div className="absolute" style={{ width: width * scale, height: height * scale }}>
+        <div className="absolute" style={{ width: wPx, height: hPx }}>
              <MiteredFrame 
                 width={width}
                 height={height}
@@ -211,12 +355,16 @@ const SlidingShutter: React.FC<{
                 rightSize={rightProfile}
                 scale={scale}
                 color={config.profileColor}
+                texture={profileOverlayTexture(config)}
              />
-            <div className="absolute" style={{ left: leftProfile * scale, top: topProfile * scale }}>
+            <div
+                className="absolute overflow-hidden"
+                style={{ left: lPx, top: tPx, right: rPx, bottom: bPx }}
+            >
                 <GlassPanel
                     config={config}
                     panelId={panelId}
-                    style={{ width: glassWidth * scale, height: glassHeight * scale }}
+                    style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }}
                     glassWidth={glassWidth}
                     glassHeight={glassHeight}
                     scale={scale}
@@ -241,7 +389,11 @@ const GlassPanel: React.FC<{
     const { glassType, glassTexture } = config;
     
     const glassStyles: Record<GlassType, React.CSSProperties> = {
-        [GlassType.CLEAR]: { backgroundColor: 'hsl(190, 80%, 85%)', opacity: 0.7 },
+        [GlassType.CLEAR]: {
+            background:
+                'linear-gradient(165deg, hsl(200, 45%, 94%) 0%, hsl(210, 55%, 78%) 45%, hsl(205, 48%, 72%) 100%)',
+            opacity: 0.82,
+        },
         [GlassType.FROSTED]: { backgroundColor: 'hsl(200, 100%, 95%)', opacity: 0.9, backdropFilter: 'blur(2px)' },
         [GlassType.TINTED_BLUE]: { backgroundColor: 'hsl(205, 90%, 60%)', opacity: 0.6 },
         [GlassType.TINTED_GREY]: { backgroundColor: 'hsl(210, 10%, 40%)', opacity: 0.6 },
@@ -255,7 +407,12 @@ const GlassPanel: React.FC<{
         [GlassType.BLACK_TINTED]: { backgroundColor: 'hsl(0, 0%, 20%)', opacity: 0.7 },
     };
 
-    const panelStyle: React.CSSProperties = { ...glassStyles[glassType], ...style, boxShadow: 'inset 0 0 1px 1px rgba(0,0,0,0.1)' };
+    const panelStyle: React.CSSProperties = {
+        ...glassStyles[glassType],
+        ...style,
+        // Soft inner light only — no inset stroke (avoids visible grey line on all edges)
+        boxShadow: 'inset 0 2px 10px rgba(255,255,255,0.28), inset 0 -1px 6px rgba(0,0,0,0.05)',
+    };
     if (glassTexture) {
         panelStyle.backgroundImage = `url(${glassTexture})`;
         panelStyle.backgroundSize = 'cover';
@@ -268,7 +425,8 @@ const GlassPanel: React.FC<{
       <div 
         className="absolute inset-0 w-full h-full pointer-events-none" 
         style={{
-          background: 'linear-gradient(to top left, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 40%, rgba(255, 255, 255, 0) 60%)'
+          background:
+            'linear-gradient(125deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.12) 38%, rgba(255,255,255,0) 55%), linear-gradient(to bottom, rgba(0,0,0,0.04) 0%, transparent 35%)',
         }}
       />
     );
@@ -313,7 +471,8 @@ const createWindowElements = (
       onToggleElevationDoor: (row: number, col: number) => void,
     }
 ) => {
-    const { width, height, series, fixedPanels, profileColor, windowType } = config;
+    const { width, height, fixedPanels, profileColor, windowType } = config;
+    const pt = profileOverlayTexture(config);
     const w = Number(width) || 0;
     const numHeight = Number(height) || 0;
 
@@ -341,23 +500,23 @@ const createWindowElements = (
     
     if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
-        profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} />);
+        profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} texture={pt} />);
     }
 
-    if (leftFix) profileElements.push(<ProfilePiece key="divider-left" color={profileColor} style={{ top: frameOffset * scale, left: (holeX1 - dims.fixedFrame) * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffset) * scale }} />);
-    if (rightFix) profileElements.push(<ProfilePiece key="divider-right" color={profileColor} style={{ top: frameOffset * scale, left: holeX2 * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffset) * scale }} />);
+    if (leftFix) profileElements.push(<ProfilePiece key="divider-left" color={profileColor} texture={pt} style={{ top: frameOffset * scale, left: (holeX1 - dims.fixedFrame) * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffset) * scale }} />);
+    if (rightFix) profileElements.push(<ProfilePiece key="divider-right" color={profileColor} texture={pt} style={{ top: frameOffset * scale, left: holeX2 * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffset) * scale }} />);
     
     const hDividerX = leftFix ? holeX1 : frameOffset;
     const hDividerWidth = (rightFix ? holeX2 : w - frameOffset) - hDividerX;
   
     if (topFix) {
-        profileElements.push(<ProfilePiece key="divider-top" color={profileColor} style={{ top: (holeY1 - dims.fixedFrame) * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
+        profileElements.push(<ProfilePiece key="divider-top" color={profileColor} texture={pt} style={{ top: (holeY1 - dims.fixedFrame) * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
         const glassW = hDividerWidth;
         const glassH = holeY1 - frameOffset - dims.fixedFrame;
         glassElements.push(<GlassPanel key="glass-top" panelId="fixed-top" config={config} style={{ top: frameOffset * scale, left: hDividerX * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH} scale={scale} />);
     }
     if (bottomFix) {
-        profileElements.push(<ProfilePiece key="divider-bottom" color={profileColor} style={{ top: holeY2 * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
+        profileElements.push(<ProfilePiece key="divider-bottom" color={profileColor} texture={pt} style={{ top: holeY2 * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
         const glassW = hDividerWidth;
         const glassH = numHeight - holeY2 - frameOffset - dims.fixedFrame;
         glassElements.push(<GlassPanel key="glass-bottom" panelId="fixed-bottom" config={config} style={{ top: (holeY2 + dims.fixedFrame) * scale, left: hDividerX * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH} scale={scale}/>);
@@ -397,6 +556,7 @@ const createWindowElements = (
                                         <ProfilePiece
                                             key={`louver-v-${currentY}`}
                                             color={profileColor}
+                                            texture={pt}
                                             style={{ top: currentY * scale, left: 0, width: innerAreaWidth * scale, height: h * scale }}
                                         />
                                     );
@@ -422,6 +582,7 @@ const createWindowElements = (
                                         <ProfilePiece
                                             key={`louver-h-${currentX}`}
                                             color={profileColor}
+                                            texture={pt}
                                             style={{ top: 0, left: currentX * scale, width: w * scale, height: innerAreaHeight * scale }}
                                         />
                                     );
@@ -502,7 +663,9 @@ const createWindowElements = (
                     panels.forEach(p => {
                         const handleConfig = slidingHandles[p.id];
                         if (handleConfig) {
-                             handleElements.push(<div key={`handle-${p.id}`} style={{ position: 'absolute', zIndex: 30, left: (p.x + panelWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>);
+                             const side = slidingMemberSide4G2M(p.id);
+                             const mirrored = mirrorHandleForSlidingMember(side);
+                             handleElements.push(<div key={`handle-${p.id}`} style={{ position: 'absolute', zIndex: 30, left: (p.x + panelWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={handleConfig} scale={scale} color={profileColor} mirrored={mirrored} /></div>);
                         }
                         
                         let leftProf = dims.shutterInterlock;
@@ -531,7 +694,7 @@ const createWindowElements = (
                     const positions = [ 0, shutterWidth - interlock, (2*shutterWidth) - interlock - meeting, (3*shutterWidth) - (2*interlock) - meeting ];
                     const profiles = [ { l: dims.shutterHandle, r: interlock }, { l: interlock, r: meeting }, { l: meeting, r: interlock }, { l: interlock, r: dims.shutterHandle } ];
                     
-                    slidingHandles.forEach((handleConfig, i) => { if (handleConfig) { handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (positions[i] + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>); } });
+                    slidingHandles.forEach((handleConfig, i) => { if (handleConfig) { const side = slidingMemberSideStandard(i, 4); const mirrored = mirrorHandleForSlidingMember(side); handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (positions[i] + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={handleConfig} scale={scale} color={profileColor} mirrored={mirrored} /></div>); } });
                     
                     innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} scale={scale} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
                 } else {
@@ -544,7 +707,7 @@ const createWindowElements = (
                         let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - interlock);
                         
                         const handleConfig = slidingHandles[i];
-                        if (handleConfig) { handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handleConfig} scale={scale} color={profileColor} /></div>); }
+                        if (handleConfig) { const side = slidingMemberSideStandard(i, numShutters); const mirrored = mirrorHandleForSlidingMember(side); handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={handleConfig} scale={scale} color={profileColor} mirrored={mirrored} /></div>); }
                         
                         return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : interlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : interlock} scale={scale} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
                     }));
@@ -572,15 +735,18 @@ const createWindowElements = (
                         
                          const doorInfo = config.doorPositions.find(p => p.row === r && p.col === c);
                           if (doorInfo?.handle) {
-                            handleElements.push(<div key={`handle-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (cellX + cellW * doorInfo.handle.x / 100) * scale, top: (cellY + cellH * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} /></div>);
+                            const mirrored = mirrorHandleForPartitionHandleX(doorInfo.handle.x);
+                            handleElements.push(<div key={`handle-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (cellX + cellW * doorInfo.handle.x / 100) * scale, top: (cellY + cellH * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} mirrored={mirrored} /></div>);
                           }
 
                         if (windowType === WindowType.CASEMENT) {
                             if (doorInfo) {
                                 innerContent.push(
-                                  <div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>
-                                    <MiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
-                                    <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellW - 2 * dims.casementShutter)*scale, height: (cellH - 2 * dims.casementShutter)*scale }} glassWidth={cellW - 2 * dims.casementShutter} glassHeight={cellH - 2 * dims.casementShutter} scale={scale} />
+                                  <div key={`cell-${r}-${c}`} className="absolute" style={{left: mmToPx(cellX, scale), top: mmToPx(cellY, scale), width: mmToPx(cellW, scale), height: mmToPx(cellH, scale)}}>
+                                    <MiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} texture={pt} />
+                                    <div className="absolute overflow-hidden" style={{ left: mmToPx(dims.casementShutter, scale), top: mmToPx(dims.casementShutter, scale), right: mmToPx(dims.casementShutter, scale), bottom: mmToPx(dims.casementShutter, scale) }}>
+                                      <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={cellW - 2 * dims.casementShutter} glassHeight={cellH - 2 * dims.casementShutter} scale={scale} />
+                                    </div>
                                     <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none"><svg viewBox="0 0 100 100" className="w-1/2 h-1/2" style={{transform: c % 2 === 0 ? 'scaleX(1)' : 'scaleX(-1)'}}><path d="M 10 10 L 10 90 L 90 90" stroke="white" strokeDasharray="4" strokeWidth="2" fill="none"/></svg></div>
                                   </div>
                                 );
@@ -589,13 +755,16 @@ const createWindowElements = (
                             const cell = config.ventilatorGrid[r]?.[c];
                             const cellType = cell?.type || 'glass';
                             if (cell?.handle) {
-                                handleElements.push(<div key={`handle-vent-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (cellX + cellW * cell.handle.x / 100) * scale, top: (cellY + cellH * cell.handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={cell.handle} scale={scale} color={profileColor} /></div>);
+                                const mirrored = mirrorHandleForPartitionHandleX(cell.handle.x);
+                                handleElements.push(<div key={`handle-vent-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (cellX + cellW * cell.handle.x / 100) * scale, top: (cellY + cellH * cell.handle.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={cell.handle} scale={scale} color={profileColor} mirrored={mirrored} /></div>);
                             }
                             if (cellType === 'door') {
                                 innerContent.push(
-                                  <div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>
-                                    <MiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} />
-                                    <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ left: dims.casementShutter*scale, top: dims.casementShutter*scale, width: (cellW - 2 * dims.casementShutter)*scale, height: (cellH - 2 * dims.casementShutter)*scale }} glassWidth={cellW - 2*dims.casementShutter} glassHeight={cellH - 2*dims.casementShutter} scale={scale}/>
+                                  <div key={`cell-${r}-${c}`} className="absolute" style={{left: mmToPx(cellX, scale), top: mmToPx(cellY, scale), width: mmToPx(cellW, scale), height: mmToPx(cellH, scale)}}>
+                                    <MiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} texture={pt} />
+                                    <div className="absolute overflow-hidden" style={{ left: mmToPx(dims.casementShutter, scale), top: mmToPx(dims.casementShutter, scale), right: mmToPx(dims.casementShutter, scale), bottom: mmToPx(dims.casementShutter, scale) }}>
+                                      <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={cellW - 2*dims.casementShutter} glassHeight={cellH - 2*dims.casementShutter} scale={scale}/>
+                                    </div>
                                     <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none"><svg viewBox="0 0 100 100" className="w-1/2 h-1/2" style={{transform: c % 2 === 0 ? 'scaleX(1)' : 'scaleX(-1)'}}><path d="M 10 10 L 10 90 L 90 90" stroke="white" strokeDasharray="4" strokeWidth="2" fill="none"/></svg></div>
                                   </div>
                                 );
@@ -605,7 +774,7 @@ const createWindowElements = (
                                     const spacing = dims.louverBlade;
                                     const numLouvers = Math.ceil(cellH / spacing);
                                      for (let i=0; i < numLouvers; i++) {
-                                       louvers.push(<ProfilePiece key={`louver-${i}`} color={profileColor} style={{left: 0, top: (i * spacing)*scale, width: cellW*scale, height: dims.louverBlade*scale }}/>)
+                                       louvers.push(<ProfilePiece key={`louver-${i}`} color={profileColor} texture={pt} style={{left: 0, top: (i * spacing)*scale, width: cellW*scale, height: dims.louverBlade*scale }}/>)
                                      }
                                 }
                                 innerContent.push(<div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>{louvers}</div>);
@@ -630,7 +799,7 @@ const createWindowElements = (
                 horizontalDividers.forEach((pos, i) => {
                     innerContent.push(
                       <button key={`hmullion-${i}`} onClick={() => callbacks.onRemoveHorizontalDivider(i)} className="absolute w-full group" style={{ top: (pos * innerAreaHeight - dims.mullion / 2) * scale, height: dims.mullion * scale, zIndex: 10 }}>
-                          <ProfilePiece color={profileColor} style={{left: 0, top: 0, width: '100%', height: '100%'}}/>
+                          <ProfilePiece color={profileColor} texture={pt} style={{left: 0, top: 0, width: '100%', height: '100%'}}/>
                           <div className="absolute inset-0 bg-red-500 bg-opacity-0 group-hover:bg-opacity-50 transition-colors flex items-center justify-center">
                               <TrashIcon className="w-5 h-5 text-white opacity-0 group-hover:opacity-100"/>
                           </div>
@@ -641,7 +810,7 @@ const createWindowElements = (
                 verticalDividers.forEach((pos, i) => {
                     innerContent.push(
                       <button key={`vmullion-${i}`} onClick={() => callbacks.onRemoveVerticalDivider(i)} className="absolute h-full group" style={{ left: (pos * innerAreaWidth - dims.mullion / 2) * scale, width: dims.mullion * scale, zIndex: 10 }}>
-                         <ProfilePiece color={profileColor} style={{left: 0, top: 0, width: '100%', height: '100%'}}/>
+                         <ProfilePiece color={profileColor} texture={pt} style={{left: 0, top: 0, width: '100%', height: '100%'}}/>
                          <div className="absolute inset-0 bg-red-500 bg-opacity-0 group-hover:bg-opacity-50 transition-colors flex items-center justify-center">
                               <TrashIcon className="w-5 h-5 text-white opacity-0 group-hover:opacity-100"/>
                           </div>
@@ -666,8 +835,8 @@ const createWindowElements = (
                 const panelWidth = totalContentWidth / partitionPanels.count;
 
                 if (partitionPanels.hasTopChannel) {
-                  innerContent.push(<ProfilePiece key="track-top" color={profileColor} style={{ top: 0, left: 0, width: innerAreaWidth * scale, height: dims.topTrack * scale }} />);
-                  innerContent.push(<ProfilePiece key="track-bottom" color={profileColor} style={{ bottom: 0, left: 0, width: innerAreaWidth * scale, height: dims.bottomTrack * scale }} />);
+                  innerContent.push(<ProfilePiece key="track-top" color={profileColor} texture={pt} style={{ top: 0, left: 0, width: innerAreaWidth * scale, height: dims.topTrack * scale }} />);
+                  innerContent.push(<ProfilePiece key="track-bottom" color={profileColor} texture={pt} style={{ top: (innerAreaHeight - dims.bottomTrack) * scale, left: 0, width: innerAreaWidth * scale, height: dims.bottomTrack * scale }} />);
                 }
                 
                 const panelAreaY = partitionPanels.hasTopChannel ? dims.topTrack : 0;
@@ -685,18 +854,28 @@ const createWindowElements = (
                     const zIndex = type === 'sliding' ? 10 + i : 5;
                     
                     if (handle) {
-                        handleElements.push(<div key={`handle-part-${i}`} style={{ position: 'absolute', zIndex: 30, left: (panelX + currentPanelWidth * handle.x / 100) * scale, top: (panelAreaY + panelAreaHeight * handle.y / 100) * scale, transform: 'translate(-50%, -50%)' }}><Handle config={handle} scale={scale} color={profileColor} /></div>);
+                        const mirrored = mirrorHandleForPartitionHandleX(handle.x);
+                        handleElements.push(<div key={`handle-part-${i}`} style={{ position: 'absolute', zIndex: 30, left: (panelX + currentPanelWidth * handle.x / 100) * scale, top: (panelAreaY + panelAreaHeight * handle.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={handle} scale={scale} color={profileColor} mirrored={mirrored} /></div>);
                     }
                     
                     const isFramed = framing === 'full' || type === 'hinged';
                     const frameSize = dims.casementShutter;
 
                     innerContent.push(
-                        <div key={`panel-${i}`} className="absolute" style={{left: panelX*scale, top: panelAreaY*scale, width: currentPanelWidth*scale, height: panelAreaHeight*scale, zIndex}}>
-                          {isFramed && <MiteredFrame width={currentPanelWidth} height={panelAreaHeight} profileSize={frameSize} scale={scale} color={profileColor} />}
-                          <GlassPanel panelId={panelId} config={config} style={{ left: (isFramed ? frameSize : 0) * scale, top: (isFramed ? frameSize : 0) * scale, width: (currentPanelWidth - (isFramed ? 2 * frameSize : 0)) * scale, height: (panelAreaHeight - (isFramed ? 2 * frameSize : 0)) * scale }} glassWidth={currentPanelWidth - (isFramed ? 2 * frameSize : 0)} glassHeight={panelAreaHeight - (isFramed ? 2 * frameSize : 0)} scale={scale}>
-                             <ShutterIndicator type={type} />
-                          </GlassPanel>
+                        <div key={`panel-${i}`} className="absolute" style={{left: mmToPx(panelX, scale), top: mmToPx(panelAreaY, scale), width: mmToPx(currentPanelWidth, scale), height: mmToPx(panelAreaHeight, scale), zIndex}}>
+                          {isFramed && <MiteredFrame width={currentPanelWidth} height={panelAreaHeight} profileSize={frameSize} scale={scale} color={profileColor} texture={pt} />}
+                          <div
+                            className="absolute overflow-hidden"
+                            style={
+                              isFramed
+                                ? { left: mmToPx(frameSize, scale), top: mmToPx(frameSize, scale), right: mmToPx(frameSize, scale), bottom: mmToPx(frameSize, scale) }
+                                : { top: 0, left: 0, right: 0, bottom: 0 }
+                            }
+                          >
+                            <GlassPanel panelId={panelId} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={currentPanelWidth - (isFramed ? 2 * frameSize : 0)} glassHeight={panelAreaHeight - (isFramed ? 2 * frameSize : 0)} scale={scale}>
+                               <ShutterIndicator type={type} />
+                            </GlassPanel>
+                          </div>
                         </div>
                     );
 
@@ -729,12 +908,12 @@ const RenderedWindow: React.FC<{
 
 
     return (
-        <div className="relative shadow-lg" style={{ width: numWidth * scale, height: numHeight * scale }}>
+        <div className="relative shadow-lg" style={{ width: mmToPx(numWidth, scale), height: mmToPx(numHeight, scale) }}>
           {elements.glassElements}
           {elements.profileElements}
           
           {elements.innerAreaWidth > 0 && elements.innerAreaHeight > 0 && (
-            <div className="absolute" style={{ top: elements.holeY1 * scale, left: elements.holeX1 * scale, width: elements.innerAreaWidth * scale, height: elements.innerAreaHeight * scale }}>
+            <div className="absolute overflow-hidden" style={{ top: mmToPx(elements.holeY1, scale), left: mmToPx(elements.holeX1, scale), width: mmToPx(elements.innerAreaWidth, scale), height: mmToPx(elements.innerAreaHeight, scale) }}>
                 {elements.innerContent}
                 {elements.handleElements}
             </div>
@@ -891,13 +1070,13 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
                     const rightElements = createWindowElements(cornerConfigRight, scale, dims, canvasCallbacks);
 
                     return (
-                        <div className="relative shadow-lg flex items-start" style={{ width: totalW * scale, height: numHeight * scale }}>
+                        <div className="relative shadow-lg flex items-start" style={{ width: mmToPx(totalW, scale), height: mmToPx(numHeight, scale) }}>
                             <div className="relative flex-shrink-0">
                                 <RenderedWindow config={cornerConfigLeft} elements={leftElements} scale={scale} showLabels={false} />
                                 <DimensionLabel value={leftW} className="-top-8 left-1/2 -translate-x-1/2" />
                             </div>
-                            <div className="relative flex-shrink-0" style={{width: postW * scale, height: numHeight * scale}}>
-                                <ProfilePiece color={profileColor} style={{ left: 0, top: 0, width: '100%', height: '100%' }} />
+                            <div className="relative flex-shrink-0" style={{width: mmToPx(postW, scale), height: mmToPx(numHeight, scale)}}>
+                                <ProfilePiece color={profileColor} texture={profileOverlayTexture(config)} style={{ left: 0, top: 0, width: '100%', height: '100%' }} />
                                 <DimensionLabel value={postW} className="-top-8 left-1/2 -translate-x-1/2" />
                             </div>
                             <div className="relative flex-shrink-0">
