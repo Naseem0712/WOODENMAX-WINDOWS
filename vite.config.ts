@@ -21,6 +21,10 @@ export default defineConfig({
       devOptions: {
         enabled: false,
       },
+      // Do not serve index.html for these URLs (SEO / crawlers); default navigateFallback catches all navigations.
+      workbox: {
+        navigateFallbackDenylist: [/^\/sitemap\.xml$/, /^\/robots\.txt$/, /^\/llms\.txt$/],
+      },
       includeAssets: ['favicon.png', 'logo.jpg'],
       manifest: {
         name: 'WoodenMax Window Designer',
