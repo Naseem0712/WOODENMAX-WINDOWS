@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "exclude": [
+    "/sitemap.xml",
+    "/robots.txt",
+    "/llms.txt",
+    "/favicon.png",
+    "/logo.jpg",
+    "/manifest.webmanifest",
+    "/registerSW.js",
+    "/sw.js"
+  ]
+}

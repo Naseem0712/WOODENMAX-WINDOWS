@@ -20,10 +20,12 @@ export default defineConfig({
       // Service worker in dev expects generated files under dev-dist/; leave off to avoid ENOENT on sw.js
       devOptions: {
         enabled: false,
+        navigateFallbackAllowlist: [/^\/.*/],
       },
-      // Do not serve index.html for these URLs (SEO / crawlers); default navigateFallback catches all navigations.
       workbox: {
         navigateFallbackDenylist: [/^\/sitemap\.xml$/, /^\/robots\.txt$/, /^\/llms\.txt$/],
+        navigateFallbackAllowlist: [/^\/.*/],
+        disableDevLogs: true,
       },
       includeAssets: ['favicon.png', 'logo.jpg'],
       manifest: {
