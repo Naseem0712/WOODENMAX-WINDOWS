@@ -1,0 +1,22 @@
+/** Curated www.woodenmax.in window & related product pages (main site catalog). */
+export const WOODENMAX_WINDOW_CATALOG_LINKS: ReadonlyArray<{ label: string; href: string }> = [
+  { label: 'Aluminium windows', href: 'https://www.woodenmax.in/products/aluminium-windows' },
+  { label: '3-track sliding', href: 'https://www.woodenmax.in/products/aluminium-windows/3-track-sliding-window' },
+  { label: 'Sliding window', href: 'https://www.woodenmax.in/products/aluminium-windows/aluminium-sliding-window' },
+  { label: 'Top hung casement', href: 'https://www.woodenmax.in/products/aluminium-windows/top-hung-casement-window' },
+  { label: 'Slimline casement', href: 'https://www.woodenmax.in/products/aluminium-windows/slimline-aluminium-window' },
+  { label: 'French sliding door', href: 'https://www.woodenmax.in/products/aluminium-windows/2-track-french-sliding-door' },
+  { label: 'Georgian grill door', href: 'https://www.woodenmax.in/products/aluminium-windows/georgian-grill-casement-door' },
+  { label: 'French Georgian bar', href: 'https://www.woodenmax.in/products/aluminium-windows/french-door-georgian-bar' },
+  { label: 'Slim entrance door', href: 'https://www.woodenmax.in/products/aluminium-windows/slim-entrance-glass-door' },
+  { label: 'Full elevation facade', href: 'https://www.woodenmax.in/products/aluminium-windows/full-elevation-villa-facade' },
+  { label: 'Telescope windows', href: 'https://www.woodenmax.in/products/telescope-windows' },
+  { label: 'Bi-fold doors', href: 'https://www.woodenmax.in/products/folding-systems' },
+  { label: 'Metal louvers', href: 'https://www.woodenmax.in/products/metal-louvers' },
+  { label: 'Shower partitions', href: 'https://www.woodenmax.in/products/shower-partitions/premium-black-profile-shower' },
+  { label: 'Glass railing', href: 'https://www.woodenmax.in/products/glass-railing' },
+  { label: 'Glass elevation', href: 'https://www.woodenmax.in/products/glass-elevation' },
+  { label: 'Full catalogue', href: 'https://www.woodenmax.in/catalog' },
+  { label: 'Window price calculator', href: 'https://www.woodenmax.in/aluminium-window-price-calculator' },
+  { label: 'Contact', href: 'https://www.woodenmax.in/contact' },
+];

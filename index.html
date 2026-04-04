@@ -24,6 +24,7 @@
     <meta name="twitter:description" content="Free tool: aluminium &amp; uPVC windows &amp; doors, partitions, louvers — PDF quotes &amp; BOM. PWA, works offline." />
     <meta name="twitter:image" content="https://window.woodenmax.in/logo.jpg" />
     <link rel="apple-touch-icon" href="/favicon.png" />
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="https://window.woodenmax.in/sitemap.xml" />
 
     <!-- GA4: loaded from src/analytics.ts in production only (avoids localhost gtag 404 / blocked requests). -->
     
@@ -33,12 +34,12 @@
       "@graph": [
         {
           "@type": "Organization",
-          "@id": "https://www.woodenmax.com/#organization",
+          "@id": "https://www.woodenmax.in/#organization",
           "name": "WoodenMax Architectural Elements",
-          "url": "https://www.woodenmax.com",
+          "url": "https://www.woodenmax.in",
           "logo": { "@type": "ImageObject", "url": "https://window.woodenmax.in/logo.jpg" },
           "email": "info@woodenmax.com",
-          "sameAs": ["https://window.woodenmax.in/", "https://www.woodenmax.com"]
+          "sameAs": ["https://window.woodenmax.in/", "https://www.woodenmax.in/"]
         },
         {
           "@type": "WebSite",
@@ -47,7 +48,7 @@
           "name": "WoodenMax Window Designer",
           "description": "Free Progressive Web App to design aluminium and uPVC windows and doors, glass partitions, louvers, ventilators, corner glazing and mirrors with PDF quotations and BOM export.",
           "inLanguage": "en-IN",
-          "publisher": { "@id": "https://www.woodenmax.com/#organization" }
+          "publisher": { "@id": "https://www.woodenmax.in/#organization" }
         },
         {
           "@type": "SoftwareApplication",
@@ -59,8 +60,8 @@
           "browserRequirements": "Requires JavaScript. Installable as PWA.",
           "description": "Design sliding and casement windows for aluminium or uPVC systems, glass partitions, louvers, bathroom ventilators, L-corner windows and mirrors. Build multi-line quotations, export PDF quotes and bill of materials for fabrication.",
           "offers": { "@type": "Offer", "price": "0", "priceCurrency": "INR" },
-          "author": { "@id": "https://www.woodenmax.com/#organization" },
-          "publisher": { "@id": "https://www.woodenmax.com/#organization" },
+          "author": { "@id": "https://www.woodenmax.in/#organization" },
+          "publisher": { "@id": "https://www.woodenmax.in/#organization" },
           "featureList": "Aluminium and uPVC sliding windows 2/3 track; uPVC and aluminium casement grids; ventilator louvers; glass shower partitions; elevation louvers; corner windows; mirror shapes; PDF quotation; BOM export; JSON backup; offline PWA"
         },
         {
@@ -273,12 +274,20 @@
         resize: vertical !important;
     }
 
-    .pdf-export-mode textarea.print-editable,
-    @media print textarea.print-editable {
+    .pdf-export-mode textarea.print-editable {
         border-color: transparent !important;
         background-color: transparent !important;
         resize: none !important;
         color: black !important;
+    }
+
+    @media print {
+        textarea.print-editable {
+            border-color: transparent !important;
+            background-color: transparent !important;
+            resize: none !important;
+            color: black !important;
+        }
     }
 
     .architectural-mode .hide-for-arch {
@@ -387,9 +396,10 @@
   <body class="bg-slate-900 text-slate-200">
     <div id="root"></div>
     <script type="module" src="/src/index.tsx"></script>
-    <footer class="text-center text-xs text-slate-400 py-3 bg-slate-900 no-print">
+    <footer class="text-center text-xs text-slate-400 py-3 px-2 bg-slate-900 no-print space-y-2">
         <p>&copy; 2026 WoodenMax Architectural Elements. All rights reserved. Designed by WoodenMax.</p>
-        <p><a href="https://www.woodenmax.in" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-400">www.woodenmax.in</a> | <a href="mailto:info@woodenmax.com" class="hover:text-indigo-400">info@woodenmax.com</a></p>
+        <p><a href="https://www.woodenmax.in" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-400">www.woodenmax.in</a> · <a href="https://www.woodenmax.in/products/aluminium-windows" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-400">Aluminium windows</a> · <a href="https://www.woodenmax.in/catalog" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-400">Catalogue</a> · <a href="https://window.woodenmax.in/sitemap.xml" class="hover:text-indigo-400">Sitemap (XML)</a></p>
+        <p><a href="mailto:info@woodenmax.com" class="hover:text-indigo-400">info@woodenmax.com</a></p>
     </footer>
   </body>
 </html>

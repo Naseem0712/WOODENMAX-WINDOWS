@@ -5,6 +5,7 @@ import { Button } from './ui/Button';
 import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
 import { Logo } from './icons/Logo';
 import { guideOrder } from '../guides/order';
+import { WoodenMaxCatalogLinks } from './WoodenMaxCatalogLinks';
 
 interface GuidesViewerProps {
     activeSlug: string;
@@ -35,6 +36,7 @@ export const GuidesViewer: React.FC<GuidesViewerProps> = ({ activeSlug, onClose 
                     Back to Designer
                 </Button>
             </header>
+            <WoodenMaxCatalogLinks />
             <main className="flex flex-row flex-grow min-h-0">
                 <aside className="w-64 bg-slate-800/50 p-4 flex-shrink-0 overflow-y-auto custom-scrollbar hidden md:block" aria-label="Guide topics">
                     <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Topics</h2>

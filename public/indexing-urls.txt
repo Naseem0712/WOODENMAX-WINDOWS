@@ -1,0 +1,24 @@
+# window.woodenmax.in — copy these URLs into Google Search Console → URL Inspection → Request indexing
+# (one URL per line; lines starting with # are comments)
+
+https://window.woodenmax.in/
+https://window.woodenmax.in/design/sliding
+https://window.woodenmax.in/design/casement
+https://window.woodenmax.in/design/ventilator
+https://window.woodenmax.in/design/glass_partition
+https://window.woodenmax.in/design/louvers
+https://window.woodenmax.in/design/corner
+https://window.woodenmax.in/design/mirror
+https://window.woodenmax.in/guides/index
+https://window.woodenmax.in/guides/sliding
+https://window.woodenmax.in/guides/casement
+https://window.woodenmax.in/guides/ventilator
+https://window.woodenmax.in/guides/glass_partition
+https://window.woodenmax.in/guides/louvers
+https://window.woodenmax.in/guides/corner
+https://window.woodenmax.in/guides/mirror
+https://window.woodenmax.in/guides/georgian_bars
+https://window.woodenmax.in/guides/qna
+https://window.woodenmax.in/llms.txt
+https://window.woodenmax.in/sitemap.xml
+https://window.woodenmax.in/robots.txt

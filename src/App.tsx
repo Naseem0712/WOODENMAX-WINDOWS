@@ -7,6 +7,7 @@ import { WindowCanvas } from './components/WindowCanvas';
 import { QuotationPanel } from './components/QuotationPanel';
 import { v4 as uuidv4 } from 'uuid';
 import { ChevronLeftIcon } from './components/icons/ChevronLeftIcon';
+import { WoodenMaxCatalogLinks } from './components/WoodenMaxCatalogLinks';
 import { Logo } from './components/icons/Logo';
 import { Button } from './components/ui/Button';
 import { DownloadIcon } from './components/icons/DownloadIcon';
@@ -913,6 +914,7 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
               )}
             </div>
         </header>
+        <WoodenMaxCatalogLinks />
         <main className="flex flex-row flex-grow min-h-0">
             <div ref={panelRef} className={`hidden lg:block flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
                 <div className={`h-full overflow-hidden ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>

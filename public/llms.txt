@@ -1,7 +1,8 @@
 # WoodenMax Window Designer
 
 > Official free app: https://window.woodenmax.in  
-> Company: https://www.woodenmax.in · info@woodenmax.com
+> Company: https://www.woodenmax.in · info@woodenmax.com  
+> Sitemap: https://window.woodenmax.in/sitemap.xml · URL list for indexing: https://window.woodenmax.in/indexing-urls.txt
 
 ## What this is
 
