@@ -1127,8 +1127,12 @@ const App: React.FC = () => {
     let pageTitle = 'WoodenMax Window Designer | Aluminium & uPVC Window & Door Design + Quotations';
 
     if (appView === 'guides') {
-        const guideTitle = guideSlug.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-        pageTitle = `${guideTitle} | Guides & Help | WoodenMax Window Designer`;
+        if (guideSlug === 'index') {
+          pageTitle = 'Features & Guides | WoodenMax Window Designer';
+        } else {
+          const guideTitle = guideSlug.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+          pageTitle = `${guideTitle} | Guides & Help | WoodenMax Window Designer`;
+        }
         canonicalUrl = `${SITE_ORIGIN}/guides/${guideSlug}`;
     } else if (windowType) {
         const mapped = titleMap[windowType];
