@@ -1,4 +1,5 @@
+# Submit this exact sitemap URL in Google Search Console (property: https://window.woodenmax.in/)
+Sitemap: https://window.woodenmax.in/sitemap.xml
+
 User-agent: *
 Allow: /
-
-Sitemap: https://window.woodenmax.in/sitemap.xml
