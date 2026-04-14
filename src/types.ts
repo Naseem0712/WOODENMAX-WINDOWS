@@ -154,12 +154,28 @@ export interface VentilatorCell {
     handle?: HandleConfig;
 }
 
-export type PartitionPanelType = 'fixed' | 'sliding' | 'hinged';
+export type PartitionPanelType = 'fixed' | 'sliding' | 'hinged' | 'fold';
 
 export interface PartitionPanelConfig {
     type: PartitionPanelType;
     handle?: HandleConfig;
     framing?: 'none' | 'full';
+    /** Optional column width in mm (glass partition). When set, overrides widthFractions for this panel. */
+    widthMm?: number | '';
+    /** Optional panel height in mm (≤ row height). */
+    heightMm?: number | '';
+    /** When height is less than the opening: align glass to top or bottom. Default bottom. */
+    heightAlign?: 'top' | 'bottom';
+    /** Folding leaves inside a Bi-fold panel (1–12). Visual / spec only. */
+    foldLeafCount?: number;
+    /** Framed Bi-fold: optional outer frame depth per edge (mm). Empty = series casement section. */
+    foldFrameTopMm?: number | '';
+    foldFrameBottomMm?: number | '';
+    /** Shared width for left + right stiles when set. */
+    foldFrameSideMm?: number | '';
+    /** Override left / right stile (mm); falls back to Sides then series default. */
+    foldFrameLeftMm?: number | '';
+    foldFrameRightMm?: number | '';
 }
 
 export interface CornerSideConfig {
@@ -254,10 +270,12 @@ export interface WindowConfig {
   ventilatorGrid: VentilatorCell[][];
   
   // Glass Partition specific
-  partitionPanels: { 
-    count: number; 
-    types: PartitionPanelConfig[]; 
+  partitionPanels: {
+    count: number;
+    types: PartitionPanelConfig[];
     hasTopChannel: boolean;
+    /** Relative widths per panel (e.g. [7, 3] ≈ 70% / 30% for door + sidelight). Omitted = equal split. */
+    widthFractions?: number[];
   };
 
   // Louvers specific

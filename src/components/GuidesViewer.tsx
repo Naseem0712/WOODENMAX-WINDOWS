@@ -5,7 +5,7 @@ import { Button } from './ui/Button';
 import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
 import { Logo } from './icons/Logo';
 import { guideOrder } from '../guides/order';
-import { WoodenMaxCatalogLinks } from './WoodenMaxCatalogLinks';
+import { WoodenMaxCatalogMenu } from './WoodenMaxCatalogMenu';
 
 interface GuidesViewerProps {
     activeSlug: string;
@@ -31,12 +31,14 @@ export const GuidesViewer: React.FC<GuidesViewerProps> = ({ activeSlug, onClose 
                         <p className="text-xs text-slate-600 sm:text-sm">Tips for every window type &amp; quotation</p>
                     </div>
                 </div>
-                <Button onClick={onClose} variant="primary" className="min-h-[44px] w-full shrink-0 justify-center sm:w-auto">
-                    <ChevronLeftIcon className="mr-2 h-5 w-5" />
-                    Back to Designer
-                </Button>
+                <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+                    <WoodenMaxCatalogMenu className="w-full sm:w-auto" />
+                    <Button onClick={onClose} variant="primary" className="min-h-[44px] w-full shrink-0 justify-center sm:w-auto">
+                        <ChevronLeftIcon className="mr-2 h-5 w-5" />
+                        Back to Designer
+                    </Button>
+                </div>
             </header>
-            <WoodenMaxCatalogLinks />
             <main className="flex flex-row flex-grow min-h-0">
                 <aside className="w-64 bg-slate-800/50 p-4 flex-shrink-0 overflow-y-auto custom-scrollbar hidden md:block" aria-label="Guide topics">
                     <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Topics</h2>

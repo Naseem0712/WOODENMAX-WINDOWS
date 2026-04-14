@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import type { ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, QuotationSettings, HandleConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig } from './types';
+import type { ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, PartitionPanelConfig, QuotationSettings, HandleConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType, MirrorShape } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
 import { QuotationPanel } from './components/QuotationPanel';
 import { v4 as uuidv4 } from 'uuid';
 import { ChevronLeftIcon } from './components/icons/ChevronLeftIcon';
-import { WoodenMaxCatalogLinks } from './components/WoodenMaxCatalogLinks';
+import { WoodenMaxCatalogMenu } from './components/WoodenMaxCatalogMenu';
 import { Logo } from './components/icons/Logo';
 import { Button } from './components/ui/Button';
 import { DownloadIcon } from './components/icons/DownloadIcon';
@@ -23,6 +23,8 @@ import {
 } from './utils/windowTypeDesignSnapshots';
 import { SITE_ORIGIN } from './constants/site';
 import { applyRouteSeo, getMetaDescription } from './seo/meta';
+import { computeHardwareCostForQuotation } from './utils/quotationHardwareCost';
+import { applyDesignerCorrectionToQuotationItem } from './utils/applyDesignerCorrectionToQuotationItem';
 
 const BatchAddModal = lazy(() => import('./components/BatchAddModal').then(module => ({ default: module.BatchAddModal })));
 const GuidesViewer = lazy(() => import('./components/GuidesViewer').then(module => ({ default: module.GuidesViewer })));
@@ -51,9 +53,12 @@ type ConfigAction =
   | { type: 'UPDATE_HANDLE'; payload: { panelId: string; newConfig: HandleConfig | null, side: 'left' | 'right' | null } }
   | { type: 'SET_WINDOW_TYPE'; payload: WindowType }
   | { type: 'SET_PARTITION_PANEL_COUNT'; payload: number }
+  | { type: 'SET_PARTITION_PRESET'; payload: ConfigState['partitionPanels'] }
+  | { type: 'SET_PARTITION_WIDTH_FRACTIONS'; payload: number[] }
   | { type: 'CYCLE_PARTITION_PANEL_TYPE'; payload: number }
   | { type: 'SET_PARTITION_HAS_TOP_CHANNEL'; payload: boolean }
   | { type: 'CYCLE_PARTITION_PANEL_FRAMING'; payload: number }
+  | { type: 'UPDATE_PARTITION_PANEL'; payload: { index: number; partial: Partial<PartitionPanelConfig> } }
   | { type: 'ADD_LOUVER_ITEM'; payload: { type: 'profile' | 'gap' } }
   | { type: 'REMOVE_LOUVER_ITEM'; payload: { id: string } }
   | { type: 'UPDATE_LOUVER_ITEM'; payload: { id: string; size: number | '' } }
@@ -672,27 +677,75 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             return newState;
         }
         case 'SET_PARTITION_PANEL_COUNT': {
-          const count = action.payload;
+          const count = Math.max(1, action.payload);
+          const old = state.partitionPanels;
+          const newTypes = Array.from({ length: count }, (_, i) => old.types[i] || { type: 'fixed' as PartitionPanelType });
+          let wf = old.widthFractions;
+          if (!wf || wf.length !== count) {
+            wf = Array.from({ length: count }, () => 1 / count);
+          }
           return {
             ...state,
             partitionPanels: {
-              ...state.partitionPanels,
+              ...old,
               count,
-              types: Array.from({ length: count }, (_, i) => state.partitionPanels.types[i] || { type: 'fixed' as PartitionPanelType }),
-            }
+              types: newTypes,
+              widthFractions: wf,
+            },
+          };
+        }
+        case 'SET_PARTITION_PRESET': {
+          const p = action.payload;
+          const wf =
+            p.widthFractions && p.widthFractions.length === p.count
+              ? [...p.widthFractions]
+              : Array.from({ length: p.count }, () => 1 / p.count);
+          return {
+            ...state,
+            partitionPanels: {
+              count: p.count,
+              types: p.types.map((t) => ({ ...t })),
+              hasTopChannel: p.hasTopChannel,
+              widthFractions: wf,
+            },
+          };
+        }
+        case 'SET_PARTITION_WIDTH_FRACTIONS': {
+          const raw = action.payload;
+          const count = state.partitionPanels.count;
+          const padded =
+            raw.length >= count
+              ? raw.slice(0, count)
+              : [...raw, ...Array.from({ length: count - raw.length }, () => 1)];
+          const sum = padded.reduce((a, b) => a + Math.max(0.0001, b), 0);
+          const widthFractions = padded.map((x) => Math.max(0.0001, x) / sum);
+          return {
+            ...state,
+            partitionPanels: { ...state.partitionPanels, widthFractions },
           };
         }
         case 'CYCLE_PARTITION_PANEL_TYPE': {
             const index = action.payload;
-            const sequence: PartitionPanelType[] = ['fixed', 'sliding', 'hinged'];
+            const sequence: PartitionPanelType[] = ['fixed', 'sliding', 'hinged', 'fold'];
             const currentConfig = state.partitionPanels.types[index];
             const currentType = currentConfig.type;
-            const currentIndex = sequence.indexOf(currentType);
-            const nextType = sequence[(currentIndex + 1) % sequence.length];
+            let ci = sequence.indexOf(currentType);
+            if (ci === -1) ci = 0;
+            const nextType = sequence[(ci + 1) % sequence.length];
             const newTypes = [...state.partitionPanels.types];
             newTypes[index] = { ...currentConfig, type: nextType };
             if (nextType === 'fixed' && newTypes[index].handle) {
                 delete newTypes[index].handle;
+            }
+            if (nextType === 'fold') {
+                if (newTypes[index].foldLeafCount == null) newTypes[index].foldLeafCount = 2;
+            } else {
+                delete newTypes[index].foldLeafCount;
+                delete newTypes[index].foldFrameTopMm;
+                delete newTypes[index].foldFrameBottomMm;
+                delete newTypes[index].foldFrameSideMm;
+                delete newTypes[index].foldFrameLeftMm;
+                delete newTypes[index].foldFrameRightMm;
             }
             return { ...state, partitionPanels: { ...state.partitionPanels, types: newTypes } };
         }
@@ -704,6 +757,19 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             const newTypes = [...state.partitionPanels.types];
             const currentFraming = newTypes[index].framing || 'none';
             newTypes[index] = { ...newTypes[index], framing: currentFraming === 'none' ? 'full' : 'none' };
+            return { ...state, partitionPanels: { ...state.partitionPanels, types: newTypes } };
+        }
+        case 'UPDATE_PARTITION_PANEL': {
+            const { index, partial } = action.payload;
+            const newTypes = [...state.partitionPanels.types];
+            if (!newTypes[index]) return state;
+            newTypes[index] = { ...newTypes[index], ...partial };
+            if ('heightMm' in partial && (partial.heightMm === '' || partial.heightMm == null)) {
+              delete newTypes[index].heightAlign;
+            }
+            if (newTypes[index].type === 'fixed' && newTypes[index].handle) {
+              delete newTypes[index].handle;
+            }
             return { ...state, partitionPanels: { ...state.partitionPanels, types: newTypes } };
         }
         case 'ADD_LOUVER_ITEM':
@@ -862,6 +928,8 @@ interface DesignerViewProps {
   hardwareCostPerWindow: number;
   quotationItemCount: number;
   onViewQuotation: () => void;
+  bulkCorrectionLineCount: number;
+  onApplyBulkCorrection: () => void;
   activeMobilePanel: MobilePanelState;
   handleOpenConfigure: () => void;
   handleOpenQuote: () => void;
@@ -876,7 +944,8 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
     quantity, setQuantity, areaType, setAreaType, rate, setRate,
     onSave, onUpdate, onCancelEdit, editingItemId,
     onBatchAdd, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount,
-    onViewQuotation, activeMobilePanel, handleOpenConfigure, handleOpenQuote, handleCloseMobilePanels
+    onViewQuotation, bulkCorrectionLineCount, onApplyBulkCorrection,
+    activeMobilePanel, handleOpenConfigure, handleOpenQuote, handleCloseMobilePanels
   } = props;
 
   return (
@@ -894,6 +963,7 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
               </p>
             </div>
             <div className="flex shrink-0 items-center justify-end gap-2 sm:ml-auto">
+              <WoodenMaxCatalogMenu />
               <Button onClick={onOpenGuides} variant="secondary" className="hidden sm:inline-flex">
                 <DocumentTextIcon className="mr-2 h-5 w-5" /> Features &amp; Guides
               </Button>
@@ -914,7 +984,6 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
               )}
             </div>
         </header>
-        <WoodenMaxCatalogLinks />
         <main className="flex flex-row flex-grow min-h-0">
             <div ref={panelRef} className={`hidden lg:block flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
                 <div className={`h-full overflow-hidden ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
@@ -927,7 +996,7 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
                  <WindowCanvas key={canvasKey} config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} onToggleElevationDoor={() => {}} />
               </div>
               <div className="flex-shrink-0 no-print hidden lg:block">
-                  <QuotationPanel idPrefix="desktop-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} />
+                  <QuotationPanel idPrefix="desktop-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} bulkCorrectionLineCount={bulkCorrectionLineCount} onApplyBulkCorrection={onApplyBulkCorrection} />
               </div>
               <div className="no-print grid grid-cols-2 gap-3 border-t-2 border-slate-700 bg-slate-800 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
                   <Button onClick={handleOpenConfigure} variant="secondary" className="min-h-[48px] justify-center text-sm font-semibold">
@@ -957,7 +1026,7 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
               <div className="h-1.5 w-12 rounded-full bg-slate-600" />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} onClose={handleCloseMobilePanels} />
+              <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} onClose={handleCloseMobilePanels} bulkCorrectionLineCount={bulkCorrectionLineCount} onApplyBulkCorrection={onApplyBulkCorrection} />
             </div>
         </div>
     </>
@@ -1019,6 +1088,8 @@ const App: React.FC = () => {
       return []; 
     } 
   });
+  /** Quotation lines selected for bulk correction (checkboxes); apply uses this on the main screen. */
+  const [quotationBulkTargetIds, setQuotationBulkTargetIds] = useState<string[]>([]);
   const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isBatchAddModalOpen, setIsBatchAddModalOpen] = useState(false);
@@ -1049,6 +1120,14 @@ const App: React.FC = () => {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [canvasKey, setCanvasKey] = useState(() => uuidv4());
   const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setQuotationBulkTargetIds((prev) => {
+      const valid = new Set(quotationItems.map((i) => i.id));
+      const next = prev.filter((id) => valid.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [quotationItems]);
 
   const configRef = useRef(windowConfigState);
   const seriesRef = useRef(series);
@@ -1457,9 +1536,14 @@ const App: React.FC = () => {
   const handleRemoveHorizontalDivider = useCallback((index: number) => dispatch({ type: 'REMOVE_HORIZONTAL_DIVIDER', payload: { index, side: getSide() } }), [getSide]);
   const handleUpdateHandle = useCallback((panelId: string, newConfig: HandleConfig | null) => dispatch({ type: 'UPDATE_HANDLE', payload: { panelId, newConfig, side: getSide() } }), [getSide]);
   const onSetPartitionPanelCount = useCallback((count: number) => dispatch({ type: 'SET_PARTITION_PANEL_COUNT', payload: count }), []);
+  const onSetPartitionPreset = useCallback((p: ConfigState['partitionPanels']) => dispatch({ type: 'SET_PARTITION_PRESET', payload: p }), []);
+  const onSetPartitionWidthFractions = useCallback((f: number[]) => dispatch({ type: 'SET_PARTITION_WIDTH_FRACTIONS', payload: f }), []);
   const onCyclePartitionPanelType = useCallback((index: number) => dispatch({ type: 'CYCLE_PARTITION_PANEL_TYPE', payload: index }), []);
   const onSetPartitionHasTopChannel = useCallback((hasChannel: boolean) => dispatch({ type: 'SET_PARTITION_HAS_TOP_CHANNEL', payload: hasChannel }), []);
   const onCyclePartitionPanelFraming = useCallback((index: number) => dispatch({ type: 'CYCLE_PARTITION_PANEL_FRAMING', payload: index }), []);
+  const onUpdatePartitionPanel = useCallback((index: number, partial: Partial<PartitionPanelConfig>) => {
+    dispatch({ type: 'UPDATE_PARTITION_PANEL', payload: { index, partial } });
+  }, []);
   
   const onAddLouverItem = useCallback((type: 'profile' | 'gap') => dispatch({ type: 'ADD_LOUVER_ITEM', payload: { type } }), []);
   const onRemoveLouverItem = useCallback((id: string) => dispatch({ type: 'REMOVE_LOUVER_ITEM', payload: { id } }), []);
@@ -1482,72 +1566,10 @@ const App: React.FC = () => {
     }
   }, [windowConfigState.windowType]);
 
-  const hardwareCostPerWindow = useMemo(() => {
-    const calculateSideCost = (config: WindowConfig | CornerSideConfig | undefined) => {
-        if (!config) return 0;
-        
-        return series.hardwareItems.reduce((total, item) => {
-            const qty = Number(item.qtyPerShutter) || 0;
-            const itemRate = Number(item.rate) || 0;
-            let panelCount = 0;
-
-            if (item.unit === 'per_window') {
-                panelCount = 1;
-            } else if (item.unit === 'per_shutter_or_door') {
-                 if (config.windowType === WindowType.LOUVERS) {
-                    const { louverPattern, height, width, orientation } = config as WindowConfig;
-                    const pattern = louverPattern;
-                    const patternUnitSize = pattern.reduce((sum, p) => sum + (Number(p.size) || 0), 0);
-
-                    if (patternUnitSize > 0) {
-                        const totalDimension = orientation === 'vertical' ? (Number(height) || 0) : (Number(width) || 0);
-                        const numProfilesInPattern = pattern.filter(p => p.type === 'profile').length;
-                        if (numProfilesInPattern > 0) {
-                            const numCompletePatterns = Math.floor(totalDimension / patternUnitSize);
-                            panelCount = numCompletePatterns * numProfilesInPattern;
-                            const remainingDimension = totalDimension % patternUnitSize;
-                            let currentSize = 0;
-                            for(const p of pattern) {
-                                if (currentSize < remainingDimension) {
-                                    if (p.type === 'profile') panelCount++;
-                                    currentSize += Number(p.size) || 0;
-                                } else break;
-                            }
-                        }
-                    }
-                } else if (config.windowType === WindowType.VENTILATOR) {
-                    const doorCells = config.ventilatorGrid.flat().filter(c => c.type === 'door').length;
-                    const louverCells = config.ventilatorGrid.flat().filter(c => c.type === 'louvers').length;
-                    const name = item.name.toLowerCase();
-                    if (name.includes('louver')) {
-                        panelCount = louverCells;
-                    } else { // Hinge, lock, handle, etc., are for doors
-                        panelCount = doorCells;
-                    }
-                } else {
-                     switch(config.windowType) {
-                        case WindowType.SLIDING:
-                           switch(config.shutterConfig) {
-                                case ShutterConfigType.TWO_GLASS: panelCount = 2; break;
-                                case ShutterConfigType.THREE_GLASS: case ShutterConfigType.TWO_GLASS_ONE_MESH: panelCount = 3; break;
-                                case ShutterConfigType.FOUR_GLASS: panelCount = 4; break;
-                                case ShutterConfigType.FOUR_GLASS_TWO_MESH: panelCount = 6; break;
-                           }
-                           break;
-                        case WindowType.CASEMENT: panelCount = config.doorPositions.length; break;
-                        case WindowType.GLASS_PARTITION: panelCount = (config as WindowConfig).partitionPanels.types.filter(t => t.type !== 'fixed').length; break;
-                    }
-                }
-            }
-            return total + (qty * itemRate * panelCount);
-        }, 0);
-    };
-
-    if (windowType === WindowType.CORNER) {
-        return calculateSideCost(windowConfig.leftConfig) + calculateSideCost(windowConfig.rightConfig);
-    }
-    return calculateSideCost(windowConfig);
-  }, [series.hardwareItems, windowConfig, windowType]);
+  const hardwareCostPerWindow = useMemo(
+    () => computeHardwareCostForQuotation(windowConfig, series.hardwareItems),
+    [series.hardwareItems, windowConfig]
+  );
 
   const handleSaveToQuotation = useCallback(() => {
     const colorName = savedColors.find(c => c.value === windowConfig.profileColor)?.name;
@@ -1638,6 +1660,7 @@ const App: React.FC = () => {
         setRate(itemToEdit.rate);
         setAreaType(itemToEdit.areaType);
         setEditingItemId(id);
+        setQuotationBulkTargetIds([]);
         setIsQuotationModalOpen(false);
         setActiveMobilePanel('none');
         navigate(`/design/${itemToEdit.config.windowType}`);
@@ -1679,6 +1702,66 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleEditCorrectionFromSelection = useCallback(() => {
+    if (quotationBulkTargetIds.length === 0) return;
+    const idSet = new Set(quotationBulkTargetIds);
+    const selectedInOrder = quotationItems.filter((i) => idSet.has(i.id));
+    if (selectedInOrder.length === 0) {
+      setQuotationBulkTargetIds([]);
+      return;
+    }
+    const wt = selectedInOrder[0].config.windowType;
+    if (!selectedInOrder.every((i) => i.config.windowType === wt)) {
+      alert('Bulk correction: select rows of the same window type only.');
+      return;
+    }
+    const first = selectedInOrder[0];
+    const { series: ser, ...configState } = first.config;
+    dispatch({ type: 'LOAD_CONFIG', payload: configState });
+    setSeries(ser);
+    setWindowTitle(first.title);
+    setQuantity(first.quantity);
+    setRate(first.rate);
+    setAreaType(first.areaType);
+    setEditingItemId(null);
+    setCanvasKey(uuidv4());
+    setIsQuotationModalOpen(false);
+    setActiveMobilePanel('none');
+    navigate(`/design/${wt}`);
+  }, [quotationBulkTargetIds, quotationItems, navigate, dispatch]);
+
+  const handleBulkApplyDesignerToSelected = useCallback(() => {
+    if (quotationBulkTargetIds.length === 0) return;
+    const idSet = new Set(quotationBulkTargetIds);
+    let updated = 0;
+    let skipped = 0;
+    const newItems = quotationItems.map((item) => {
+      if (!idSet.has(item.id)) return item;
+      const merged = applyDesignerCorrectionToQuotationItem(item, {
+        designerConfig: windowConfig,
+        designerSeries: series,
+        savedColors,
+      });
+      if (!merged) {
+        skipped++;
+        return item;
+      }
+      updated++;
+      return merged;
+    });
+    if (updated === 0) {
+      alert(
+        'Could not apply. Open the same window type on the designer as the selected quotation lines, then try again.'
+      );
+      return;
+    }
+    setQuotationItems(newItems);
+    setQuotationBulkTargetIds([]);
+    alert(
+      `Correction applied to ${updated} product(s).${skipped > 0 ? ` Skipped ${skipped} (type mismatch).` : ''} Each line keeps its own size, quantity, rate and layout.`
+    );
+  }, [quotationBulkTargetIds, quotationItems, windowConfig, series, savedColors]);
+
   const commonControlProps = useMemo(() => ({
     config: windowConfig,
     setConfig,
@@ -1700,9 +1783,12 @@ const App: React.FC = () => {
     setSavedColors: setSavedColors,
     onUpdateHandle: handleUpdateHandle,
     onSetPartitionPanelCount,
+    onSetPartitionPreset,
+    onSetPartitionWidthFractions,
     onCyclePartitionPanelType,
     onSetPartitionHasTopChannel,
     onCyclePartitionPanelFraming,
+    onUpdatePartitionPanel,
     onAddLouverItem,
     onRemoveLouverItem,
     onUpdateLouverItem,
@@ -1712,7 +1798,7 @@ const App: React.FC = () => {
     onResetDesign: handleResetDesign,
     activeCornerSide,
     setActiveCornerSide
-  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onAddLouverItem, onRemoveLouverItem, onUpdateLouverItem, handleLaminatedConfigChange, handleDguConfigChange, handleUpdateMirrorConfig, handleResetDesign, activeCornerSide]);
+  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onSetPartitionPreset, onSetPartitionWidthFractions, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onUpdatePartitionPanel, onAddLouverItem, onRemoveLouverItem, onUpdateLouverItem, handleLaminatedConfigChange, handleDguConfigChange, handleUpdateMirrorConfig, handleResetDesign, activeCornerSide]);
 
   const handleOpenConfigure = () => setActiveMobilePanel('configure');
   const handleOpenQuote = () => setActiveMobilePanel('quotation');
@@ -1733,7 +1819,7 @@ const App: React.FC = () => {
   return (
     <>
       {isQuotationModalOpen && (
-          <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} onEdit={handleEditItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} />
+          <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} onEdit={handleEditItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} selectedLineIds={quotationBulkTargetIds} onSelectedLineIdsChange={setQuotationBulkTargetIds} onEditCorrection={handleEditCorrectionFromSelection} />
       )}
       {isBatchAddModalOpen && (
           <Suspense fallback={loadingFallback}>
@@ -1772,6 +1858,8 @@ const App: React.FC = () => {
                     hardwareCostPerWindow={hardwareCostPerWindow}
                     quotationItemCount={quotationItems.length}
                     onViewQuotation={handleViewQuotation}
+                    bulkCorrectionLineCount={quotationBulkTargetIds.length}
+                    onApplyBulkCorrection={handleBulkApplyDesignerToSelected}
                     activeMobilePanel={activeMobilePanel}
                     handleOpenConfigure={handleOpenConfigure}
                     handleOpenQuote={handleOpenQuote}

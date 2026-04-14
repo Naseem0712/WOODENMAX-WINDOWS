@@ -1,5 +1,6 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import type { QuotationItem, QuotationSettings, BOM } from '../types';
+import { WindowType } from '../types';
 import { Button } from './ui/Button';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { Input } from './ui/Input';
@@ -14,7 +15,6 @@ import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
 import { PencilIcon } from './icons/PencilIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { sanitizeFilenameSegment } from '../utils/pdfFilename';
-
 interface QuotationListModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -25,6 +25,10 @@ interface QuotationListModalProps {
   settings: QuotationSettings;
   setSettings: (settings: QuotationSettings) => void;
   onTogglePreview: (isPreviewing: boolean) => void;
+  selectedLineIds: string[];
+  onSelectedLineIdsChange: (ids: string[]) => void;
+  /** Opens designer with first selected line; user changes in Configure, then applies from quotation bar. */
+  onEditCorrection: () => void;
 }
 
 const Section: React.FC<{title: string, children: React.ReactNode, className?: string}> = ({title, children, className}) => (
@@ -42,12 +46,61 @@ const TextArea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & {la
 );
 
 
-export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, onClose, items, setItems, onRemove, onEdit, settings, setSettings, onTogglePreview }) => {
+const WINDOW_TYPE_FILTER_LABEL: Record<WindowType, string> = {
+  [WindowType.SLIDING]: 'Sliding',
+  [WindowType.CASEMENT]: 'Casement',
+  [WindowType.VENTILATOR]: 'Ventilator',
+  [WindowType.GLASS_PARTITION]: 'Glass partition',
+  [WindowType.CORNER]: 'Corner',
+  [WindowType.MIRROR]: 'Mirror',
+  [WindowType.LOUVERS]: 'Louvers',
+};
+
+export const QuotationListModal: React.FC<QuotationListModalProps> = ({
+  isOpen,
+  onClose,
+  items,
+  setItems,
+  onRemove,
+  onEdit,
+  settings,
+  setSettings,
+  onTogglePreview,
+  selectedLineIds,
+  onSelectedLineIdsChange,
+  onEditCorrection,
+}) => {
   const companyLogoInputRef = useRef<HTMLInputElement>(null);
   const importQuotationInputRef = useRef<HTMLInputElement>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isMaterialSummaryOpen, setIsMaterialSummaryOpen] = useState(false);
   const [bom, setBom] = useState<BOM | null>(null);
+  const [typeFilter, setTypeFilter] = useState<WindowType | 'all'>('all');
+  const visibleItems = useMemo(() => {
+    if (typeFilter === 'all') return items;
+    return items.filter((i) => i.config.windowType === typeFilter);
+  }, [items, typeFilter]);
+
+  const toggleSelect = useCallback(
+    (id: string) => {
+      onSelectedLineIdsChange(
+        selectedLineIds.includes(id) ? selectedLineIds.filter((x) => x !== id) : [...selectedLineIds, id]
+      );
+    },
+    [selectedLineIds, onSelectedLineIdsChange]
+  );
+
+  const selectAllVisible = useCallback(() => {
+    const next = new Set(selectedLineIds);
+    visibleItems.forEach((i) => next.add(i.id));
+    onSelectedLineIdsChange(Array.from(next));
+  }, [selectedLineIds, visibleItems, onSelectedLineIdsChange]);
+
+  const clearSelection = useCallback(() => onSelectedLineIdsChange([]), [onSelectedLineIdsChange]);
+
+  useEffect(() => {
+    if (!isOpen) setTypeFilter('all');
+  }, [isOpen]);
 
   useEffect(() => {
     onTogglePreview(isPreviewOpen || isMaterialSummaryOpen);
@@ -238,21 +291,68 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
                   {items.length === 0 ? (
                       <p className="text-slate-400 text-center py-8">Your quotation is empty. Add items from the main screen or import a quotation file.</p>
                   ) : (
-                      <div className="space-y-2">
-                          {items.map((item, index) => {
+                      <div className="space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 justify-between">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <label className="text-sm text-slate-300 flex items-center gap-2">
+                                <span>Show type</span>
+                                <select
+                                  value={typeFilter}
+                                  onChange={(e) => setTypeFilter(e.target.value as WindowType | 'all')}
+                                  className="bg-slate-800 border border-slate-600 rounded-md px-2 py-1 text-white text-sm"
+                                >
+                                  <option value="all">All</option>
+                                  {(Object.values(WindowType) as WindowType[]).map((t) => (
+                                    <option key={t} value={t}>
+                                      {WINDOW_TYPE_FILTER_LABEL[t]}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <Button type="button" variant="secondary" className="text-xs py-1 h-8" onClick={selectAllVisible}>
+                                Select visible
+                              </Button>
+                              <Button type="button" variant="secondary" className="text-xs py-1 h-8" onClick={clearSelection}>
+                                Clear selection
+                              </Button>
+                            </div>
+                            <Button
+                              type="button"
+                              onClick={onEditCorrection}
+                              disabled={selectedLineIds.length === 0}
+                              className="no-print"
+                            >
+                              Edit correction ({selectedLineIds.length})
+                            </Button>
+                          </div>
+                          <div className="space-y-2">
+                          {visibleItems.map((item) => {
                               const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
                               const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
                               const totalArea = singleArea * item.quantity;
                               const baseCost = totalArea * item.rate;
                               const totalHardwareCost = item.hardwareCost * item.quantity;
                               const totalCost = baseCost + totalHardwareCost;
+                              const globalIndex = items.findIndex((i) => i.id === item.id) + 1;
+                              const wt = item.config.windowType;
 
                               return (
                                   <div key={item.id} className="bg-slate-900/50 p-3 rounded-lg flex flex-col md:flex-row md:items-center gap-4">
-                                      <span className="font-bold text-slate-300">#{index+1}</span>
-                                      <div className="flex-grow">
+                                      <label className="flex items-center gap-2 cursor-pointer shrink-0 no-print">
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedLineIds.includes(item.id)}
+                                          onChange={() => toggleSelect(item.id)}
+                                          className="rounded border-slate-500"
+                                          aria-label={`Select ${item.title}`}
+                                        />
+                                        <span className="font-bold text-slate-300">#{globalIndex}</span>
+                                      </label>
+                                      <div className="flex-grow min-w-0">
                                           <h4 className="font-bold text-md text-white">{item.title}</h4>
                                           <p className="text-xs text-slate-300">
+                                              <span className="text-indigo-300/90">{WINDOW_TYPE_FILTER_LABEL[wt]}</span>
+                                              {' · '}
                                               {item.config.width}mm x {item.config.height}mm  |  Qty: {item.quantity}  |  Rate: ₹{Math.round(item.rate)}/{item.areaType}
                                           </p>
                                       </div>
@@ -281,6 +381,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({ isOpen, 
                                   </div>
                               )
                           })}
+                          </div>
                       </div>
                   )}
               </Section>

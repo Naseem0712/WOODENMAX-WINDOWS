@@ -1,5 +1,6 @@
 import type { HandleConfig, WindowConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, WindowType } from '../types';
+import { getPartitionPanelWidthsMm } from './partitionPanelGeometry';
 
 /** Default inset from meeting stile / opening edge (mm). User can fine-tune in Handle Configuration. */
 export const HANDLE_EDGE_INSET_MM = 5;
@@ -185,19 +186,15 @@ export function getDefaultHandleConfig(panelId: string, config: WindowConfig): H
     }
     const i = parseInt(parts[1], 10);
     const { partitionPanels } = config;
-    const gap = 5;
-    const numGaps = partitionPanels.types.slice(0, -1).reduce((acc, _cur, index) => {
-      const current = partitionPanels.types[index];
-      const next = partitionPanels.types[index + 1];
-      if ((current.type === 'sliding' || current.type === 'hinged') && (next.type === 'sliding' || next.type === 'hinged')) {
-        return acc + 1;
-      }
-      return acc;
-    }, 0);
-    const totalContentWidth = inner.innerW - numGaps * gap;
-    const panelWidth = totalContentWidth / partitionPanels.count;
+    const widths = getPartitionPanelWidthsMm(
+      inner.innerW,
+      partitionPanels.count,
+      partitionPanels.types,
+      partitionPanels.widthFractions
+    );
+    const panelWidth = widths[i] ?? inner.innerW / partitionPanels.count;
     const panelType = partitionPanels.types[i]?.type ?? 'fixed';
-    if (panelType === 'sliding') {
+    if (panelType === 'sliding' || panelType === 'fold') {
       const side = slidingMemberSideStandard(i, partitionPanels.count);
       const leftP = i === 0 ? shutterHandle : interlock;
       const rightP = i === partitionPanels.count - 1 ? shutterHandle : interlock;

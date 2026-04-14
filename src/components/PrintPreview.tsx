@@ -15,6 +15,15 @@ import {
 } from '../utils/handleDefaults';
 import { PROFILE_TEXTURE_TILE, profileTexturePosition } from '../utils/profileTexture';
 import { quotationPdfFilename, printDocumentTitleForQuotation } from '../utils/pdfFilename';
+import {
+  PARTITION_PANEL_GAP_MM,
+  getPartitionPanelWidthsMm,
+  isOperablePartitionType,
+  clampFoldLeafCount,
+  getPartitionPanelTopMm,
+} from '../utils/partitionPanelGeometry';
+import { resolveFoldFrameEdges } from '../utils/foldDoorFrame';
+import { FoldDoorOpeningGraphic } from './FoldDoorOpeningVisual';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
   return config.profileColor.startsWith('#') ? config.profileTexture || undefined : undefined;
@@ -74,16 +83,22 @@ const PrintDimensionLabel: React.FC<{ value: number; unit?: string, className?: 
     </span>
 );
 
-const PRINT_SHUTTER_LETTER: Record<'fixed' | 'sliding' | 'hinged' | 'door' | 'louvers' | 'exhaust_fan', string> = {
+const PRINT_SHUTTER_LETTER: Record<'fixed' | 'sliding' | 'hinged' | 'fold' | 'door' | 'louvers' | 'exhaust_fan', string> = {
     fixed: 'F',
     sliding: 'S',
     hinged: 'H',
+    fold: 'B',
     door: 'D',
     louvers: 'L',
     exhaust_fan: 'E',
 };
 
-const PrintShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | 'door' | 'louvers' | 'exhaust_fan', width?: number, height?: number }> = ({ type, width, height }) => {
+const PrintShutterIndicator: React.FC<{
+  type: 'fixed' | 'sliding' | 'hinged' | 'fold' | 'door' | 'louvers' | 'exhaust_fan';
+  width?: number;
+  height?: number;
+  foldLeaves?: number;
+}> = ({ type, width, height, foldLeaves }) => {
     if (!type) return null;
 
     const containerSize = Math.min(width || 100, height || 100);
@@ -92,14 +107,18 @@ const PrintShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | '
     const fontSize = baseFontSizePt * scaleFactor;
     const finalFontSize = Math.max(fontSize, 5);
 
-    const text = PRINT_SHUTTER_LETTER[type];
+    let text = PRINT_SHUTTER_LETTER[type];
+    if (type === 'fold') {
+      const n = clampFoldLeafCount(foldLeaves);
+      text = n > 1 ? `${PRINT_SHUTTER_LETTER.fold}×${n}` : PRINT_SHUTTER_LETTER.fold;
+    }
 
     const style: React.CSSProperties = {
         fontSize: `${finalFontSize}pt`,
         lineHeight: 1,
     };
 
-    const baseStyle = "absolute inset-0 flex items-center justify-center text-black font-bold tracking-wide pointer-events-none opacity-90 z-10 p-1 text-center";
+    const baseStyle = "absolute inset-0 z-[12] flex items-center justify-center text-black font-bold tracking-wide pointer-events-none opacity-90 p-1 text-center";
 
     return <div className={baseStyle} style={style}>{text}</div>;
 };
@@ -679,24 +698,18 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
 
                     {windowType === WindowType.GLASS_PARTITION && (() => {
                         const { partitionPanels } = config;
-                        const gap = 5; // mm
+                        const gap = PARTITION_PANEL_GAP_MM;
+                        const panelWidths = getPartitionPanelWidthsMm(
+                          innerAreaWidth,
+                          partitionPanels.count,
+                          partitionPanels.types,
+                          partitionPanels.widthFractions
+                        );
 
-                        const numGaps = partitionPanels.types.slice(0, -1).reduce((acc, current, index) => {
-                            const next = partitionPanels.types[index + 1];
-                            if ((current.type === 'sliding' || current.type === 'hinged') && (next.type === 'sliding' || next.type === 'hinged')) {
-                                return acc + 1;
-                            }
-                            return acc;
-                        }, 0);
-
-                        const totalContentWidth = innerAreaWidth - (numGaps * gap);
-                        const panelWidth = totalContentWidth / partitionPanels.count;
-                        
                         const panels: React.ReactNode[] = [];
                         
                         if (partitionPanels.hasTopChannel) {
-                            panels.push(<PrintProfilePiece key="track-top" color={profileColor} texture={pt} style={{ top: 0, left: 0, width: innerAreaWidth * scale, height: dims.topTrack * scale }} />);
-                            panels.push(<PrintProfilePiece key="track-bottom" color={profileColor} texture={pt} style={{ top: (innerAreaHeight - dims.bottomTrack) * scale, left: 0, width: innerAreaWidth * scale, height: dims.bottomTrack * scale }} />);
+                            panels.push(<PrintProfilePiece key="track-top" color={profileColor} texture={pt} style={{ top: 0, left: 0, width: innerAreaWidth * scale, height: dims.topTrack * scale, zIndex: 4 }} />);
                         }
                         const panelAreaY = partitionPanels.hasTopChannel ? dims.topTrack : 0;
                         const panelAreaHeight = innerAreaHeight - (partitionPanels.hasTopChannel ? dims.topTrack + dims.bottomTrack : 0);
@@ -708,45 +721,107 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                             const { type, handle, framing } = panelConfig;
                             
                             const panelX = currentX;
-                            const currentPanelWidth = panelWidth;
-                            const zIndex = type === 'sliding' ? 10 + i : 5;
+                            const currentPanelWidth = panelWidths[i] ?? 0;
+                            const zIndex = type === 'sliding' || type === 'fold' ? 10 + i : 5;
+
+                            let ph = panelAreaHeight;
+                            const rawHm = panelConfig.heightMm;
+                            if (rawHm !== '' && rawHm !== undefined && rawHm !== null) {
+                              const nh = Number(rawHm);
+                              if (Number.isFinite(nh) && nh > 0) {
+                                ph = Math.min(nh, panelAreaHeight);
+                              }
+                            }
+                            const py = getPartitionPanelTopMm(panelAreaY, panelAreaHeight, ph, panelConfig.heightAlign);
+                            const foldLeaves = type === 'fold' ? clampFoldLeafCount(panelConfig.foldLeafCount) : undefined;
+
+                            if (partitionPanels.hasTopChannel) {
+                              panels.push(
+                                <PrintProfilePiece
+                                  key={`track-bottom-${i}`}
+                                  color={profileColor}
+                                  texture={pt}
+                                  style={{
+                                    left: panelX * scale,
+                                    top: (py + ph - dims.bottomTrack) * scale,
+                                    width: currentPanelWidth * scale,
+                                    height: dims.bottomTrack * scale,
+                                    zIndex: 4,
+                                  }}
+                                />
+                              );
+                            }
 
                              if (handle) {
                                 const mirrored = mirrorHandleForPartitionHandleX(handle.x);
-                                handleElements.push(<div key={`handle-part-${i}`} style={{ position: 'absolute', zIndex: 30, left: (panelX + currentPanelWidth * handle.x / 100) * scale, top: (panelAreaY + panelAreaHeight * handle.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><PrintableHandle config={handle} scale={scale} mirrored={mirrored} /></div>);
+                                handleElements.push(<div key={`handle-part-${i}`} style={{ position: 'absolute', zIndex: 30, left: (panelX + currentPanelWidth * handle.x / 100) * scale, top: (py + ph * handle.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><PrintableHandle config={handle} scale={scale} mirrored={mirrored} /></div>);
                             }
                             
                              const isFramed = framing === 'full' || type === 'hinged';
                              const frameSize = dims.casementShutter;
+                            let ft = frameSize;
+                            let fb = frameSize;
+                            let fl = frameSize;
+                            let fr = frameSize;
+                            if (isFramed && type === 'fold') {
+                              const e = resolveFoldFrameEdges(panelConfig, frameSize);
+                              ft = e.top;
+                              fb = e.bottom;
+                              fl = e.left;
+                              fr = e.right;
+                            }
+                            const innerGlassW = (currentPanelWidth - (isFramed ? fl + fr : 0)) * scale;
+                            const innerGlassH = (ph - (isFramed ? ft + fb : 0)) * scale;
 
                             panels.push(
-                                <div key={`panel-${i}`} className="absolute" style={{left: mmToPx(panelX, scale), top: mmToPx(panelAreaY, scale), width: mmToPx(currentPanelWidth, scale), height: mmToPx(panelAreaHeight, scale), zIndex}}>
-                                  {isFramed && <PrintableMiteredFrame width={currentPanelWidth} height={panelAreaHeight} profileSize={frameSize} scale={scale} color={profileColor} texture={pt} />}
+                                <div key={`panel-${i}`} className="absolute" style={{left: mmToPx(panelX, scale), top: mmToPx(py, scale), width: mmToPx(currentPanelWidth, scale), height: mmToPx(ph, scale), zIndex}}>
+                                  {isFramed && type === 'fold' && (
+                                    <PrintableMiteredFrame
+                                      width={currentPanelWidth}
+                                      height={ph}
+                                      topSize={ft}
+                                      bottomSize={fb}
+                                      leftSize={fl}
+                                      rightSize={fr}
+                                      scale={scale}
+                                      color={profileColor}
+                                      texture={pt}
+                                    />
+                                  )}
+                                  {isFramed && type !== 'fold' && (
+                                    <PrintableMiteredFrame width={currentPanelWidth} height={ph} profileSize={frameSize} scale={scale} color={profileColor} texture={pt} />
+                                  )}
                                   <div
                                     className="absolute overflow-hidden"
                                     style={
                                       isFramed
-                                        ? { left: mmToPx(frameSize, scale), top: mmToPx(frameSize, scale), right: mmToPx(frameSize, scale), bottom: mmToPx(frameSize, scale) }
+                                        ? { left: mmToPx(fl, scale), top: mmToPx(ft, scale), right: mmToPx(fr, scale), bottom: mmToPx(fb, scale) }
                                         : { top: 0, left: 0, right: 0, bottom: 0 }
                                     }
                                   >
                                     <GlassPanel 
                                       panelId={`partition-${i}`}
                                       style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }}
-                                      glassWidthPx={(currentPanelWidth - (isFramed ? 2 * frameSize : 0))*scale}
-                                      glassHeightPx={(panelAreaHeight - (isFramed ? 2 * frameSize : 0))*scale}
+                                      glassWidthPx={innerGlassW}
+                                      glassHeightPx={innerGlassH}
                                     >
-                                       <PrintShutterIndicator type={type} />
+                                       {type === 'fold' && (
+                                         <FoldDoorOpeningGraphic leaves={foldLeaves ?? 2} variant="print" profileColor={profileColor} />
+                                       )}
+                                       <PrintShutterIndicator type={type} width={innerGlassW} height={innerGlassH} foldLeaves={foldLeaves} />
                                     </GlassPanel>
                                   </div>
                                 </div>
                             );
 
-                            currentX += panelWidth;
-                            // Add gap for the next panel if needed
+                            currentX += currentPanelWidth;
                             if (i < partitionPanels.count - 1) {
                                 const nextPanelConfig = partitionPanels.types[i+1];
-                                if ((type === 'sliding' || type === 'hinged') && (nextPanelConfig.type === 'sliding' || nextPanelConfig.type === 'hinged')) {
+                                if (
+                                  nextPanelConfig &&
+                                  isOperablePartitionType(type) &&
+                                  isOperablePartitionType(nextPanelConfig.type)
+                                ) {
                                     currentX += gap;
                                 }
                             }

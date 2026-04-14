@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig } from '../types';
+import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, PartitionPanelConfig } from '../types';
 import { getDefaultHandleConfig } from '../utils/handleDefaults';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType, MirrorShape } from '../types';
 import { Button } from './ui/Button';
@@ -20,6 +20,8 @@ import {
   getAddableProfileDimensionKeys,
   dimensionKeyLabel,
 } from '../utils/profileDimensionKeys';
+import { DOOR_WINDOW_COMBO_PRESETS } from '../utils/doorWindowComboPresets';
+import { clampFoldLeafCount } from '../utils/partitionPanelGeometry';
 
 const PROFILE_QUICK_PRESETS: { name: string; value: string }[] = [
   { name: 'Grey', value: '#6b7280' },
@@ -57,9 +59,13 @@ interface ControlsPanelProps {
   onUpdateHandle: (panelId: string, newConfig: HandleConfig | null) => void;
 
   onSetPartitionPanelCount: (count: number) => void;
+  onSetPartitionPreset?: (panels: WindowConfig['partitionPanels']) => void;
+  onSetPartitionWidthFractions?: (fractions: number[]) => void;
   onCyclePartitionPanelType: (index: number) => void;
   onSetPartitionHasTopChannel: (hasChannel: boolean) => void;
   onCyclePartitionPanelFraming: (index: number) => void;
+  /** Per-panel width/height (mm) and bi-fold leaf count. */
+  onUpdatePartitionPanel: (index: number, partial: Partial<PartitionPanelConfig>) => void;
 
   onAddLouverItem: (type: 'profile' | 'gap') => void;
   onRemoveLouverItem: (id: string) => void;
@@ -89,7 +95,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
     onHardwareChange, onAddHardware, onRemoveHardware,
     toggleDoorPosition, onVentilatorCellClick,
     savedColors, setSavedColors, onUpdateHandle,
-    onSetPartitionPanelCount, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming,
+    onSetPartitionPanelCount, onSetPartitionPreset, onSetPartitionWidthFractions, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onUpdatePartitionPanel,
     onAddLouverItem, onRemoveLouverItem, onUpdateLouverItem,
     onLaminatedConfigChange, onDguConfigChange, onUpdateMirrorConfig,
     onResetDesign,
@@ -223,7 +229,12 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
             displayConfig.ventilatorGrid.forEach((row, r) => { row.forEach((cell, c) => { if (cell.type === 'door') { panels.push({ id: `ventilator-${r}-${c}`, label: `Door (R${r + 1}, C${c + 1})` }); } }); });
             break;
         case WindowType.GLASS_PARTITION:
-            config.partitionPanels.types.forEach((p, i) => { if (p.type !== 'fixed') { panels.push({ id: `partition-${i}`, label: `Panel ${i + 1} (${p.type})` }); } });
+            config.partitionPanels.types.forEach((p, i) => {
+                if (p.type !== 'fixed') {
+                    const pl = p.type === 'fold' ? 'Bi-fold' : p.type;
+                    panels.push({ id: `partition-${i}`, label: `Panel ${i + 1} (${pl})` });
+                }
+            });
             break;
     }
     if (selectedPanelId && !panels.some(p => p.id === selectedPanelId)) {
@@ -334,7 +345,10 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
       <CollapsibleCard title="Design Type" isOpen={openCard === 'Design Type'} onToggle={() => handleToggleCard('Design Type')}>
           <div className="grid grid-cols-4 bg-slate-700 rounded-md p-1 gap-1">
               {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.LOUVERS, WindowType.CORNER, WindowType.MIRROR].map(type => {
-                  const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  const typeLabel =
+                    type === WindowType.GLASS_PARTITION
+                      ? 'Glass / door+window'
+                      : type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
                   return (
                     <NavLink
                       key={type}
@@ -524,6 +538,27 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
           </CollapsibleCard>
       )}
 
+      {windowType === WindowType.GLASS_PARTITION && onSetPartitionPreset && (
+        <CollapsibleCard title="Door + window combinations" isOpen={openCard === 'Door + window combinations'} onToggle={() => handleToggleCard('Door + window combinations')}>
+          <p className="text-xs text-slate-400 mb-3 leading-snug">
+            Main entrance–style layouts: door leaf with fixed or sliding sidelight, shower enclosures, bi-fold + slider, etc. Set <strong className="text-slate-300">total width × height</strong> in Overall Dimensions (e.g. 2134 × 1219 mm ≈ 7′ × 4′), then tap a preset. Fine-tune panel types in Partition Panel Setup below.
+          </p>
+          <div className="flex flex-col gap-2">
+            {DOOR_WINDOW_COMBO_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => onSetPartitionPreset(preset.panels)}
+                className="text-left rounded-md border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm text-slate-100 transition hover:border-indigo-500 hover:bg-slate-800"
+              >
+                <span className="font-semibold text-indigo-200 block">{preset.label}</span>
+                <span className="text-xs text-slate-400 font-normal">{preset.hint}</span>
+              </button>
+            ))}
+          </div>
+        </CollapsibleCard>
+      )}
+
       {windowType === WindowType.GLASS_PARTITION && (
         <CollapsibleCard title="Partition Panel Setup" isOpen={openCard === 'Partition Panel Setup'} onToggle={() => handleToggleCard('Partition Panel Setup')}>
           <Input id={`${idPrefix}partition-count`} name="partition-count" label="Number of Panels" type="number" inputMode="numeric" min={1} max={8} value={config.partitionPanels.count} onChange={e => onSetPartitionPanelCount(Math.max(1, parseInt(e.target.value) || 1))}/>
@@ -536,21 +571,247 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
               <label className="block text-sm font-medium text-slate-300 mb-2">Panel Types (Click to change)</label>
               <div className="grid grid-cols-1 gap-2">
                   {Array.from({length: config.partitionPanels.count}).map((_, i) => {
-                      const panelConfig = config.partitionPanels.types[i] || { type: 'fixed' };
+                      const panelConfig = config.partitionPanels.types[i] || { type: 'fixed' as const };
                       const {type, framing = 'none'} = panelConfig;
-                      const typeColorClass = type === 'sliding' ? 'bg-sky-600 hover:bg-sky-700' : type === 'hinged' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-700 hover:bg-slate-600';
+                      const typeColorClass = type === 'sliding' ? 'bg-sky-600 hover:bg-sky-700' : type === 'hinged' ? 'bg-indigo-600 hover:bg-indigo-700' : type === 'fold' ? 'bg-violet-600 hover:bg-violet-700' : 'bg-slate-700 hover:bg-slate-600';
+                      const typeLabel = type === 'fold' ? 'Bi-fold' : type;
                       const frameColorClass = framing === 'full' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-700 hover:bg-slate-600';
+                      const wVal = panelConfig.widthMm;
+                      const hVal = panelConfig.heightMm;
+                      const hAlign = panelConfig.heightAlign ?? 'bottom';
+                      const hasReducedHeight =
+                        hVal !== '' && hVal != null && Number.isFinite(Number(hVal)) && Number(hVal) > 0;
+                      const leaves = clampFoldLeafCount(panelConfig.foldLeafCount);
                       return (
-                        <div key={i} className="grid grid-cols-3 gap-1 text-white text-sm font-semibold">
+                        <div key={i} className="rounded-md border border-slate-600 overflow-hidden">
+                          <div className="grid grid-cols-3 gap-1 text-white text-sm font-semibold">
                             <div className="p-2 rounded-l-md bg-slate-800 col-span-1 flex items-center justify-center">Panel {i + 1}</div>
-                            <button onClick={() => onCyclePartitionPanelType(i)} className={`p-2 capitalize ${typeColorClass} transition-colors`}>{type}</button>
-                            <button onClick={() => onCyclePartitionPanelFraming(i)} disabled={type === 'hinged'} className={`p-2 rounded-r-md capitalize ${frameColorClass} transition-colors ${type === 'hinged' ? 'opacity-50 cursor-not-allowed' : ''}`}>{type === 'hinged' ? 'Framed' : (framing === 'full' ? 'Framed' : 'Frameless')}</button>
+                            <button type="button" onClick={() => onCyclePartitionPanelType(i)} className={`p-2 capitalize ${typeColorClass} transition-colors`}>{typeLabel}</button>
+                            <button type="button" onClick={() => onCyclePartitionPanelFraming(i)} disabled={type === 'hinged'} className={`p-2 rounded-r-md capitalize ${frameColorClass} transition-colors ${type === 'hinged' ? 'opacity-50 cursor-not-allowed' : ''}`}>{type === 'hinged' ? 'Framed' : (framing === 'full' ? 'Framed' : 'Frameless')}</button>
+                          </div>
+                          <div className="p-2 bg-slate-900/60 border-t border-slate-600 space-y-2">
+                            <p className="text-[11px] text-slate-400 leading-snug">Optional: exact width / height (mm) for this zone. Leave empty to use split % or equal columns.</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Input
+                                id={`${idPrefix}partition-panel-${i}-w`}
+                                name={`partition-panel-${i}-w`}
+                                label="Width (mm)"
+                                type="number"
+                                inputMode="decimal"
+                                min={1}
+                                placeholder="Auto"
+                                value={wVal === '' || wVal == null ? '' : wVal}
+                                onChange={(e) => {
+                                  const v = e.target.value.trim();
+                                  if (v === '') onUpdatePartitionPanel(i, { widthMm: '' });
+                                  else {
+                                    const n = parseFloat(v);
+                                    if (Number.isFinite(n) && n > 0) onUpdatePartitionPanel(i, { widthMm: n });
+                                  }
+                                }}
+                              />
+                              <Input
+                                id={`${idPrefix}partition-panel-${i}-h`}
+                                name={`partition-panel-${i}-h`}
+                                label="Height (mm)"
+                                type="number"
+                                inputMode="decimal"
+                                min={1}
+                                placeholder="Full opening"
+                                value={hVal === '' || hVal == null ? '' : hVal}
+                                onChange={(e) => {
+                                  const v = e.target.value.trim();
+                                  if (v === '') onUpdatePartitionPanel(i, { heightMm: '' });
+                                  else {
+                                    const n = parseFloat(v);
+                                    if (Number.isFinite(n) && n > 0) onUpdatePartitionPanel(i, { heightMm: n });
+                                  }
+                                }}
+                              />
+                            </div>
+                            {hasReducedHeight && (
+                              <div>
+                                <span className="block text-xs font-medium text-slate-300 mb-1.5">Shorter height aligns from</span>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => onUpdatePartitionPanel(i, { heightAlign: 'top' })}
+                                    className={`rounded-md px-2 py-2 text-xs font-semibold transition-colors ${
+                                      hAlign === 'top'
+                                        ? 'bg-indigo-600 text-white ring-2 ring-indigo-400'
+                                        : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+                                    }`}
+                                  >
+                                    Top (head)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => onUpdatePartitionPanel(i, { heightAlign: 'bottom' })}
+                                    className={`rounded-md px-2 py-2 text-xs font-semibold transition-colors ${
+                                      hAlign === 'bottom'
+                                        ? 'bg-indigo-600 text-white ring-2 ring-indigo-400'
+                                        : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+                                    }`}
+                                  >
+                                    Bottom (sill)
+                                  </button>
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-1.5 leading-snug">
+                                  Top: glass meets the top channel; bottom track sits under the door/window. Bottom: glass meets the sill (default).
+                                </p>
+                              </div>
+                            )}
+                            {type === 'fold' && (
+                              <>
+                                <Input
+                                  id={`${idPrefix}partition-panel-${i}-leaves`}
+                                  name={`partition-panel-${i}-leaves`}
+                                  label="Folding leaves (1–12)"
+                                  type="number"
+                                  inputMode="numeric"
+                                  min={1}
+                                  max={12}
+                                  value={leaves}
+                                  onChange={(e) => {
+                                    const n = parseInt(e.target.value, 10);
+                                    if (!Number.isFinite(n)) return;
+                                    onUpdatePartitionPanel(i, { foldLeafCount: clampFoldLeafCount(n) });
+                                  }}
+                                />
+                                <div
+                                  className={`space-y-2 pt-1 border-t border-slate-600/80 ${framing !== 'full' ? 'opacity-45 pointer-events-none' : ''}`}
+                                >
+                                  <p className="text-[11px] text-slate-400 leading-snug">
+                                    Bi-fold outer frame (mm) when <strong className="text-slate-300">Framed</strong> is on. Leave blank to use the series casement depth for that edge. Top / bottom can differ from vertical stiles; use Left / Right only if stiles are not equal.
+                                  </p>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <Input
+                                      id={`${idPrefix}partition-panel-${i}-ft`}
+                                      name={`partition-panel-${i}-ft`}
+                                      label="Top frame"
+                                      type="number"
+                                      inputMode="decimal"
+                                      min={1}
+                                      placeholder="Series"
+                                      value={panelConfig.foldFrameTopMm === '' || panelConfig.foldFrameTopMm == null ? '' : panelConfig.foldFrameTopMm}
+                                      onChange={(e) => {
+                                        const v = e.target.value.trim();
+                                        if (v === '') onUpdatePartitionPanel(i, { foldFrameTopMm: '' });
+                                        else {
+                                          const n = parseFloat(v);
+                                          if (Number.isFinite(n) && n > 0) onUpdatePartitionPanel(i, { foldFrameTopMm: n });
+                                        }
+                                      }}
+                                    />
+                                    <Input
+                                      id={`${idPrefix}partition-panel-${i}-fb`}
+                                      name={`partition-panel-${i}-fb`}
+                                      label="Bottom frame"
+                                      type="number"
+                                      inputMode="decimal"
+                                      min={1}
+                                      placeholder="Series"
+                                      value={panelConfig.foldFrameBottomMm === '' || panelConfig.foldFrameBottomMm == null ? '' : panelConfig.foldFrameBottomMm}
+                                      onChange={(e) => {
+                                        const v = e.target.value.trim();
+                                        if (v === '') onUpdatePartitionPanel(i, { foldFrameBottomMm: '' });
+                                        else {
+                                          const n = parseFloat(v);
+                                          if (Number.isFinite(n) && n > 0) onUpdatePartitionPanel(i, { foldFrameBottomMm: n });
+                                        }
+                                      }}
+                                    />
+                                    <Input
+                                      id={`${idPrefix}partition-panel-${i}-fs`}
+                                      name={`partition-panel-${i}-fs`}
+                                      label="Sides (L+R)"
+                                      type="number"
+                                      inputMode="decimal"
+                                      min={1}
+                                      placeholder="Series"
+                                      value={panelConfig.foldFrameSideMm === '' || panelConfig.foldFrameSideMm == null ? '' : panelConfig.foldFrameSideMm}
+                                      onChange={(e) => {
+                                        const v = e.target.value.trim();
+                                        if (v === '') onUpdatePartitionPanel(i, { foldFrameSideMm: '' });
+                                        else {
+                                          const n = parseFloat(v);
+                                          if (Number.isFinite(n) && n > 0) onUpdatePartitionPanel(i, { foldFrameSideMm: n });
+                                        }
+                                      }}
+                                    />
+                                    <div className="col-span-2 text-[10px] text-slate-500">Optional: different left / right stile (overrides Sides)</div>
+                                    <Input
+                                      id={`${idPrefix}partition-panel-${i}-fl`}
+                                      name={`partition-panel-${i}-fl`}
+                                      label="Left stile"
+                                      type="number"
+                                      inputMode="decimal"
+                                      min={1}
+                                      placeholder="Sides / series"
+                                      value={panelConfig.foldFrameLeftMm === '' || panelConfig.foldFrameLeftMm == null ? '' : panelConfig.foldFrameLeftMm}
+                                      onChange={(e) => {
+                                        const v = e.target.value.trim();
+                                        if (v === '') onUpdatePartitionPanel(i, { foldFrameLeftMm: '' });
+                                        else {
+                                          const n = parseFloat(v);
+                                          if (Number.isFinite(n) && n > 0) onUpdatePartitionPanel(i, { foldFrameLeftMm: n });
+                                        }
+                                      }}
+                                    />
+                                    <Input
+                                      id={`${idPrefix}partition-panel-${i}-fr`}
+                                      name={`partition-panel-${i}-fr`}
+                                      label="Right stile"
+                                      type="number"
+                                      inputMode="decimal"
+                                      min={1}
+                                      placeholder="Sides / series"
+                                      value={panelConfig.foldFrameRightMm === '' || panelConfig.foldFrameRightMm == null ? '' : panelConfig.foldFrameRightMm}
+                                      onChange={(e) => {
+                                        const v = e.target.value.trim();
+                                        if (v === '') onUpdatePartitionPanel(i, { foldFrameRightMm: '' });
+                                        else {
+                                          const n = parseFloat(v);
+                                          if (Number.isFinite(n) && n > 0) onUpdatePartitionPanel(i, { foldFrameRightMm: n });
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      )
+                      );
                   })}
               </div>
             </div>
           )}
+          {config.partitionPanels.count === 2 && onSetPartitionWidthFractions && (() => {
+            const wf = config.partitionPanels.widthFractions;
+            const leftPct =
+              wf && wf.length === 2
+                ? Math.round((100 * wf[0]) / (wf[0] + wf[1]))
+                : 50;
+            return (
+              <div className="pt-4 mt-2 border-t border-slate-600">
+                <Slider
+                  id={`${idPrefix}partition-split`}
+                  name="partition-split"
+                  label="Left zone width (two panels)"
+                  min={10}
+                  max={90}
+                  value={leftPct}
+                  unit="%"
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    onSetPartitionWidthFractions([v, 100 - v]);
+                  }}
+                />
+                <p className="text-xs text-slate-500 mt-1">Split between two zones when you do not set per-panel width (mm) above. Presets set typical ratios.</p>
+              </div>
+            );
+          })()}
         </CollapsibleCard>
       )}
 

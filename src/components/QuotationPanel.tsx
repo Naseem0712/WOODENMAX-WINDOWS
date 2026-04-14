@@ -27,6 +27,9 @@ interface QuotationPanelProps {
     quotationItemCount: number;
     onViewQuotation: () => void;
     onClose?: () => void;
+    /** Pending bulk correction: show apply on main screen after "Edit correction" from quotation list. */
+    bulkCorrectionLineCount?: number;
+    onApplyBulkCorrection?: () => void;
 }
 
 const CostDisplay: React.FC<{label:string, value: number, isTotal?: boolean}> = ({label, value, isTotal = false}) => (
@@ -40,7 +43,7 @@ const CostDisplay: React.FC<{label:string, value: number, isTotal?: boolean}> = 
 
 
 export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
-    idPrefix = '', width, height, quantity, setQuantity, areaType, setAreaType, rate, setRate, onSave, onUpdate, onCancelEdit, editingItemId, onBatchAdd, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount, onViewQuotation, onClose
+    idPrefix = '', width, height, quantity, setQuantity, areaType, setAreaType, rate, setRate, onSave, onUpdate, onCancelEdit, editingItemId, onBatchAdd, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount,     onViewQuotation, onClose, bulkCorrectionLineCount = 0, onApplyBulkCorrection
 }) => {
 
     const numQuantity = Number(quantity) || 0;
@@ -128,6 +131,11 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
                     <Button onClick={onViewQuotation} variant="secondary" className="w-full h-10">
                         View Quotation ({quotationItemCount})
                     </Button>
+                    {bulkCorrectionLineCount > 0 && !editingItemId && onApplyBulkCorrection && (
+                        <Button onClick={onApplyBulkCorrection} className="w-full h-10 text-xs">
+                            Apply correction ({bulkCorrectionLineCount} products)
+                        </Button>
+                    )}
                     {editingItemId ? (
                         <div className="grid grid-cols-2 gap-2">
                             <Button onClick={onCancelEdit} variant="secondary" className="w-full h-10 text-xs">
