@@ -617,7 +617,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                 { l: dims.shutterHandle, r: dims.shutterInterlock }, { l: dims.shutterInterlock, r: dims.shutterMeeting },
                                 { l: dims.shutterMeeting, r: dims.shutterInterlock }, { l: dims.shutterInterlock, r: dims.shutterHandle }
                             ];
-                            return profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><PrintSlidingShutter panelId={`sliding-${i}`} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>);
+                            return profiles.map((p, i) => <div key={i} className="absolute" style={{ left: mmToPx(positions[i], scale), zIndex: (i === 1 || i === 2) ? 10 : 5 }}><PrintSlidingShutter panelId={`sliding-${i}`} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>);
                         } else {
                             const shutterDivider = hasMesh ? 2 : numShutters;
                             const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * dims.shutterInterlock) / shutterDivider;
@@ -634,7 +634,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                 let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - dims.shutterInterlock);
                                 const leftProfile = i === 0 ? dims.shutterHandle : dims.shutterInterlock;
                                 const rightProfile = i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock;
-                                return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><PrintSlidingShutter panelId={`sliding-${i}`} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={leftProfile} rightProfile={rightProfile} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
+                                return ( <div key={i} className="absolute" style={{ left: mmToPx(leftPosition, scale), zIndex: i + (isMeshShutter ? 10 : 5) }}><PrintSlidingShutter panelId={`sliding-${i}`} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={leftProfile} rightProfile={rightProfile} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
                             });
                         }
                     })() : null}
@@ -1115,15 +1115,33 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
     };
 
     import('html2pdf.js').then(({ default: html2pdf }) => {
-        html2pdf().from(element).set(opt).save().then(() => {
-            setIsExporting(false);
-            element.classList.remove('pdf-export-mode');
-        }).catch((err: any) => {
-            console.error("PDF export failed", err);
-            setIsExporting(false);
-            element.classList.remove('pdf-export-mode');
-            alert("Sorry, there was an error exporting the PDF.");
-        });
+        html2pdf()
+            .from(element)
+            .set(opt)
+            .toPdf()
+            .get('pdf')
+            .then((pdf: any) => {
+                const totalPages = pdf.internal.getNumberOfPages();
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                pdf.setFontSize(8);
+                pdf.setTextColor(100);
+                for (let i = 1; i <= totalPages; i++) {
+                    pdf.setPage(i);
+                    pdf.text(`Page ${i} of ${totalPages}`, pageWidth - 10, pageHeight - 6, { align: 'right' });
+                }
+            })
+            .save()
+            .then(() => {
+                setIsExporting(false);
+                element.classList.remove('pdf-export-mode');
+            })
+            .catch((err: any) => {
+                console.error("PDF export failed", err);
+                setIsExporting(false);
+                element.classList.remove('pdf-export-mode');
+                alert("Sorry, there was an error exporting the PDF.");
+            });
     });
   };
   

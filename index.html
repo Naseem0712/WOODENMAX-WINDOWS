@@ -369,7 +369,7 @@
         }
         .page-counter::before {
             counter-increment: page;
-            content: counter(page);
+            content: counter(page) " of " counter(pages);
         }
         
         .print-window-title {

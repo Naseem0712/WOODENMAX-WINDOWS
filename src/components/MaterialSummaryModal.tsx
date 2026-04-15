@@ -58,15 +58,33 @@ export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOp
         };
         
         import('html2pdf.js').then(({ default: html2pdf }) => {
-            html2pdf().from(element).set(opt).save().then(() => {
-                setIsExporting(false);
-                element.classList.remove('pdf-export-mode');
-            }).catch((err: any) => {
-                console.error("PDF export failed", err);
-                setIsExporting(false);
-                element.classList.remove('pdf-export-mode');
-                alert("Sorry, there was an error exporting the PDF.");
-            });
+            html2pdf()
+                .from(element)
+                .set(opt)
+                .toPdf()
+                .get('pdf')
+                .then((pdf: any) => {
+                    const totalPages = pdf.internal.getNumberOfPages();
+                    const pageWidth = pdf.internal.pageSize.getWidth();
+                    const pageHeight = pdf.internal.pageSize.getHeight();
+                    pdf.setFontSize(8);
+                    pdf.setTextColor(100);
+                    for (let i = 1; i <= totalPages; i++) {
+                        pdf.setPage(i);
+                        pdf.text(`Page ${i} of ${totalPages}`, pageWidth - 10, pageHeight - 6, { align: 'right' });
+                    }
+                })
+                .save()
+                .then(() => {
+                    setIsExporting(false);
+                    element.classList.remove('pdf-export-mode');
+                })
+                .catch((err: any) => {
+                    console.error("PDF export failed", err);
+                    setIsExporting(false);
+                    element.classList.remove('pdf-export-mode');
+                    alert("Sorry, there was an error exporting the PDF.");
+                });
         });
     };
 

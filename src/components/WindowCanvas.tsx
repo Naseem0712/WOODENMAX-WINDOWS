@@ -40,6 +40,22 @@ interface WindowCanvasProps {
 
 /** Convert mm at current canvas scale to CSS px; rounded so frame borders and glass insets stay aligned. */
 const mmToPx = (mm: number, scale: number) => Math.round(mm * scale * 100) / 100;
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+function adjustHexColor(hex: string, delta: number): string {
+    if (!hex || !hex.startsWith('#')) return hex;
+    const raw = hex.slice(1);
+    const normalized = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw;
+    if (normalized.length !== 6) return hex;
+    const n = Number.parseInt(normalized, 16);
+    if (!Number.isFinite(n)) return hex;
+    const shift = Math.round(255 * clamp(delta, -1, 1));
+    const r = clamp(((n >> 16) & 0xff) + shift, 0, 255);
+    const g = clamp(((n >> 8) & 0xff) + shift, 0, 255);
+    const b = clamp((n & 0xff) + shift, 0, 255);
+    const toHex = (v: number) => v.toString(16).padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
 
 const DimensionLabel: React.FC<{ value: number; unit?: string, className?: string, style?: React.CSSProperties }> = ({ value, unit = "mm", className, style }) => (
     <span className={`absolute bg-slate-900 bg-opacity-60 text-slate-200 text-base font-mono px-1.5 py-0.5 rounded ${className}`} style={style}>
@@ -118,6 +134,14 @@ const ProfilePiece: React.FC<{ style: React.CSSProperties; color: string; textur
     const baseColor = color.startsWith('#') ? color : '#8b939e';
     return (
         <div style={{ boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)', position: 'absolute', ...style, backgroundColor: baseColor, overflow: 'hidden' }}>
+            <div
+                style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'linear-gradient(145deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.06) 40%, rgba(0,0,0,0.18) 100%)',
+                    pointerEvents: 'none',
+                }}
+            />
             {texture ? (
                 <div
                     style={{
@@ -361,6 +385,7 @@ const SlidingShutter: React.FC<{
     const tPx = mmToPx(topProfile, scale);
     const rPx = mmToPx(rightProfile, scale);
     const bPx = mmToPx(bottomProfile, scale);
+    const shutterColor = config.profileColor.startsWith('#') ? adjustHexColor(config.profileColor, 0.08) : config.profileColor;
 
     return (
         <div className="absolute" style={{ width: wPx, height: hPx }}>
@@ -372,7 +397,7 @@ const SlidingShutter: React.FC<{
                 leftSize={leftProfile}
                 rightSize={rightProfile}
                 scale={scale}
-                color={config.profileColor}
+                color={shutterColor}
                 texture={profileOverlayTexture(config)}
              />
             <div
@@ -387,7 +412,16 @@ const SlidingShutter: React.FC<{
                     glassHeight={glassHeight}
                     scale={scale}
                 >
-                    {isMesh && <div className="w-full h-full" style={{backgroundColor: '#808080', opacity: 0.5, backgroundImage: `linear-gradient(45deg, #000 25%, transparent 25%), linear-gradient(-45deg, #000 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #000 75%), linear-gradient(-45deg, transparent 75%, #000 75%)`, backgroundSize: '4px 4px' }} />}
+                    {isMesh && (
+                        <div
+                            className="w-full h-full"
+                            style={{
+                                backgroundColor: 'rgba(92, 101, 112, 0.35)',
+                                backgroundImage:
+                                    'repeating-linear-gradient(0deg, rgba(24,24,24,0.30) 0px, rgba(24,24,24,0.30) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(90deg, rgba(24,24,24,0.30) 0px, rgba(24,24,24,0.30) 1px, transparent 1px, transparent 3px)',
+                            }}
+                        />
+                    )}
                     <ShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
                 </GlassPanel>
             </div>
@@ -666,6 +700,72 @@ const createWindowElements = (
                 const { shutterConfig, fixedShutters, slidingHandles } = config;
                 const interlock = Number(dims.shutterInterlock) || 0;
                 const meeting = Number(dims.shutterMeeting) || 0;
+                const laneCount = (shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH || shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) ? 3 : 2;
+                const trackBandMm = Math.max(8, Math.min(16, Number(dims.topTrack) * 0.18));
+                const trackBandPx = mmToPx(trackBandMm, scale);
+                const laneGapPx = laneCount > 1 ? (innerAreaWidth * scale) / laneCount : 0;
+
+                innerContent.push(
+                    <div
+                        key="sliding-track-top"
+                        className="absolute"
+                        style={{
+                            left: 0,
+                            top: 0,
+                            width: innerAreaWidth * scale,
+                            height: trackBandPx,
+                            zIndex: 2,
+                            background: 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(0,0,0,0.15) 100%)',
+                            boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.22)',
+                        }}
+                    />
+                );
+                innerContent.push(
+                    <div
+                        key="sliding-track-bottom"
+                        className="absolute"
+                        style={{
+                            left: 0,
+                            bottom: 0,
+                            width: innerAreaWidth * scale,
+                            height: trackBandPx,
+                            zIndex: 2,
+                            background: 'linear-gradient(0deg, rgba(255,255,255,0.22) 0%, rgba(0,0,0,0.15) 100%)',
+                            boxShadow: 'inset 0 1px 0 rgba(0,0,0,0.22)',
+                        }}
+                    />
+                );
+                for (let i = 1; i < laneCount; i++) {
+                    const x = laneGapPx * i;
+                    innerContent.push(
+                        <div
+                            key={`sliding-track-lane-${i}`}
+                            className="absolute"
+                            style={{
+                                left: x - 0.5,
+                                top: 0,
+                                width: 1,
+                                height: trackBandPx,
+                                zIndex: 3,
+                                backgroundColor: 'rgba(255,255,255,0.45)',
+                            }}
+                        />
+                    );
+                    innerContent.push(
+                        <div
+                            key={`sliding-track-lane-bottom-${i}`}
+                            className="absolute"
+                            style={{
+                                left: x - 0.5,
+                                bottom: 0,
+                                width: 1,
+                                height: trackBandPx,
+                                zIndex: 3,
+                                backgroundColor: 'rgba(255,255,255,0.45)',
+                            }}
+                        />
+                    );
+                }
                 
                 if (shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
                     const panelWidth = (innerAreaWidth + 3 * interlock) / 4;
@@ -692,7 +792,7 @@ const createWindowElements = (
                         if (p.id === 3 || p.id === 5) rightProf = dims.shutterHandle;
 
                         innerContent.push(
-                            <div key={p.id} className="absolute" style={{ left: p.x * scale, zIndex: p.z }}>
+                            <div key={p.id} className="absolute" style={{ left: mmToPx(p.x, scale), zIndex: p.z }}>
                                 <SlidingShutter
                                     panelId={`sliding-${p.id}`}
                                     config={config}
@@ -714,7 +814,7 @@ const createWindowElements = (
                     
                     slidingHandles.forEach((handleConfig, i) => { if (handleConfig) { const side = slidingMemberSideStandard(i, 4); const mirrored = mirrorHandleForSlidingMember(side); handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (positions[i] + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={handleConfig} scale={scale} color={profileColor} mirrored={mirrored} /></div>); } });
                     
-                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: positions[i] * scale, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} scale={scale} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
+                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: mmToPx(positions[i], scale), zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} scale={scale} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
                 } else {
                     const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
                     const numShutters = hasMesh ? 3 : (shutterConfig === ShutterConfigType.TWO_GLASS ? 2 : 3);
@@ -727,7 +827,7 @@ const createWindowElements = (
                         const handleConfig = slidingHandles[i];
                         if (handleConfig) { const side = slidingMemberSideStandard(i, numShutters); const mirrored = mirrorHandleForSlidingMember(side); handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={handleConfig} scale={scale} color={profileColor} mirrored={mirrored} /></div>); }
                         
-                        return ( <div key={i} className="absolute" style={{ left: leftPosition * scale, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : interlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : interlock} scale={scale} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
+                        return ( <div key={i} className="absolute" style={{ left: mmToPx(leftPosition, scale), zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : interlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : interlock} scale={scale} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
                     }));
                 }
                 break;
@@ -1056,67 +1156,66 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
 
         setIsExporting(true);
 
-        const opt = {
-            margin: 0,
-            html2canvas: {
-                scale: 5, // Keep high-res capture for quality
-                backgroundColor: null, // Transparent background from capture
+        const bounds = windowElement.getBoundingClientRect();
+        const baseW = Math.max(1, Math.round(bounds.width));
+        const baseH = Math.max(1, Math.round(bounds.height));
+        const longest = Math.max(baseW, baseH);
+        const captureScale = clamp(2400 / longest, 2, 5);
+
+        import('html2canvas').then(({ default: html2canvas }) => {
+            html2canvas(windowElement, {
+                scale: captureScale,
+                backgroundColor: '#ffffff',
                 logging: false,
                 useCORS: true,
-            },
-        };
+                width: baseW,
+                height: baseH,
+                windowWidth: baseW,
+                windowHeight: baseH,
+                scrollX: 0,
+                scrollY: 0,
+            }).then((productCanvas: HTMLCanvasElement) => {
+                const padding = clamp(Math.round(Math.min(productCanvas.width, productCanvas.height) * 0.08), 48, 140);
+                const outCanvas = document.createElement('canvas');
+                outCanvas.width = productCanvas.width + padding * 2;
+                outCanvas.height = productCanvas.height + padding * 2;
 
-        import('html2pdf.js').then(({ default: html2pdf }) => {
-            html2pdf().from(windowElement).set(opt).toCanvas().get('canvas').then((productCanvas: HTMLCanvasElement) => {
-                // User wants padding of ~1 inch. A common DPI is 96, so we use that for padding calculation.
-                const PADDING_IN_PIXELS = 96;
-
-                const newCanvas = document.createElement('canvas');
-                newCanvas.width = productCanvas.width + PADDING_IN_PIXELS * 2;
-                newCanvas.height = productCanvas.height + PADDING_IN_PIXELS * 2;
-                
-                const ctx = newCanvas.getContext('2d');
+                const ctx = outCanvas.getContext('2d');
                 if (!ctx) {
                     setIsExporting(false);
                     return;
                 }
 
-                // 1. Fill with white background
                 ctx.fillStyle = 'white';
-                ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
-                
-                // 2. Draw the product image centered with padding
-                ctx.drawImage(productCanvas, PADDING_IN_PIXELS, PADDING_IN_PIXELS);
+                ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
+                ctx.drawImage(productCanvas, padding, padding);
 
-                // 3. Add Watermark, scaled to the new canvas size
                 ctx.save();
-                ctx.translate(newCanvas.width / 2, newCanvas.height / 2);
+                ctx.translate(outCanvas.width / 2, outCanvas.height / 2);
                 ctx.rotate(-Math.PI / 4);
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                
-                // Dynamically size the font based on the canvas size
-                const fontSize = Math.min(newCanvas.width, newCanvas.height) / 8;
-                ctx.font = `bold ${fontSize}px Arial`;
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
-                
+                ctx.font = `bold ${Math.min(outCanvas.width, outCanvas.height) / 8}px Arial`;
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.10)';
                 ctx.fillText('WoodenMax', 0, 0);
                 ctx.restore();
 
-                // 4. Export the new canvas
                 const link = document.createElement('a');
                 link.download = `woodenmax-design-${Date.now()}.png`;
-                link.href = newCanvas.toDataURL('image/png');
+                link.href = outCanvas.toDataURL('image/png');
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-                
                 setIsExporting(false);
             }).catch((err: any) => {
                 console.error('Failed to export PNG:', err);
                 alert('Could not export image.');
                 setIsExporting(false);
             });
+        }).catch((err: any) => {
+            console.error('Failed to load html2canvas:', err);
+            alert('Could not export image.');
+            setIsExporting(false);
         });
     };
 
