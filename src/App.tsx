@@ -1747,6 +1747,8 @@ const App: React.FC = () => {
         return item;
       }
       updated++;
+      merged.rate = Number(rate) || 0;
+      merged.areaType = areaType;
       return merged;
     });
     if (updated === 0) {
@@ -1758,9 +1760,9 @@ const App: React.FC = () => {
     setQuotationItems(newItems);
     setQuotationBulkTargetIds([]);
     alert(
-      `Correction applied to ${updated} product(s).${skipped > 0 ? ` Skipped ${skipped} (type mismatch).` : ''} Each line keeps its own size, quantity, rate and layout.`
+      `Correction applied to ${updated} product(s).${skipped > 0 ? ` Skipped ${skipped} (type mismatch).` : ''} Each line keeps its own size, quantity, and layout; rate and area unit match the quotation panel.`
     );
-  }, [quotationBulkTargetIds, quotationItems, windowConfig, series, savedColors]);
+  }, [quotationBulkTargetIds, quotationItems, windowConfig, series, savedColors, rate, areaType]);
 
   const commonControlProps = useMemo(() => ({
     config: windowConfig,
