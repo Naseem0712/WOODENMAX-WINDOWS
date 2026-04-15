@@ -845,10 +845,13 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
 
 
 function renderInlineBold(text: string): React.ReactNode[] {
-    const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    const parts = text.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g);
     return parts.filter(Boolean).map((part, index) => {
-        if (/^\*\*[^*]+\*\*$/.test(part)) {
+        if (/^\*\*[^*\n]+\*\*$/.test(part)) {
             return <strong key={`${part}-${index}`}>{part.slice(2, -2)}</strong>;
+        }
+        if (/^\*[^*\n]+\*$/.test(part)) {
+            return <strong key={`${part}-${index}`}>{part.slice(1, -1)}</strong>;
         }
         return <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>;
     });
@@ -1016,23 +1019,37 @@ const getItemDetails = (item: QuotationItem) => {
         }
     }
 
-    const relevantHardware = item.hardwareItems.filter(hw => {
-        const nameLower = hw.name.toLowerCase();
-        return nameLower.includes('handle') || nameLower.includes('lock');
-    });
+    const relevantHardware = item.hardwareItems.filter(hw => hw.name.toLowerCase().includes('lock'));
 
 
     return { panelCounts, hardwareDetails, relevantHardware };
 }
 
 const getColorName = (item: QuotationItem) => {
+    const quickColorNames: Record<string, string> = {
+        '#6b7280': 'Grey',
+        '#2f3238': 'Black',
+        '#5c4033': 'Brown',
+        '#d4a84b': 'Champion gold',
+        '#f5f5f0': 'Off white',
+    };
+
     if (item.profileColorName) {
+        if (item.profileColorName.startsWith('#')) {
+            return quickColorNames[item.profileColorName.toLowerCase()] || 'Custom Color';
+        }
+        if (item.profileColorName.startsWith('data:image')) {
+            return 'Custom Texture';
+        }
         return item.profileColorName;
     }
     if (item.config.profileColor && item.config.profileColor.startsWith('data:image')) {
         return "Custom Texture";
     }
-    return item.config.profileColor;
+    if (item.config.profileColor && item.config.profileColor.startsWith('#')) {
+        return quickColorNames[item.config.profileColor.toLowerCase()] || 'Custom Color';
+    }
+    return item.config.profileColor || 'Custom Color';
 };
 
 
@@ -1301,7 +1318,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                         {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
                                                         {relevantHardware.length > 0 && (
                                                             <tr>
-                                                                <td className='pr-2 font-semibold pt-1 align-top'>Hardware:</td>
+                                                                <td className='pr-2 font-semibold pt-1 align-top'>Lock:</td>
                                                                 <td className='pt-1'>
                                                                     {relevantHardware.map((hw, i) => (
                                                                         <span key={i} className="block">{hw.name}</span>

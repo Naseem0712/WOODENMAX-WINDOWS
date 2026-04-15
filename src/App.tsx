@@ -22,9 +22,11 @@ import {
   type DesignSnapshot,
 } from './utils/windowTypeDesignSnapshots';
 import { SITE_ORIGIN } from './constants/site';
+import { DEFAULT_MATERIAL_RATES } from './constants/materialRates';
 import { applyRouteSeo, getMetaDescription } from './seo/meta';
 import { computeHardwareCostForQuotation } from './utils/quotationHardwareCost';
 import { applyDesignerCorrectionToQuotationItem } from './utils/applyDesignerCorrectionToQuotationItem';
+import { calculateMaterialCostSummary } from './utils/materialCosting';
 
 const BatchAddModal = lazy(() => import('./components/BatchAddModal').then(module => ({ default: module.BatchAddModal })));
 const GuidesViewer = lazy(() => import('./components/GuidesViewer').then(module => ({ default: module.GuidesViewer })));
@@ -85,13 +87,88 @@ const DEFAULT_GLASS_OPTIONS = {
     specialTypes: ['laminated', 'dgu'] as Exclude<GlassSpecialType, 'none'>[],
 };
 
-const DEFAULT_SLIDING_HARDWARE: HardwareItem[] = [
-    { id: uuidv4(), name: 'Outer Profile Joint Connector', qtyPerShutter: 2, rate: 50, unit: 'per_window' },
-    { id: uuidv4(), name: 'Shutter Joint Connector', qtyPerShutter: 4, rate: 30, unit: 'per_shutter_or_door' },
-    { id: uuidv4(), name: 'PVC Angle', qtyPerShutter: 4, rate: 10, unit: 'per_shutter_or_door' },
-    { id: uuidv4(), name: 'Handle', qtyPerShutter: 1, rate: 150, unit: 'per_shutter_or_door' },
-    { id: uuidv4(), name: 'Bearing', qtyPerShutter: 2, rate: 80, unit: 'per_shutter_or_door' },
+const SLIDING_HARDWARE_TEMPLATE: Omit<HardwareItem, 'id'>[] = [
+    { name: 'Track Connector', qtyPerShutter: 4, rate: 30, unit: 'per_window' },
+    { name: 'Shutter Connector', qtyPerShutter: 2, rate: 30, unit: 'per_shutter_or_door' },
+    { name: 'Interlock Connector', qtyPerShutter: 2, rate: 25, unit: 'per_shutter_or_door' },
+    { name: 'Interlock Cap', qtyPerShutter: 2, rate: 20, unit: 'per_shutter_or_door' },
+    { name: 'Shutter Bearing', qtyPerShutter: 2, rate: 150, unit: 'per_shutter_or_door' },
+    { name: 'Handle Single Point', qtyPerShutter: 1, rate: 450, unit: 'per_shutter_or_door' },
+    { name: 'Handle Multi Point', qtyPerShutter: 0, rate: 1250, unit: 'per_shutter_or_door' },
+    { name: 'Mortice Lock', qtyPerShutter: 0, rate: 1550, unit: 'per_shutter_or_door' },
+    { name: 'Mesh Lock Single Point Touch Type', qtyPerShutter: 1, rate: 450, unit: 'per_shutter_or_door' },
 ];
+
+const DEFAULT_SLIDING_HARDWARE: HardwareItem[] = SLIDING_HARDWARE_TEMPLATE.map((item) => ({ ...item, id: uuidv4() }));
+const OPULENCE_SLIDING_HARDWARE: HardwareItem[] = [
+    { id: uuidv4(), name: 'Interlock Cap', qtyPerShutter: 2, rate: 20, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Shutter Bearing', qtyPerShutter: 2, rate: 220, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Handle Single Point', qtyPerShutter: 1, rate: 450, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Handle Multi Point', qtyPerShutter: 0, rate: 1850, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Mortice Lock', qtyPerShutter: 0, rate: 1550, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Mesh Lock Single Point Touch Type', qtyPerShutter: 1, rate: 450, unit: 'per_shutter_or_door' },
+];
+
+const normalizeHardwareKey = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const mapHardwareToSlidingKey = (name: string): string => {
+    const key = normalizeHardwareKey(name);
+    if (key.includes('track') && key.includes('connector')) return 'trackconnector';
+    if (key.includes('outerprofilejointconnector')) return 'trackconnector';
+    if (key.includes('shutter') && key.includes('connector')) return 'shutterconnector';
+    if (key.includes('interlock') && key.includes('connector')) return 'interlockconnector';
+    if (key.includes('interlock') && key.includes('cap')) return 'interlockcap';
+    if (key.includes('bearing')) return 'shutterbearing';
+    if (key.includes('handlemultipoint')) return 'handlemultipoint';
+    if (key.includes('handlesinglepoint') || key === 'handle') return 'handlesinglepoint';
+    if (key.includes('morticelock')) return 'morticelock';
+    if (key.includes('mesh') && key.includes('lock')) return 'meshlocksinglepointtouchtype';
+    return key;
+};
+
+const normalizeSlidingHardwareItems = (items: HardwareItem[]): HardwareItem[] => {
+    const mappedByKey = new Map<string, HardwareItem>();
+    for (const item of items) {
+        const mappedKey = mapHardwareToSlidingKey(item.name || '');
+        if (!mappedByKey.has(mappedKey)) {
+            mappedByKey.set(mappedKey, item);
+        }
+    }
+    return SLIDING_HARDWARE_TEMPLATE.map((tpl) => {
+        const key = mapHardwareToSlidingKey(tpl.name);
+        const existing = mappedByKey.get(key);
+        if (!existing) return { ...tpl, id: uuidv4() };
+        return {
+            id: existing.id || uuidv4(),
+            name: tpl.name,
+            qtyPerShutter: Number(existing.qtyPerShutter) || 0,
+            rate: Number(existing.rate) || 0,
+            unit: existing.unit || tpl.unit,
+        };
+    });
+};
+
+const areHardwareItemsEqual = (a: HardwareItem[], b: HardwareItem[]): boolean => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+        if (
+            a[i].id !== b[i].id ||
+            a[i].name !== b[i].name ||
+            a[i].unit !== b[i].unit ||
+            Number(a[i].qtyPerShutter) !== Number(b[i].qtyPerShutter) ||
+            Number(a[i].rate) !== Number(b[i].rate)
+        ) {
+            return false;
+        }
+    }
+    return true;
+};
+
+const normalizeSeriesHardwareForType = (input: ProfileSeries): ProfileSeries => {
+    if (input.type !== WindowType.SLIDING) return input;
+    const normalized = normalizeSlidingHardwareItems(input.hardwareItems || []);
+    return { ...input, hardwareItems: normalized };
+};
 
 const PREDEFINED_SLIDING_SERIES: ProfileSeries[] = [
     // 25mm Series
@@ -284,6 +361,47 @@ const PREDEFINED_SLIDING_SERIES: ProfileSeries[] = [
         weights: { outerFrame: 1.943, shutterHandle: 0.942, shutterTop: 0.942, shutterBottom: 0.942, shutterInterlock: 0.990 },
         ...ALL_PROFILES_16_FEET, hardwareItems: DEFAULT_SLIDING_HARDWARE, glassOptions: DEFAULT_GLASS_OPTIONS,
     },
+    // 35mm Opulence Series
+    {
+        id: 'series-sliding-35mm-opulence-2t-slim-default',
+        name: '35mm Opulence (2-Track, Slim Interlock)',
+        type: WindowType.SLIDING,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 97, outerFrameVertical: 100, fixedFrame: 31, shutterHandle: 59, shutterTop: 58, shutterBottom: 58, shutterInterlock: 27 },
+        weights: { outerFrame: 1.680, outerFrameVertical: 1.200, fixedFrame: 0.300, shutterHandle: 0.920, shutterTop: 0.910, shutterBottom: 0.910, shutterInterlock: 0.720 },
+        ...ALL_PROFILES_16_FEET,
+        hardwareItems: OPULENCE_SLIDING_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+    {
+        id: 'series-sliding-35mm-opulence-2t-reinf-default',
+        name: '35mm Opulence (2-Track, Reinf. Interlock)',
+        type: WindowType.SLIDING,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 97, outerFrameVertical: 100, fixedFrame: 31, shutterHandle: 59, shutterTop: 58, shutterBottom: 58, shutterInterlock: 27 },
+        weights: { outerFrame: 1.680, outerFrameVertical: 1.200, fixedFrame: 0.300, shutterHandle: 0.920, shutterTop: 0.910, shutterBottom: 0.910, shutterInterlock: 1.200 },
+        ...ALL_PROFILES_16_FEET,
+        hardwareItems: OPULENCE_SLIDING_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+    {
+        id: 'series-sliding-35mm-opulence-3t-slim-default',
+        name: '35mm Opulence (3-Track, Slim Interlock)',
+        type: WindowType.SLIDING,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 145, outerFrameVertical: 150, fixedFrame: 31, shutterHandle: 59, shutterTop: 58, shutterBottom: 58, shutterInterlock: 27 },
+        weights: { outerFrame: 2.120, outerFrameVertical: 1.720, fixedFrame: 0.300, shutterHandle: 0.920, shutterTop: 0.910, shutterBottom: 0.910, shutterInterlock: 0.720 },
+        ...ALL_PROFILES_16_FEET,
+        hardwareItems: OPULENCE_SLIDING_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+    {
+        id: 'series-sliding-35mm-opulence-3t-reinf-default',
+        name: '35mm Opulence (3-Track, Reinf. Interlock)',
+        type: WindowType.SLIDING,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 145, outerFrameVertical: 150, fixedFrame: 31, shutterHandle: 59, shutterTop: 58, shutterBottom: 58, shutterInterlock: 27 },
+        weights: { outerFrame: 2.120, outerFrameVertical: 1.720, fixedFrame: 0.300, shutterHandle: 0.920, shutterTop: 0.910, shutterBottom: 0.910, shutterInterlock: 1.200 },
+        ...ALL_PROFILES_16_FEET,
+        hardwareItems: OPULENCE_SLIDING_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
 ];
 
 const DEFAULT_SLIDING_SERIES: ProfileSeries = {
@@ -307,6 +425,33 @@ const DEFAULT_CASEMENT_HARDWARE: HardwareItem[] = [
     { id: uuidv4(), name: 'Hinges', qtyPerShutter: 3, rate: 70, unit: 'per_shutter_or_door' },
 ];
 
+const CASEMENT_40_HARDWARE: HardwareItem[] = [
+    { id: uuidv4(), name: 'Outer Connector', qtyPerShutter: 4, rate: 40, unit: 'per_window' },
+    { id: uuidv4(), name: 'Shutter Connector (all side)', qtyPerShutter: 4, rate: 40, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Butt Hinges', qtyPerShutter: 2, rate: 120, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Door Holder', qtyPerShutter: 2, rate: 180, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Handle Single Point', qtyPerShutter: 1, rate: 250, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Handle Multi Point', qtyPerShutter: 0, rate: 1450, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Friction Stay 8 inch (optional set)', qtyPerShutter: 0, rate: 180, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Friction Stay 10 inch (optional set)', qtyPerShutter: 0, rate: 220, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Friction Stay 12 inch (optional set)', qtyPerShutter: 0, rate: 350, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Friction Stay 14 inch (optional set)', qtyPerShutter: 0, rate: 450, unit: 'per_shutter_or_door' },
+];
+
+const CASEMENT_50_HARDWARE: HardwareItem[] = [
+    { id: uuidv4(), name: 'Outer Connector', qtyPerShutter: 4, rate: 40, unit: 'per_window' },
+    { id: uuidv4(), name: 'Shutter Connector (all side)', qtyPerShutter: 4, rate: 40, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Butt Hinges', qtyPerShutter: 2, rate: 160, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Door Holder', qtyPerShutter: 2, rate: 180, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Handle Single Point', qtyPerShutter: 1, rate: 250, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Handle Multi Point', qtyPerShutter: 0, rate: 1450, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Mortice Lock', qtyPerShutter: 0, rate: 1550, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Friction Stay 8 inch (optional set)', qtyPerShutter: 0, rate: 180, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Friction Stay 10 inch (optional set)', qtyPerShutter: 0, rate: 220, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Friction Stay 12 inch (optional set)', qtyPerShutter: 0, rate: 350, unit: 'per_shutter_or_door' },
+    { id: uuidv4(), name: 'Friction Stay 14 inch (optional set)', qtyPerShutter: 0, rate: 450, unit: 'per_shutter_or_door' },
+];
+
 const DEFAULT_CASEMENT_SERIES: ProfileSeries = {
     id: 'series-casement-default',
     name: 'Standard Casement Series',
@@ -315,6 +460,49 @@ const DEFAULT_CASEMENT_SERIES: ProfileSeries = {
     hardwareItems: DEFAULT_CASEMENT_HARDWARE,
     glassOptions: DEFAULT_GLASS_OPTIONS,
 };
+
+const PREDEFINED_CASEMENT_SERIES: ProfileSeries[] = [
+    {
+        id: 'series-casement-40mm-small-default',
+        name: '40mm Casement (Mullion Small)',
+        type: WindowType.CASEMENT,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 40, fixedFrame: 20, casementShutter: 40, mullion: 35 },
+        weights: { outerFrame: 0.600, fixedFrame: 0.240, casementShutter: 0.900, mullion: 0.900 },
+        ...ALL_PROFILES_16_FEET,
+        hardwareItems: CASEMENT_40_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+    {
+        id: 'series-casement-40mm-big-default',
+        name: '40mm Casement (Mullion Big)',
+        type: WindowType.CASEMENT,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 40, fixedFrame: 20, casementShutter: 40, mullion: 35 },
+        weights: { outerFrame: 0.600, fixedFrame: 0.240, casementShutter: 0.900, mullion: 0.980 },
+        ...ALL_PROFILES_16_FEET,
+        hardwareItems: CASEMENT_40_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+    {
+        id: 'series-casement-50mm-small-default',
+        name: '50mm Casement (Mullion Small)',
+        type: WindowType.CASEMENT,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 50, fixedFrame: 25, casementShutter: 50, mullion: 40 },
+        weights: { outerFrame: 1.200, casementShutter: 1.350, mullion: 1.400 },
+        ...ALL_PROFILES_16_FEET,
+        hardwareItems: CASEMENT_50_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+    {
+        id: 'series-casement-50mm-big-default',
+        name: '50mm Casement (Mullion Big)',
+        type: WindowType.CASEMENT,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 50, fixedFrame: 25, casementShutter: 50, mullion: 40 },
+        weights: { outerFrame: 1.200, casementShutter: 1.350, mullion: 4.900 },
+        ...ALL_PROFILES_16_FEET,
+        hardwareItems: CASEMENT_50_HARDWARE,
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+];
 
 const DEFAULT_VENTILATOR_HARDWARE: HardwareItem[] = [
     { id: uuidv4(), name: 'Frame Connector', qtyPerShutter: 4, rate: 30, unit: 'per_window' },
@@ -332,11 +520,42 @@ const DEFAULT_VENTILATOR_SERIES: ProfileSeries = {
     glassOptions: DEFAULT_GLASS_OPTIONS,
 };
 
+const PREDEFINED_VENTILATOR_SERIES: ProfileSeries[] = [
+    {
+        id: 'series-ventilator-25mm-slim-default',
+        name: '25mm Ventilator Slim Series',
+        type: WindowType.VENTILATOR,
+        dimensions: { ...BASE_DIMENSIONS, outerFrame: 25, fixedFrame: 25, casementShutter: 42, mullion: 25, louverBlade: 25 },
+        weights: {
+            outerFrame: 0.850,
+            outerFrameVertical: 1.200, // Corner profile mapping
+            fixedFrame: 0.280, // Door outer 25x50 mapping
+            casementShutter: 1.630, // Door vertical 76x42 mapping
+            mullion: 0.820, // Divider 25x50
+            louverBlade: 0.550, // Z-louver 75x4
+        },
+        lengths: { ...ALL_PROFILES_16_FEET.lengths, mullion: 3500 }, // Slim vertical divider @ 3.5m
+        hardwareItems: [
+            ...DEFAULT_VENTILATOR_HARDWARE,
+            { id: uuidv4(), name: 'Divider Slim Vertical 3.5m', qtyPerShutter: 1, rate: 550, unit: 'per_window' },
+        ],
+        glassOptions: DEFAULT_GLASS_OPTIONS,
+    },
+];
+
 const DEFAULT_PARTITION_HARDWARE: HardwareItem[] = [
   { id: uuidv4(), name: 'Sliding Shower Set', qtyPerShutter: 1, rate: 2500, unit: 'per_shutter_or_door' },
   { id: uuidv4(), name: 'Hinges (for openable)', qtyPerShutter: 3, rate: 350, unit: 'per_shutter_or_door' },
   { id: uuidv4(), name: 'Door Seal', qtyPerShutter: 1, rate: 500, unit: 'per_shutter_or_door' },
   { id: uuidv4(), name: 'Handle Knob/Pull', qtyPerShutter: 1, rate: 400, unit: 'per_shutter_or_door' },
+];
+
+const PARTITION_SLIM_HARDWARE: HardwareItem[] = [
+  { id: uuidv4(), name: 'Butterfly Hinges 4 inch', qtyPerShutter: 5, rate: 140, unit: 'per_shutter_or_door' },
+  { id: uuidv4(), name: 'Butterfly Hinges 5 inch', qtyPerShutter: 0, rate: 180, unit: 'per_shutter_or_door' },
+  { id: uuidv4(), name: 'Mortice Lock', qtyPerShutter: 0, rate: 1550, unit: 'per_shutter_or_door' },
+  { id: uuidv4(), name: 'Door Stopper (optional)', qtyPerShutter: 0, rate: 1100, unit: 'per_shutter_or_door' },
+  { id: uuidv4(), name: 'Door Closer (optional)', qtyPerShutter: 0, rate: 2750, unit: 'per_shutter_or_door' },
 ];
 
 const DEFAULT_GLASS_PARTITION_SERIES: ProfileSeries = {
@@ -351,6 +570,72 @@ const DEFAULT_GLASS_PARTITION_SERIES: ProfileSeries = {
     specialTypes: ['laminated'],
   },
 };
+
+const PREDEFINED_PARTITION_SERIES: ProfileSeries[] = [
+  {
+    id: 'series-partition-40mm-default',
+    name: '40mm Glass Door & Window',
+    type: WindowType.GLASS_PARTITION,
+    dimensions: { ...BASE_DIMENSIONS, topTrack: 40, bottomTrack: 40, fixedFrame: 20, casementShutter: 40, mullion: 35 },
+    weights: {
+      topTrack: 0.600,
+      bottomTrack: 0.600,
+      fixedFrame: 0.240,
+      casementShutter: 0.900,
+      mullion: 0.900,
+    },
+    ...ALL_PROFILES_16_FEET,
+    hardwareItems: DEFAULT_PARTITION_HARDWARE,
+    glassOptions: {
+      thicknesses: [8, 10, 12],
+      customThicknessAllowed: true,
+      specialTypes: ['laminated'],
+    },
+  },
+  {
+    id: 'series-partition-50mm-default',
+    name: '50mm Glass Door & Window',
+    type: WindowType.GLASS_PARTITION,
+    dimensions: { ...BASE_DIMENSIONS, topTrack: 50, bottomTrack: 50, fixedFrame: 25, casementShutter: 50, mullion: 40 },
+    weights: {
+      topTrack: 1.200,
+      bottomTrack: 1.200,
+      casementShutter: 1.350,
+      mullion: 1.400,
+    },
+    ...ALL_PROFILES_16_FEET,
+    hardwareItems: DEFAULT_PARTITION_HARDWARE,
+    glassOptions: {
+      thicknesses: [8, 10, 12],
+      customThicknessAllowed: true,
+      specialTypes: ['laminated'],
+    },
+  },
+  {
+    id: 'series-partition-25mm-slim-default',
+    name: '25mm Partition Slim Series',
+    type: WindowType.GLASS_PARTITION,
+    dimensions: { ...BASE_DIMENSIONS, topTrack: 25, bottomTrack: 25, fixedFrame: 25, casementShutter: 75, mullion: 25 },
+    weights: {
+      topTrack: 0.850, // 25x50 outer profile
+      bottomTrack: 0.850,
+      fixedFrame: 0.280, // Door outer 25x50 mapping
+      mullion: 0.820, // Divider 25x50
+      casementShutter: 1.420, // Door top/bottom 75x42 mapping
+      outerFrameVertical: 1.200, // Corner profile reference
+    },
+    lengths: { ...ALL_PROFILES_16_FEET.lengths, mullion: 3500 },
+    hardwareItems: [
+      ...PARTITION_SLIM_HARDWARE,
+      { id: uuidv4(), name: 'Divider Slim Vertical 3.5m', qtyPerShutter: 1, rate: 550, unit: 'per_window' },
+    ],
+    glassOptions: {
+      thicknesses: [8, 10, 12],
+      customThicknessAllowed: true,
+      specialTypes: ['laminated'],
+    },
+  },
+];
 
 const DEFAULT_CORNER_SERIES: ProfileSeries = {
     id: 'series-corner-default',
@@ -395,7 +680,8 @@ const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
     bankDetails: { name: '', accountNumber: '', ifsc: '', branch: '', accountType: 'current' },
     title: 'Quotation - WoodenMax Window Designer',
     terms: '1. 50% advance payment required.\n2. Prices are exclusive of taxes.\n3. Delivery within 4-6 weeks.',
-    description: 'Supply and installation of premium aluminium windows and partitions as per the agreed specifications.'
+    description: 'Supply and installation of premium aluminium windows and partitions as per the agreed specifications.',
+    materialRates: DEFAULT_MATERIAL_RATES,
 };
 
 const defaultCornerSideConfig: CornerSideConfig = {
@@ -1058,18 +1344,32 @@ const App: React.FC = () => {
       const item = window.localStorage.getItem('aluminium-window-last-series');
       if (item) {
         const parsed = JSON.parse(item);
-        if(parsed.id && parsed.name && parsed.dimensions) { return parsed; }
+        if(parsed.id && parsed.name && parsed.dimensions) { return normalizeSeriesHardwareForType(parsed); }
       }
     } catch (error) { console.error("Could not load last used series", error); }
-    return DEFAULT_SLIDING_SERIES;
+    return normalizeSeriesHardwareForType(DEFAULT_SLIDING_SERIES);
   });
 
   const [savedSeries, setSavedSeries] = useState<ProfileSeries[]>(() => {
     try {
       const item = window.localStorage.getItem('aluminium-window-profiles');
       const userSaved = item ? JSON.parse(item).filter((s: ProfileSeries) => !s.id.includes('-default')) : [];
-      return [...PREDEFINED_SLIDING_SERIES, ...userSaved];
-    } catch (error) { console.error("Could not load profiles", error); return [...PREDEFINED_SLIDING_SERIES]; }
+      return [
+        ...PREDEFINED_SLIDING_SERIES,
+        ...PREDEFINED_CASEMENT_SERIES,
+        ...PREDEFINED_VENTILATOR_SERIES,
+        ...PREDEFINED_PARTITION_SERIES,
+        ...userSaved,
+      ].map((s) => normalizeSeriesHardwareForType(s));
+    } catch (error) {
+      console.error("Could not load profiles", error);
+      return [
+        ...PREDEFINED_SLIDING_SERIES,
+        ...PREDEFINED_CASEMENT_SERIES,
+        ...PREDEFINED_VENTILATOR_SERIES,
+        ...PREDEFINED_PARTITION_SERIES,
+      ];
+    }
   });
 
   const [savedColors, setSavedColors] = useState<SavedColor[]>(() => {
@@ -1120,6 +1420,44 @@ const App: React.FC = () => {
                   customer: { ...DEFAULT_QUOTATION_SETTINGS.customer, ...savedSettings.customer },
                   financials: { ...DEFAULT_QUOTATION_SETTINGS.financials, ...savedSettings.financials },
                   bankDetails: { ...DEFAULT_QUOTATION_SETTINGS.bankDetails, ...savedSettings.bankDetails },
+                  materialRates: {
+                      ...DEFAULT_QUOTATION_SETTINGS.materialRates,
+                      ...savedSettings.materialRates,
+                      makingChargePerSqFt: Number(savedSettings.materialRates?.makingChargePerSqFt) || DEFAULT_QUOTATION_SETTINGS.materialRates.makingChargePerSqFt,
+                      meshPerSqFt: Number(savedSettings.materialRates?.meshPerSqFt) || DEFAULT_QUOTATION_SETTINGS.materialRates.meshPerSqFt,
+                      meshShutterOptions: {
+                          ...DEFAULT_QUOTATION_SETTINGS.materialRates.meshShutterOptions,
+                          ...savedSettings.materialRates?.meshShutterOptions,
+                          separateSections: Boolean(savedSettings.materialRates?.meshShutterOptions?.separateSections),
+                      },
+                      wastageCartagePerSqFt: Number(savedSettings.materialRates?.wastageCartagePerSqFt) || 0,
+                      profit: {
+                          ...DEFAULT_QUOTATION_SETTINGS.materialRates.profit,
+                          ...savedSettings.materialRates?.profit,
+                          mode: savedSettings.materialRates?.profit?.mode === 'per_sqft' ? 'per_sqft' : 'percentage',
+                          value: Number(savedSettings.materialRates?.profit?.value) || DEFAULT_QUOTATION_SETTINGS.materialRates.profit.value,
+                      },
+                      powderCoatingPerRft: {
+                          ...DEFAULT_QUOTATION_SETTINGS.materialRates.powderCoatingPerRft,
+                          ...savedSettings.materialRates?.powderCoatingPerRft,
+                      },
+                      glassPerSqFt: {
+                          ...DEFAULT_QUOTATION_SETTINGS.materialRates.glassPerSqFt,
+                          ...savedSettings.materialRates?.glassPerSqFt,
+                          clear: {
+                              ...DEFAULT_QUOTATION_SETTINGS.materialRates.glassPerSqFt.clear,
+                              ...savedSettings.materialRates?.glassPerSqFt?.clear,
+                          },
+                          laminated: {
+                              ...DEFAULT_QUOTATION_SETTINGS.materialRates.glassPerSqFt.laminated,
+                              ...savedSettings.materialRates?.glassPerSqFt?.laminated,
+                          },
+                          dgu: {
+                              ...DEFAULT_QUOTATION_SETTINGS.materialRates.glassPerSqFt.dgu,
+                              ...savedSettings.materialRates?.glassPerSqFt?.dgu,
+                          },
+                      },
+                  },
               };
               mergedSettings.company.gstNumber = (mergedSettings.company.gstNumber || '').toUpperCase();
               mergedSettings.customer.gstNumber = (mergedSettings.customer.gstNumber || '').toUpperCase();
@@ -1132,6 +1470,28 @@ const App: React.FC = () => {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [canvasKey, setCanvasKey] = useState(() => uuidv4());
   const [isShortcutHelpOpen, setIsShortcutHelpOpen] = useState(false);
+  const applySlidingBasicRateProtection = useCallback((items: QuotationItem[]): QuotationItem[] => {
+    if (items.length === 0) return items;
+    const summary = calculateMaterialCostSummary(
+      items,
+      quotationSettings.materialRates,
+      Number(quotationSettings.materialRates.makingChargePerSqFt) || 120
+    );
+    let changed = false;
+    const mapped = items.map((item) => {
+      if (item.config.windowType !== WindowType.SLIDING) return item;
+      const base = summary.byItemId[item.id];
+      if (!base) return item;
+      const safeRate = Number(base.basicRatePerSqFt) || 0;
+      if (item.rate !== safeRate || item.hardwareCost !== 0) {
+        changed = true;
+        return { ...item, rate: safeRate, hardwareCost: 0 };
+      }
+      return item;
+    });
+    return changed ? mapped : items;
+  }, [quotationSettings.materialRates]);
+
   const panelRef = useRef<HTMLDivElement>(null);
   const lastAppliedSearchRef = useRef<string>('');
   const isEmbedded = useMemo(() => new URLSearchParams(location.search).get('embed') === '1', [location.search]);
@@ -1143,6 +1503,18 @@ const App: React.FC = () => {
       return next.length === prev.length ? prev : next;
     });
   }, [quotationItems]);
+
+  useEffect(() => {
+    if (series.type !== WindowType.SLIDING) return;
+    const normalized = normalizeSlidingHardwareItems(series.hardwareItems || []);
+    if (!areHardwareItemsEqual(series.hardwareItems || [], normalized)) {
+      setSeries((prev) => ({ ...prev, hardwareItems: normalized }));
+    }
+  }, [series]);
+
+  useEffect(() => {
+    setQuotationItems((prev) => applySlidingBasicRateProtection(prev));
+  }, [applySlidingBasicRateProtection]);
 
   const configRef = useRef(windowConfigState);
   const seriesRef = useRef(series);
@@ -1643,9 +2015,9 @@ const App: React.FC = () => {
         hardwareItems: JSON.parse(JSON.stringify(series.hardwareItems)),
         profileColorName: colorName || (windowConfig.profileColor.startsWith('data:') ? 'Custom Texture' : windowConfig.profileColor),
     };
-    setQuotationItems(prev => [...prev, newItem]);
+    setQuotationItems(prev => applySlidingBasicRateProtection([...prev, newItem]));
     alert(`"${newItem.title}" saved to quotation! You now have ${quotationItems.length + 1} item(s).`);
-  }, [windowTitle, windowConfig, quantity, areaType, rate, hardwareCostPerWindow, series.hardwareItems, savedColors, quotationItems.length]);
+  }, [windowTitle, windowConfig, quantity, areaType, rate, hardwareCostPerWindow, series.hardwareItems, savedColors, quotationItems.length, applySlidingBasicRateProtection]);
 
   const handleBatchSave = useCallback((items: BatchAddItem[]) => {
     const colorName = savedColors.find(c => c.value === windowConfig.profileColor)?.name;
@@ -1671,13 +2043,15 @@ const App: React.FC = () => {
         };
     });
 
-    setQuotationItems(prev => [...prev, ...newQuotationItems]);
+    setQuotationItems(prev => applySlidingBasicRateProtection([...prev, ...newQuotationItems]));
     setIsBatchAddModalOpen(false);
     alert(`${newQuotationItems.length} item(s) saved to quotation! You now have ${quotationItems.length + newQuotationItems.length} item(s).`);
-  }, [windowConfig, areaType, hardwareCostPerWindow, series.hardwareItems, savedColors, quotationItems.length]);
+  }, [windowConfig, areaType, hardwareCostPerWindow, series.hardwareItems, savedColors, quotationItems.length, applySlidingBasicRateProtection]);
 
 
-  const handleRemoveQuotationItem = useCallback((id: string) => { setQuotationItems(prev => prev.filter(item => item.id !== id)); }, []);
+  const handleRemoveQuotationItem = useCallback((id: string) => {
+    setQuotationItems(prev => applySlidingBasicRateProtection(prev.filter(item => item.id !== id)));
+  }, [applySlidingBasicRateProtection]);
   
   const handleInstallClick = async () => {
     if (!installPrompt) return;
@@ -1742,11 +2116,11 @@ const App: React.FC = () => {
         profileColorName: colorName || (windowConfig.profileColor.startsWith('data:') ? 'Custom Texture' : windowConfig.profileColor),
     };
 
-    setQuotationItems(prev => prev.map(item => item.id === editingItemId ? updatedItem : item));
+    setQuotationItems(prev => applySlidingBasicRateProtection(prev.map(item => item.id === editingItemId ? updatedItem : item)));
     
     setEditingItemId(null);
     alert(`"${updatedItem.title}" updated successfully!`);
-  }, [editingItemId, savedColors, windowConfig, windowTitle, quantity, areaType, rate, hardwareCostPerWindow, series.hardwareItems]);
+  }, [editingItemId, savedColors, windowConfig, windowTitle, quantity, areaType, rate, hardwareCostPerWindow, series.hardwareItems, applySlidingBasicRateProtection]);
 
   const handleCancelEdit = useCallback(() => {
     if (window.confirm("Are you sure you want to cancel editing? Any changes will be lost.")) {
@@ -1814,12 +2188,12 @@ const App: React.FC = () => {
       );
       return;
     }
-    setQuotationItems(newItems);
+    setQuotationItems(applySlidingBasicRateProtection(newItems));
     setQuotationBulkTargetIds([]);
     alert(
       `Correction applied to ${updated} product(s).${skipped > 0 ? ` Skipped ${skipped} (type mismatch).` : ''} Each line keeps its own size, quantity, and layout; rate and area unit match the quotation panel.`
     );
-  }, [quotationBulkTargetIds, quotationItems, windowConfig, series, savedColors, rate, areaType]);
+  }, [quotationBulkTargetIds, quotationItems, windowConfig, series, savedColors, rate, areaType, applySlidingBasicRateProtection]);
 
   const commonControlProps = useMemo(() => ({
     config: windowConfig,
@@ -1980,7 +2354,7 @@ const App: React.FC = () => {
   return (
     <>
       {isQuotationModalOpen && (
-          <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={setQuotationItems} onRemove={handleRemoveQuotationItem} onEdit={handleEditItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} selectedLineIds={quotationBulkTargetIds} onSelectedLineIdsChange={setQuotationBulkTargetIds} onEditCorrection={handleEditCorrectionFromSelection} />
+          <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={(items) => setQuotationItems(applySlidingBasicRateProtection(items))} onRemove={handleRemoveQuotationItem} onEdit={handleEditItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} selectedLineIds={quotationBulkTargetIds} onSelectedLineIdsChange={setQuotationBulkTargetIds} onEditCorrection={handleEditCorrectionFromSelection} />
       )}
       {isBatchAddModalOpen && (
           <Suspense fallback={loadingFallback}>

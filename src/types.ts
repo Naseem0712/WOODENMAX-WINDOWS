@@ -309,6 +309,46 @@ export interface QuotationItem {
   profileColorName?: string;
 }
 
+export interface MaterialRateSettings {
+  aluminiumProfilePerKg: number;
+  makingChargePerSqFt: number;
+  meshPerSqFt: number;
+  meshShutterOptions: {
+    separateSections: boolean;
+    meshClipPerMeshShutter: number;
+    meshClipLengthFt: number;
+    meshClipWeightKgPerPc: number;
+    meshClipPowderRatePerRft: number;
+  };
+  profit: {
+    mode: 'percentage' | 'per_sqft';
+    value: number;
+  };
+  wastageCartagePerSqFt: number;
+  powderCoatingPerRft: {
+    track: number;
+    shutterSections: number;
+    slimInterlock: number;
+  };
+  glassPerSqFt: {
+    clear: {
+      '5': number;
+      '6': number;
+      '8': number;
+      '10': number;
+      '12': number;
+    };
+    laminated: {
+      '5+5': number;
+      '6+6': number;
+    };
+    dgu: {
+      '6+12+6': number;
+      '5+12+5': number;
+    };
+  };
+}
+
 export interface QuotationSettings {
   company: {
     logo: string;
@@ -342,6 +382,7 @@ export interface QuotationSettings {
   title: string;
   terms: string;
   description: string;
+  materialRates: MaterialRateSettings;
 }
 
 // Bill of Materials Types

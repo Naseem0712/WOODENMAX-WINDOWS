@@ -1126,14 +1126,22 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
           <h4 className="text-base font-semibold text-slate-200">Hardware Items</h4>
           {series.hardwareItems.map(item => (
             <div key={item.id} className="bg-slate-900/50 p-3 rounded-md grid grid-cols-12 gap-2">
-              <div className="col-span-12"><Input id={`${idPrefix}hw-${item.id}-name`} name={`hw-${item.id}-name`} label="Name" value={item.name} onChange={e => onHardwareChange(item.id, 'name', e.target.value)} /></div>
+              <div className="col-span-12"><Input id={`${idPrefix}hw-${item.id}-name`} name={`hw-${item.id}-name`} label="Name" value={item.name} disabled={activeWindowType === WindowType.SLIDING} onChange={e => onHardwareChange(item.id, 'name', e.target.value)} /></div>
               <div className="col-span-4"><Input id={`${idPrefix}hw-${item.id}-qty`} name={`hw-${item.id}-qty`} label="Qty" type="number" value={item.qtyPerShutter} onChange={e => onHardwareChange(item.id, 'qtyPerShutter', e.target.value === '' ? '' : Number(e.target.value))} /></div>
               <div className="col-span-5"><Input id={`${idPrefix}hw-${item.id}-rate`} name={`hw-${item.id}-rate`} label="Rate" type="number" value={item.rate} onChange={e => onHardwareChange(item.id, 'rate', e.target.value === '' ? '' : Number(e.target.value))} /></div>
-              <div className="col-span-3 flex items-end"><Button variant="danger" onClick={() => onRemoveHardware(item.id)} className="p-2 h-10 w-full"><TrashIcon className="w-5 h-5"/></Button></div>
+              <div className="col-span-3 flex items-end">
+                {activeWindowType === WindowType.SLIDING ? (
+                  <Button variant="secondary" className="p-2 h-10 w-full" disabled>Locked</Button>
+                ) : (
+                  <Button variant="danger" onClick={() => onRemoveHardware(item.id)} className="p-2 h-10 w-full"><TrashIcon className="w-5 h-5"/></Button>
+                )}
+              </div>
               <div className="col-span-12"><Select id={`${idPrefix}hw-${item.id}-unit`} name={`hw-${item.id}-unit`} label="Unit" value={item.unit} onChange={e => onHardwareChange(item.id, 'unit', e.target.value as HardwareItem['unit'])}><option value="per_shutter_or_door">Per Shutter/Door</option><option value="per_window">Per Window</option></Select></div>
             </div>
           ))}
-          <Button variant="secondary" className="w-full" onClick={onAddHardware}><PlusIcon className="w-4 h-4 mr-2"/> Add Hardware Item</Button>
+          {activeWindowType !== WindowType.SLIDING && (
+            <Button variant="secondary" className="w-full" onClick={onAddHardware}><PlusIcon className="w-4 h-4 mr-2"/> Add Hardware Item</Button>
+          )}
         </div>
       </CollapsibleCard>
 

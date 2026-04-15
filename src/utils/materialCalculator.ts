@@ -10,7 +10,7 @@ const DEFAULT_STANDARD_LENGTH_MM = 16 * FEET_TO_MM; // 4876.8
  * First-Fit Decreasing bin packing algorithm.
  * Tries to fit a list of pieces into the minimum number of standard-length bars.
  */
-function packPieces(pieces: number[], standardLength: number): number {
+export function packPieces(pieces: number[], standardLength: number): number {
     if (pieces.length === 0) return 0;
     
     const sortedPieces = [...pieces].sort((a, b) => b - a);
@@ -118,6 +118,25 @@ function calculateUsage(config: WindowConfig): {
          }
     }
 
+    const getSegmentSizes = (total: number, dividers: number[]): number[] => {
+        if (total <= 0) return [];
+        if (!dividers || dividers.length === 0) return [total];
+        const sorted = [...dividers]
+            .map(v => Number(v))
+            .filter(v => Number.isFinite(v))
+            .sort((a, b) => a - b);
+        let prev = 0;
+        const out: number[] = [];
+        for (const d of sorted) {
+            const pos = d > 0 && d < 1 ? d * total : d;
+            const clamped = Math.max(0, Math.min(total, pos));
+            out.push(Math.max(0, clamped - prev));
+            prev = clamped;
+        }
+        out.push(Math.max(0, total - prev));
+        return out;
+    };
+
     if (config.windowType === WindowType.CORNER && config.leftConfig && config.rightConfig) {
         const leftConfig: WindowConfig = { ...config, ...config.leftConfig, width: config.leftWidth ?? 0, height: config.height ?? 0, windowType: config.leftConfig.windowType, fixedPanels: [] };
         const rightConfig: WindowConfig = { ...config, ...config.rightConfig, width: config.rightWidth ?? 0, height: config.height ?? 0, windowType: config.rightConfig.windowType, fixedPanels: [] };
@@ -182,8 +201,10 @@ function calculateUsage(config: WindowConfig): {
         case WindowType.SLIDING: {
             const { shutterConfig } = config;
             const interlock = Number(dims.shutterInterlock) || 0;
+            let fixedBoundaryCount = 0;
 
             if (shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
+                fixedBoundaryCount = 5;
                 const shutterW = (innerW + 3 * interlock) / 4;
                 for (let i = 0; i < 6; i++) {
                     addProfile('shutterTop', shutterW);
@@ -197,6 +218,7 @@ function calculateUsage(config: WindowConfig): {
                 addProfile('shutterHandle', innerH, innerH, innerH, innerH); // 4 handles
                 addProfile('shutterInterlock', innerH, innerH, innerH, innerH, innerH, innerH, innerH, innerH); // 8 interlocks
             } else if (shutterConfig === ShutterConfigType.FOUR_GLASS) {
+                fixedBoundaryCount = 3;
                 const meeting = Number(dims.shutterMeeting) || 0;
                 const shutterW = (innerW + (2 * interlock) + meeting) / 4;
                  const profiles = [ { l: Number(dims.shutterHandle), r: interlock }, { l: interlock, r: meeting }, { l: meeting, r: interlock }, { l: interlock, r: Number(dims.shutterHandle) } ];
@@ -208,6 +230,7 @@ function calculateUsage(config: WindowConfig): {
             } else {
                 const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
                 const numShutters = shutterConfig === ShutterConfigType.TWO_GLASS ? 2 : 3;
+                fixedBoundaryCount = Math.max(0, numShutters - 1);
                 const shutterDivider = hasMesh ? 2 : numShutters;
                 const shutterW = (innerW + (shutterDivider - 1) * interlock) / shutterDivider;
                 for (let i = 0; i < numShutters; i++) {
@@ -221,12 +244,128 @@ function calculateUsage(config: WindowConfig): {
                 addProfile('shutterHandle', innerH, innerH);
                 addProfile('shutterInterlock', ...Array((numShutters - 1) * 2).fill(innerH));
             }
+
+            // When top/bottom fixed panel exists in sliding, align mullions with shutter interlock boundaries.
+            const topFixMullionLen = topFix ? (topFix.size - frame - Number(dims.fixedFrame || 0)) : 0;
+            const bottomFixMullionLen = bottomFix ? (bottomFix.size - frame - Number(dims.fixedFrame || 0)) : 0;
+            if (topFix && topFixMullionLen > 0 && fixedBoundaryCount > 0) {
+                addProfile('mullion', ...Array(fixedBoundaryCount).fill(topFixMullionLen));
+            }
+            if (bottomFix && bottomFixMullionLen > 0 && fixedBoundaryCount > 0) {
+                addProfile('mullion', ...Array(fixedBoundaryCount).fill(bottomFixMullionLen));
+            }
             break;
         }
-        // ... other cases
+        case WindowType.CASEMENT: {
+            const colWidths = getSegmentSizes(innerW, config.verticalDividers || []);
+            const rowHeights = getSegmentSizes(innerH, config.horizontalDividers || []);
+
+            // Mullion on all internal dividers (vertical + horizontal)
+            if ((config.verticalDividers || []).length > 0) {
+                addProfile('mullion', ...Array(config.verticalDividers.length).fill(innerH));
+            }
+            if ((config.horizontalDividers || []).length > 0) {
+                addProfile('mullion', ...Array(config.horizontalDividers.length).fill(innerW));
+            }
+
+            const doorSet = new Set((config.doorPositions || []).map(p => `${p.row}-${p.col}`));
+            for (let r = 0; r < rowHeights.length; r++) {
+                for (let c = 0; c < colWidths.length; c++) {
+                    const cw = colWidths[c];
+                    const ch = rowHeights[r];
+                    if (cw <= 0 || ch <= 0) continue;
+                    const key = `${r}-${c}`;
+                    const isDoor = doorSet.has(key);
+                    if (isDoor) {
+                        // Door all side
+                        addProfile('casementShutter', cw, cw, ch, ch);
+                        addGlass(`casement-door-${r}-${c}`, cw - (2 * Number(dims.casementShutter || 0)), ch - (2 * Number(dims.casementShutter || 0)));
+                    } else {
+                        addGlass(`casement-fixed-${r}-${c}`, cw, ch);
+                    }
+                }
+            }
+            break;
+        }
+        case WindowType.VENTILATOR: {
+            const colWidths = getSegmentSizes(innerW, config.verticalDividers || []);
+            const rowHeights = getSegmentSizes(innerH, config.horizontalDividers || []);
+
+            // Mullion on all internal dividers
+            if ((config.verticalDividers || []).length > 0) {
+                addProfile('mullion', ...Array(config.verticalDividers.length).fill(innerH));
+            }
+            if ((config.horizontalDividers || []).length > 0) {
+                addProfile('mullion', ...Array(config.horizontalDividers.length).fill(innerW));
+            }
+
+            for (let r = 0; r < rowHeights.length; r++) {
+                for (let c = 0; c < colWidths.length; c++) {
+                    const cw = colWidths[c];
+                    const ch = rowHeights[r];
+                    if (cw <= 0 || ch <= 0) continue;
+                    const cell = config.ventilatorGrid?.[r]?.[c];
+                    const cellType = cell?.type || 'glass';
+                    if (cellType === 'door') {
+                        addProfile('casementShutter', cw, cw, ch, ch);
+                        addGlass(`vent-door-${r}-${c}`, cw - (2 * Number(dims.casementShutter || 0)), ch - (2 * Number(dims.casementShutter || 0)));
+                    } else if (cellType === 'louvers') {
+                        // Z-louvers: horizontal at every 70mm, profile 75x4 style weight from louverBlade
+                        const louverPitch = 70;
+                        const count = Math.max(1, Math.floor(ch / louverPitch));
+                        addProfile('louverBlade', ...Array(count).fill(cw));
+                    } else {
+                        addGlass(`vent-glass-${r}-${c}`, cw, ch);
+                    }
+                }
+            }
+            break;
+        }
+        case WindowType.GLASS_PARTITION: {
+            const panelCount = Math.max(1, config.partitionPanels?.count || 1);
+            const widths = (() => {
+                const explicit = (config.partitionPanels?.types || []).map((t) => Number(t.widthMm) || 0);
+                const sumExplicit = explicit.reduce((s, v) => s + (v > 0 ? v : 0), 0);
+                const flexCount = explicit.filter(v => v <= 0).length;
+                const rem = Math.max(0, innerW - sumExplicit);
+                const flexW = flexCount > 0 ? rem / flexCount : 0;
+                return Array.from({ length: panelCount }).map((_, i) => explicit[i] > 0 ? explicit[i] : flexW);
+            })();
+
+            // Vertical dividers/mullions between panels
+            if (panelCount > 1) {
+                addProfile('mullion', ...Array(panelCount - 1).fill(innerH));
+            }
+
+            addProfile('topTrack', innerW);
+            addProfile('bottomTrack', innerW);
+
+            for (let i = 0; i < panelCount; i++) {
+                const p = config.partitionPanels.types?.[i];
+                const type = p?.type || 'fixed';
+                const pw = widths[i] || 0;
+                if (pw <= 0 || innerH <= 0) continue;
+                if (type === 'fixed') {
+                    addGlass(`partition-fixed-${i}`, pw, innerH);
+                } else {
+                    // Door/openable/slider/fold panel outer all side
+                    addProfile('casementShutter', pw, pw, innerH, innerH);
+                    addGlass(`partition-open-${i}`, pw - (2 * Number(dims.casementShutter || 0)), innerH - (2 * Number(dims.casementShutter || 0)));
+                }
+            }
+            break;
+        }
     }
     
     return { profiles: profileUsage, glass: glassUsage, mesh: meshArea };
+}
+
+export function calculateUsageForConfig(config: WindowConfig): {
+    profiles: Map<keyof ProfileDimensions, number[]>,
+    glass: Map<string, number>,
+    mesh: number
+} {
+    return calculateUsage(config);
 }
 
 

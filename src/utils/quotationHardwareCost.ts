@@ -6,10 +6,18 @@ function calculateSideCost(
   hardwareItems: HardwareItem[]
 ): number {
   if (!config) return 0;
+  const hasFrictionStay = hardwareItems.some((item) => {
+    const name = item.name.toLowerCase();
+    return name.includes('friction stay') && (Number(item.qtyPerShutter) || 0) > 0;
+  });
 
   return hardwareItems.reduce((total, item) => {
     const qty = Number(item.qtyPerShutter) || 0;
     const itemRate = Number(item.rate) || 0;
+    const itemName = item.name.toLowerCase();
+    if (hasFrictionStay && (itemName.includes('butt hinge') || itemName.includes('door holder'))) {
+      return total;
+    }
     let panelCount = 0;
 
     if (item.unit === 'per_window') {
@@ -39,7 +47,7 @@ function calculateSideCost(
       } else if (config.windowType === WindowType.VENTILATOR) {
         const doorCells = config.ventilatorGrid.flat().filter((c) => c.type === 'door').length;
         const louverCells = config.ventilatorGrid.flat().filter((c) => c.type === 'louvers').length;
-        const name = item.name.toLowerCase();
+        const name = itemName;
         if (name.includes('louver')) {
           panelCount = louverCells;
         } else {
@@ -62,6 +70,14 @@ function calculateSideCost(
               case ShutterConfigType.FOUR_GLASS_TWO_MESH:
                 panelCount = 6;
                 break;
+            }
+            if (item.name.toLowerCase().includes('mesh lock')) {
+              panelCount =
+                config.shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH
+                  ? 2
+                  : config.shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH
+                    ? 1
+                    : 0;
             }
             break;
           case WindowType.CASEMENT:

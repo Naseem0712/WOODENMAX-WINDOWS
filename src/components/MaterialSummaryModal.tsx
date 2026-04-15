@@ -1,7 +1,9 @@
 import React, { useRef, useState } from 'react';
-import type { BOM, QuotationSettings } from '../types';
+import type { BOM, QuotationItem, QuotationSettings } from '../types';
+import { WindowType } from '../types';
 import { Button } from './ui/Button';
 import { bomPdfFilename, printDocumentTitleForBom } from '../utils/pdfFilename';
+import { getSlidingCuttingPlanPerWindow } from '../utils/slidingCuttingPlan';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { PrinterIcon } from './icons/PrinterIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
@@ -10,6 +12,7 @@ interface MaterialSummaryModalProps {
   isOpen: boolean;
   onClose: () => void;
   bom: BOM;
+  items: QuotationItem[];
   settings: QuotationSettings;
 }
 
@@ -19,7 +22,7 @@ const profileKeyToName = (key: string) => {
     return key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
 };
 
-export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOpen, onClose, bom, settings }) => {
+export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOpen, onClose, bom, items, settings }) => {
     const printContainerRef = useRef<HTMLDivElement>(null);
     const [isExporting, setIsExporting] = useState(false);
 
@@ -217,6 +220,85 @@ export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOp
                                     )}
                                 </div>
                             ))}
+
+                            {items.some((item) => item.config.windowType === WindowType.SLIDING) && (
+                              <div className="print-item">
+                                <h3 className="text-lg font-bold bg-gray-200 p-2 -mx-2">Sliding Cutting Plan (Per Window Cost Breakdown)</h3>
+                                <p className="text-[8pt] mt-2">
+                                  Formula follows cutting-plan style: all-side track, track clips by track count, glass shutter sections,
+                                  optional mesh sections, and slim/reinforcement interlock selection based on selected series.
+                                </p>
+
+                                {items
+                                  .filter((item) => item.config.windowType === WindowType.SLIDING)
+                                  .map((item) => {
+                                    const plan = getSlidingCuttingPlanPerWindow(item, settings.materialRates);
+                                    if (!plan) return null;
+                                    const qty = Number(item.quantity) || 0;
+                                    return (
+                                      <div key={item.id} className="mt-3">
+                                        <h4 className="font-bold text-sm">
+                                          {item.title} ({((Number(item.config.width) || 0) * FEET_PER_MM).toFixed(2)} ft x {((Number(item.config.height) || 0) * FEET_PER_MM).toFixed(2)} ft, qty {qty})
+                                        </h4>
+
+                                        <table className="w-full text-left text-[8pt] mt-1">
+                                          <thead className="bg-gray-100">
+                                            <tr className="border-b-2 border-black">
+                                              <th className="p-1">Section</th>
+                                              <th className="p-1 text-right">Cutting Plan</th>
+                                              <th className="p-1 text-right">Total Rft</th>
+                                              <th className="p-1 text-right">Powder Cost</th>
+                                              <th className="p-1 text-right">Aluminium Weight</th>
+                                              <th className="p-1 text-right">Aluminium Cost</th>
+                                              <th className="p-1 text-right">Line Total</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {plan.lines.map((line) => (
+                                              <tr key={`${item.id}-${line.label}`} className="border-b border-gray-300">
+                                                <td className="p-1 font-semibold">{line.label}</td>
+                                                <td className="p-1 text-right">{line.pieces} x {line.pieceLengthFt.toFixed(2)} ft</td>
+                                                <td className="p-1 text-right">{line.totalLengthFt.toFixed(2)}</td>
+                                                <td className="p-1 text-right">₹ {Math.round(line.powderCost).toLocaleString('en-IN')}</td>
+                                                <td className="p-1 text-right">{line.aluminiumWeightKg.toFixed(2)} kg</td>
+                                                <td className="p-1 text-right">₹ {Math.round(line.aluminiumCost).toLocaleString('en-IN')}</td>
+                                                <td className="p-1 text-right font-semibold">₹ {Math.round(line.totalCost).toLocaleString('en-IN')}</td>
+                                              </tr>
+                                            ))}
+                                            <tr className="border-b border-gray-300 bg-gray-50">
+                                              <td className="p-1 font-semibold">Glass Cost</td>
+                                              <td className="p-1 text-right">Rate ₹ {plan.totals.glassRatePerSqFt.toFixed(2)} / sq ft</td>
+                                              <td className="p-1 text-right">{plan.totals.glassAreaSqFt.toFixed(2)} sq ft</td>
+                                              <td className="p-1 text-right">-</td>
+                                              <td className="p-1 text-right">-</td>
+                                              <td className="p-1 text-right">-</td>
+                                              <td className="p-1 text-right font-semibold">₹ {Math.round(plan.totals.glassCost).toLocaleString('en-IN')}</td>
+                                            </tr>
+                                            <tr className="border-b-2 border-black bg-gray-100">
+                                              <td className="p-1 font-bold">Per Window Total</td>
+                                              <td className="p-1 text-right">-</td>
+                                              <td className="p-1 text-right font-bold">{plan.totals.totalLengthFt.toFixed(2)} rft</td>
+                                              <td className="p-1 text-right font-bold">₹ {Math.round(plan.totals.powderCost).toLocaleString('en-IN')}</td>
+                                              <td className="p-1 text-right font-bold">{plan.totals.aluminiumWeightKg.toFixed(2)} kg</td>
+                                              <td className="p-1 text-right font-bold">₹ {Math.round(plan.totals.aluminiumCost).toLocaleString('en-IN')}</td>
+                                              <td className="p-1 text-right font-bold">₹ {Math.round(plan.totals.totalCost).toLocaleString('en-IN')}</td>
+                                            </tr>
+                                            <tr className="bg-gray-100">
+                                              <td className="p-1 font-bold">Line Qty Total</td>
+                                              <td className="p-1 text-right">{qty} window(s)</td>
+                                              <td className="p-1 text-right font-bold">{(plan.totals.totalLengthFt * qty).toFixed(2)} rft</td>
+                                              <td className="p-1 text-right font-bold">₹ {Math.round(plan.totals.powderCost * qty).toLocaleString('en-IN')}</td>
+                                              <td className="p-1 text-right font-bold">{(plan.totals.aluminiumWeightKg * qty).toFixed(2)} kg</td>
+                                              <td className="p-1 text-right font-bold">₹ {Math.round(plan.totals.aluminiumCost * qty).toLocaleString('en-IN')}</td>
+                                              <td className="p-1 text-right font-bold">₹ {Math.round(plan.totals.totalCost * qty).toLocaleString('en-IN')}</td>
+                                            </tr>
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            )}
                         </div>
                     </div>
                 </div>

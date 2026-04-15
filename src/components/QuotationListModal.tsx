@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import type { QuotationItem, QuotationSettings, BOM } from '../types';
-import { WindowType } from '../types';
+import { ShutterConfigType, WindowType } from '../types';
 import { Button } from './ui/Button';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { Input } from './ui/Input';
@@ -11,6 +11,7 @@ import { PrintPreview } from './PrintPreview';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { generateBillOfMaterials } from '../utils/materialCalculator';
 import { MaterialSummaryModal } from './MaterialSummaryModal';
+import { calculateMaterialCostSummary } from '../utils/materialCosting';
 import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
 import { PencilIcon } from './icons/PencilIcon';
 import { TrashIcon } from './icons/TrashIcon';
@@ -56,6 +57,7 @@ const WINDOW_TYPE_FILTER_LABEL: Record<WindowType, string> = {
   [WindowType.MIRROR]: 'Mirror',
   [WindowType.LOUVERS]: 'Louvers',
 };
+const FEET_PER_MM = 0.00328084;
 
 export const QuotationListModal: React.FC<QuotationListModalProps> = ({
   isOpen,
@@ -81,6 +83,51 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
     if (typeFilter === 'all') return items;
     return items.filter((i) => i.config.windowType === typeFilter);
   }, [items, typeFilter]);
+  const makingChargePerSqFt = Number(settings.materialRates.makingChargePerSqFt) || 120;
+  const materialCostSummary = useMemo(
+    () => calculateMaterialCostSummary(items, settings.materialRates, makingChargePerSqFt),
+    [items, settings.materialRates]
+  );
+  const rateUsage = useMemo(() => {
+    const source = visibleItems.length > 0 ? visibleItems : items;
+    const glassClear = new Set<string>();
+    const glassLaminated = new Set<string>();
+    const glassDgu = new Set<string>();
+    let usesSliding = false;
+    let usesMesh = false;
+    let usesSlimInterlock = false;
+
+    for (const item of source) {
+      const config = item.config;
+      if (config.windowType === WindowType.SLIDING) {
+        usesSliding = true;
+        if (config.shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH || config.shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
+          usesMesh = true;
+        }
+        const isReinf = /reinf|reinforcement/i.test(`${config.series.name} ${config.series.id}`);
+        if (!isReinf) usesSlimInterlock = true;
+      }
+
+      if (config.glassSpecialType === 'laminated') {
+        const key = `${Number(config.laminatedGlassConfig?.glass1Thickness) || 0}+${Number(config.laminatedGlassConfig?.glass2Thickness) || 0}`;
+        glassLaminated.add(key);
+      } else if (config.glassSpecialType === 'dgu') {
+        const key = `${Number(config.dguGlassConfig?.glass1Thickness) || 0}+${Number(config.dguGlassConfig?.airGap) || 0}+${Number(config.dguGlassConfig?.glass2Thickness) || 0}`;
+        glassDgu.add(key);
+      } else {
+        glassClear.add(String(Number(config.glassThickness) || 0));
+      }
+    }
+
+    return {
+      usesSliding,
+      usesMesh,
+      usesSlimInterlock,
+      glassClear,
+      glassLaminated,
+      glassDgu,
+    };
+  }, [visibleItems, items]);
 
   const toggleSelect = useCallback(
     (id: string) => {
@@ -135,6 +182,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
         isOpen={isMaterialSummaryOpen} 
         onClose={() => setIsMaterialSummaryOpen(false)}
         bom={bom}
+        items={items}
         settings={settings}
       />
   }
@@ -151,6 +199,40 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
         }
     });
   }
+
+  const handleMaterialRateChange = (
+    group: 'powderCoatingPerRft' | 'clear' | 'laminated' | 'dgu',
+    key: string,
+    value: number
+  ) => {
+    if (group === 'powderCoatingPerRft') {
+      setSettings({
+        ...settings,
+        materialRates: {
+          ...settings.materialRates,
+          powderCoatingPerRft: {
+            ...settings.materialRates.powderCoatingPerRft,
+            [key]: value,
+          },
+        },
+      });
+      return;
+    }
+
+    setSettings({
+      ...settings,
+      materialRates: {
+        ...settings.materialRates,
+        glassPerSqFt: {
+          ...settings.materialRates.glassPerSqFt,
+          [group]: {
+            ...settings.materialRates.glassPerSqFt[group],
+            [key]: value,
+          },
+        },
+      },
+    });
+  };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -207,6 +289,44 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                   },
                   financials: { ...settings.financials, ...data.settings.financials },
                   bankDetails: { ...settings.bankDetails, ...data.settings.bankDetails },
+                  materialRates: {
+                    ...settings.materialRates,
+                    ...data.settings.materialRates,
+                    makingChargePerSqFt: Number(data.settings.materialRates?.makingChargePerSqFt) || settings.materialRates.makingChargePerSqFt,
+                    meshPerSqFt: Number(data.settings.materialRates?.meshPerSqFt) || settings.materialRates.meshPerSqFt,
+                    meshShutterOptions: {
+                      ...settings.materialRates.meshShutterOptions,
+                      ...data.settings.materialRates?.meshShutterOptions,
+                      separateSections: Boolean(data.settings.materialRates?.meshShutterOptions?.separateSections),
+                    },
+                    wastageCartagePerSqFt: Number(data.settings.materialRates?.wastageCartagePerSqFt) || settings.materialRates.wastageCartagePerSqFt || 0,
+                    profit: {
+                      ...settings.materialRates.profit,
+                      ...data.settings.materialRates?.profit,
+                      mode: data.settings.materialRates?.profit?.mode === 'per_sqft' ? 'per_sqft' : (settings.materialRates.profit.mode || 'percentage'),
+                      value: Number(data.settings.materialRates?.profit?.value) || settings.materialRates.profit.value,
+                    },
+                    powderCoatingPerRft: {
+                      ...settings.materialRates.powderCoatingPerRft,
+                      ...data.settings.materialRates?.powderCoatingPerRft,
+                    },
+                    glassPerSqFt: {
+                      ...settings.materialRates.glassPerSqFt,
+                      ...data.settings.materialRates?.glassPerSqFt,
+                      clear: {
+                        ...settings.materialRates.glassPerSqFt.clear,
+                        ...data.settings.materialRates?.glassPerSqFt?.clear,
+                      },
+                      laminated: {
+                        ...settings.materialRates.glassPerSqFt.laminated,
+                        ...data.settings.materialRates?.glassPerSqFt?.laminated,
+                      },
+                      dgu: {
+                        ...settings.materialRates.glassPerSqFt.dgu,
+                        ...data.settings.materialRates?.glassPerSqFt?.dgu,
+                      },
+                    },
+                  },
                 };
                 setSettings(importedSettings);
                 setItems(data.items);
@@ -233,6 +353,132 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
       setIsMaterialSummaryOpen(true);
   }
 
+  const handleExportStockNeed = () => {
+    if (items.length === 0) {
+      alert("Please add items before exporting stock need.");
+      return;
+    }
+    const bomData = generateBillOfMaterials(items);
+    const csvRows: string[][] = [];
+    csvRows.push(['Party Name', settings.customer.name || '']);
+    csvRows.push(['Quotation Title', settings.title || '']);
+    csvRows.push(['Date', new Date().toISOString().slice(0, 10)]);
+    csvRows.push([]);
+    csvRows.push([
+      'Category',
+      'Series',
+      'Item',
+      'Unit',
+      'Purchase Qty',
+      'Used Length (ft)',
+      'Purchase Length (ft)',
+      'Wastage (ft)',
+      'Used Weight (kg)',
+      'Purchase Weight (kg)',
+      'Wastage (kg)',
+      'Area (sq ft)',
+      'Cutting Plan (ft pieces)',
+    ]);
+
+    bomData.forEach((seriesData) => {
+      seriesData.profiles.forEach((profile) => {
+        const usedLengthFt = profile.totalLength * FEET_PER_MM;
+        const purchaseLengthFt = profile.requiredBars * profile.standardLength * FEET_PER_MM;
+        const wastageFt = Math.max(0, purchaseLengthFt - usedLengthFt);
+        const usedWeight = profile.totalWeight || 0;
+        const purchaseWeight = ((profile.requiredBars * profile.standardLength) / 1000) * (profile.weightPerMeter || 0);
+        const wastageWeight = Math.max(0, purchaseWeight - usedWeight);
+        const piecesFt = profile.pieces.map((p) => (p * FEET_PER_MM).toFixed(2));
+        const cuttingPlan = piecesFt.length > 40
+          ? `${piecesFt.slice(0, 40).join(' | ')} | ... (+${piecesFt.length - 40} pcs)`
+          : piecesFt.join(' | ');
+        csvRows.push([
+          'Profile',
+          seriesData.seriesName,
+          profile.profileKey,
+          'ft / kg',
+          String(profile.requiredBars),
+          usedLengthFt.toFixed(2),
+          purchaseLengthFt.toFixed(2),
+          wastageFt.toFixed(2),
+          usedWeight.toFixed(2),
+          purchaseWeight.toFixed(2),
+          wastageWeight.toFixed(2),
+          '',
+          cuttingPlan,
+        ]);
+      });
+
+      seriesData.glass.forEach((g) => {
+        csvRows.push([
+          'Glass',
+          seriesData.seriesName,
+          g.description,
+          'sq ft',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          g.totalAreaSqFt.toFixed(2),
+          '',
+        ]);
+      });
+
+      if (seriesData.mesh) {
+        csvRows.push([
+          'Mesh',
+          seriesData.seriesName,
+          'Mesh Area',
+          'sq ft',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          seriesData.mesh.totalAreaSqFt.toFixed(2),
+          '',
+        ]);
+      }
+
+      seriesData.hardware.forEach((hw) => {
+        csvRows.push([
+          'Hardware',
+          seriesData.seriesName,
+          hw.name,
+          'pcs',
+          String(hw.totalQuantity),
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+        ]);
+      });
+    });
+
+    const toCsvCell = (value: string) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const csvText = csvRows.map((row) => row.map(toCsvCell).join(',')).join('\n');
+    const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const date = new Date().toISOString().slice(0, 10);
+    const customer = sanitizeFilenameSegment(settings.customer.name, 'Party');
+    link.download = `Stock-Need-${customer}-${date}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const subTotal = items.reduce((total, item) => {
     const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
     const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
@@ -245,6 +491,8 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
   const discountAmount = settings.financials.discountType === 'percentage' 
     ? subTotal * (Number(settings.financials.discount) / 100) 
     : Number(settings.financials.discount);
+  const profitBeforeDiscount = materialCostSummary.totals.profitCost;
+  const profitAfterDiscount = profitBeforeDiscount - discountAmount;
   
   const totalAfterDiscount = subTotal - discountAmount;
   const gstAmount = totalAfterDiscount * (Number(settings.financials.gstPercentage) / 100);
@@ -265,6 +513,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
           <h2 className="text-2xl font-bold text-white">Quotation Generator</h2>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <Button onClick={handleGenerateBom} variant="secondary"><ClipboardDocumentListIcon className="w-5 h-5 mr-2"/> Export Materials (BOM)</Button>
+            <Button onClick={handleExportStockNeed} variant="secondary"><ClipboardDocumentListIcon className="w-5 h-5 mr-2"/> Export Stock Need</Button>
             <Button onClick={handleExport} variant="secondary"><DownloadIcon className="w-5 h-5 mr-2"/> Export JSON</Button>
             <Button onClick={() => importQuotationInputRef.current?.click()} variant="secondary"><UploadIcon className="w-5 h-5 mr-2"/> Import JSON</Button>
             <input type="file" ref={importQuotationInputRef} onChange={handleImport} className="hidden" accept="application/json" />
@@ -368,6 +617,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                               const baseCost = totalArea * item.rate;
                               const totalHardwareCost = item.hardwareCost * item.quantity;
                               const totalCost = baseCost + totalHardwareCost;
+                              const materialCost = materialCostSummary.byItemId[item.id];
                               const globalIndex = items.findIndex((i) => i.id === item.id) + 1;
                               const wt = item.config.windowType;
 
@@ -390,6 +640,13 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                                               {' · '}
                                               {item.config.width}mm x {item.config.height}mm  |  Qty: {item.quantity}  |  Rate: ₹{Math.round(item.rate)}/{item.areaType}
                                           </p>
+                                          {materialCost && (
+                                            <p className="text-xs text-amber-300 mt-1">
+                                              Basic rate (material calc): ₹{Math.round(materialCost.basicRatePerSqFt).toLocaleString('en-IN')}/sq ft
+                                              {' · '}Hardware: ₹{Math.round(materialCost.hardwareCost).toLocaleString('en-IN')}
+                                              {' · '}Total: ₹{Math.round(materialCost.totalCost).toLocaleString('en-IN')}
+                                            </p>
+                                          )}
                                       </div>
                                       <div className="flex items-center gap-4 text-xs whitespace-nowrap">
                                           <div className="text-right">
@@ -424,7 +681,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
               <div className="grid md:grid-cols-2 gap-4">
                   <Section title="Details & Terms">
                       <TextArea id="modal-quotation-description" name="modal-quotation-description" label="Description" value={settings.description} onChange={e => setSettings({...settings, description: e.target.value})} maxLength={1500} />
-                      <p className="text-[11px] text-slate-400 -mt-2">Use **double stars** to make text bold in preview/print.</p>
+                      <p className="text-[11px] text-slate-400 -mt-2">Use **text** or *text* to make text bold in preview/print.</p>
                       <TextArea id="modal-quotation-terms" name="modal-quotation-terms" label="Terms & Conditions" value={settings.terms} onChange={e => setSettings({...settings, terms: autoContinueTermsSerial(e.target.value)})} />
                       <p className="text-[11px] text-slate-400 -mt-2">Use **bold** text and start first line with `a`/`1`; next lines auto-continue serials.</p>
                   </Section>
@@ -447,9 +704,285 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                       </div>
                   </Section>
               </div>
+
+              <Section title="Material Rates (Editable Anytime)">
+                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <Input
+                    id="modal-rate-making-charge"
+                    name="modal-rate-making-charge"
+                    label="Making Charge"
+                    type="number"
+                    inputMode="decimal"
+                    value={settings.materialRates.makingChargePerSqFt}
+                    onChange={(e) =>
+                      handleSettingsChange(
+                        'materialRates',
+                        'makingChargePerSqFt',
+                        e.target.value === '' ? 0 : Number(e.target.value)
+                      )
+                    }
+                    unit="₹ / sq ft"
+                  />
+                  <Select
+                    id="modal-rate-profit-mode"
+                    name="modal-rate-profit-mode"
+                    label="Profit Mode"
+                    value={settings.materialRates.profit.mode}
+                    onChange={(e) =>
+                      handleSettingsChange('materialRates', 'profit', {
+                        ...settings.materialRates.profit,
+                        mode: e.target.value as 'percentage' | 'per_sqft',
+                      })
+                    }
+                  >
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="per_sqft">Per Sq Ft (₹)</option>
+                  </Select>
+                  <Input
+                    id="modal-rate-profit-value"
+                    name="modal-rate-profit-value"
+                    label="Profit Value"
+                    type="number"
+                    inputMode="decimal"
+                    value={settings.materialRates.profit.value}
+                    onChange={(e) =>
+                      handleSettingsChange(
+                        'materialRates',
+                        'profit',
+                        { ...settings.materialRates.profit, value: e.target.value === '' ? 0 : Number(e.target.value) }
+                      )
+                    }
+                    unit={settings.materialRates.profit.mode === 'percentage' ? '%' : '₹ / sq ft'}
+                  />
+                  <Input
+                    id="modal-rate-wastage-cartage"
+                    name="modal-rate-wastage-cartage"
+                    label="Wastage/Cartage (hidden)"
+                    type="number"
+                    inputMode="decimal"
+                    value={settings.materialRates.wastageCartagePerSqFt}
+                    onChange={(e) =>
+                      handleSettingsChange(
+                        'materialRates',
+                        'wastageCartagePerSqFt',
+                        e.target.value === '' ? 0 : Number(e.target.value)
+                      )
+                    }
+                    unit="₹ / sq ft"
+                  />
+                  <Input
+                    id="modal-rate-aluminium-profile"
+                    name="modal-rate-aluminium-profile"
+                    label="Aluminium Profile"
+                    type="number"
+                    inputMode="decimal"
+                    value={settings.materialRates.aluminiumProfilePerKg}
+                    onChange={(e) =>
+                      handleSettingsChange(
+                        'materialRates',
+                        'aluminiumProfilePerKg',
+                        e.target.value === '' ? 0 : Number(e.target.value)
+                      )
+                    }
+                    unit="₹ / kg"
+                  />
+                  {rateUsage.usesSliding && (
+                    <Input
+                      id="modal-rate-powder-track"
+                      name="modal-rate-powder-track"
+                      label="Powder Coating Track"
+                      type="number"
+                      inputMode="decimal"
+                      value={settings.materialRates.powderCoatingPerRft.track}
+                      onChange={(e) =>
+                        handleMaterialRateChange('powderCoatingPerRft', 'track', e.target.value === '' ? 0 : Number(e.target.value))
+                      }
+                      unit="₹ / rft"
+                    />
+                  )}
+                  {rateUsage.usesSliding && (
+                    <Input
+                      id="modal-rate-powder-shutter-sections"
+                      name="modal-rate-powder-shutter-sections"
+                      label="Powder Coating Shutter/Top/Bottom/Reinf."
+                      type="number"
+                      inputMode="decimal"
+                      value={settings.materialRates.powderCoatingPerRft.shutterSections}
+                      onChange={(e) =>
+                        handleMaterialRateChange('powderCoatingPerRft', 'shutterSections', e.target.value === '' ? 0 : Number(e.target.value))
+                      }
+                      unit="₹ / rft"
+                    />
+                  )}
+                  {rateUsage.usesSlimInterlock && (
+                    <Input
+                      id="modal-rate-powder-slim-interlock"
+                      name="modal-rate-powder-slim-interlock"
+                      label="Powder Coating Slim Interlock"
+                      type="number"
+                      inputMode="decimal"
+                      value={settings.materialRates.powderCoatingPerRft.slimInterlock}
+                      onChange={(e) =>
+                        handleMaterialRateChange('powderCoatingPerRft', 'slimInterlock', e.target.value === '' ? 0 : Number(e.target.value))
+                      }
+                      unit="₹ / rft"
+                    />
+                  )}
+                  {rateUsage.usesMesh && (
+                    <Input
+                      id="modal-rate-mesh"
+                      name="modal-rate-mesh"
+                      label="Mesh Rate (W/2 x H)"
+                      type="number"
+                      inputMode="decimal"
+                      value={settings.materialRates.meshPerSqFt}
+                      onChange={(e) =>
+                        handleSettingsChange(
+                          'materialRates',
+                          'meshPerSqFt',
+                          e.target.value === '' ? 0 : Number(e.target.value)
+                        )
+                      }
+                      unit="₹ / sq ft"
+                    />
+                  )}
+                </div>
+
+                {rateUsage.usesMesh && (
+                  <details className="rounded-md border border-slate-600 bg-slate-900/40 p-3">
+                    <summary className="cursor-pointer text-xs font-semibold text-slate-300">Hidden Mesh Options</summary>
+                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3 pt-3">
+                      <label className="flex items-center space-x-2 cursor-pointer pt-2">
+                        <input
+                          type="checkbox"
+                          checked={settings.materialRates.meshShutterOptions.separateSections}
+                          onChange={(e) =>
+                            handleSettingsChange('materialRates', 'meshShutterOptions', {
+                              ...settings.materialRates.meshShutterOptions,
+                              separateSections: e.target.checked,
+                            })
+                          }
+                          className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="text-sm text-slate-200">Mesh shutter sections separate</span>
+                      </label>
+                      <Input
+                        id="modal-rate-mesh-clip-per-shutter"
+                        name="modal-rate-mesh-clip-per-shutter"
+                        label="Mesh Clip per Mesh Shutter"
+                        type="number"
+                        inputMode="decimal"
+                        value={settings.materialRates.meshShutterOptions.meshClipPerMeshShutter}
+                        onChange={(e) =>
+                          handleSettingsChange('materialRates', 'meshShutterOptions', {
+                            ...settings.materialRates.meshShutterOptions,
+                            meshClipPerMeshShutter: e.target.value === '' ? 0 : Number(e.target.value),
+                          })
+                        }
+                      />
+                      <Input
+                        id="modal-rate-mesh-clip-length"
+                        name="modal-rate-mesh-clip-length"
+                        label="Mesh Clip Length"
+                        type="number"
+                        inputMode="decimal"
+                        value={settings.materialRates.meshShutterOptions.meshClipLengthFt}
+                        onChange={(e) =>
+                          handleSettingsChange('materialRates', 'meshShutterOptions', {
+                            ...settings.materialRates.meshShutterOptions,
+                            meshClipLengthFt: e.target.value === '' ? 0 : Number(e.target.value),
+                          })
+                        }
+                        unit="ft"
+                      />
+                      <Input
+                        id="modal-rate-mesh-clip-weight"
+                        name="modal-rate-mesh-clip-weight"
+                        label="Mesh Clip Weight"
+                        type="number"
+                        inputMode="decimal"
+                        value={settings.materialRates.meshShutterOptions.meshClipWeightKgPerPc}
+                        onChange={(e) =>
+                          handleSettingsChange('materialRates', 'meshShutterOptions', {
+                            ...settings.materialRates.meshShutterOptions,
+                            meshClipWeightKgPerPc: e.target.value === '' ? 0 : Number(e.target.value),
+                          })
+                        }
+                        unit="kg / pc"
+                      />
+                      <Input
+                        id="modal-rate-mesh-clip-powder"
+                        name="modal-rate-mesh-clip-powder"
+                        label="Mesh Clip Powder Rate"
+                        type="number"
+                        inputMode="decimal"
+                        value={settings.materialRates.meshShutterOptions.meshClipPowderRatePerRft}
+                        onChange={(e) =>
+                          handleSettingsChange('materialRates', 'meshShutterOptions', {
+                            ...settings.materialRates.meshShutterOptions,
+                            meshClipPowderRatePerRft: e.target.value === '' ? 0 : Number(e.target.value),
+                          })
+                        }
+                        unit="₹ / rft"
+                      />
+                    </div>
+                  </details>
+                )}
+
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
+                  {rateUsage.glassClear.has('5') && <Input id="modal-rate-glass-clear-5" name="modal-rate-glass-clear-5" label="Glass Clear 5mm" type="number" inputMode="decimal" value={settings.materialRates.glassPerSqFt.clear['5']} onChange={(e) => handleMaterialRateChange('clear', '5', e.target.value === '' ? 0 : Number(e.target.value))} unit="₹ / sq ft" />}
+                  {rateUsage.glassClear.has('6') && <Input id="modal-rate-glass-clear-6" name="modal-rate-glass-clear-6" label="Glass Clear 6mm" type="number" inputMode="decimal" value={settings.materialRates.glassPerSqFt.clear['6']} onChange={(e) => handleMaterialRateChange('clear', '6', e.target.value === '' ? 0 : Number(e.target.value))} unit="₹ / sq ft" />}
+                  {rateUsage.glassClear.has('8') && <Input id="modal-rate-glass-clear-8" name="modal-rate-glass-clear-8" label="Glass Clear 8mm" type="number" inputMode="decimal" value={settings.materialRates.glassPerSqFt.clear['8']} onChange={(e) => handleMaterialRateChange('clear', '8', e.target.value === '' ? 0 : Number(e.target.value))} unit="₹ / sq ft" />}
+                  {rateUsage.glassClear.has('10') && <Input id="modal-rate-glass-clear-10" name="modal-rate-glass-clear-10" label="Glass Clear 10mm" type="number" inputMode="decimal" value={settings.materialRates.glassPerSqFt.clear['10']} onChange={(e) => handleMaterialRateChange('clear', '10', e.target.value === '' ? 0 : Number(e.target.value))} unit="₹ / sq ft" />}
+                  {rateUsage.glassClear.has('12') && <Input id="modal-rate-glass-clear-12" name="modal-rate-glass-clear-12" label="Glass Clear 12mm" type="number" inputMode="decimal" value={settings.materialRates.glassPerSqFt.clear['12']} onChange={(e) => handleMaterialRateChange('clear', '12', e.target.value === '' ? 0 : Number(e.target.value))} unit="₹ / sq ft" />}
+                  {rateUsage.glassLaminated.has('5+5') && <Input id="modal-rate-glass-lam-55" name="modal-rate-glass-lam-55" label="Glass 5+5mm Laminated" type="number" inputMode="decimal" value={settings.materialRates.glassPerSqFt.laminated['5+5']} onChange={(e) => handleMaterialRateChange('laminated', '5+5', e.target.value === '' ? 0 : Number(e.target.value))} unit="₹ / sq ft" />}
+                  {rateUsage.glassLaminated.has('6+6') && <Input id="modal-rate-glass-lam-66" name="modal-rate-glass-lam-66" label="Glass 6+6mm Laminated" type="number" inputMode="decimal" value={settings.materialRates.glassPerSqFt.laminated['6+6']} onChange={(e) => handleMaterialRateChange('laminated', '6+6', e.target.value === '' ? 0 : Number(e.target.value))} unit="₹ / sq ft" />}
+                  {rateUsage.glassDgu.has('6+12+6') && <Input id="modal-rate-glass-dgu-6126" name="modal-rate-glass-dgu-6126" label="Glass 6+12+6mm DGU" type="number" inputMode="decimal" value={settings.materialRates.glassPerSqFt.dgu['6+12+6']} onChange={(e) => handleMaterialRateChange('dgu', '6+12+6', e.target.value === '' ? 0 : Number(e.target.value))} unit="₹ / sq ft" />}
+                  {rateUsage.glassDgu.has('5+12+5') && <Input id="modal-rate-glass-dgu-5125" name="modal-rate-glass-dgu-5125" label="Glass 5+12+5mm DGU" type="number" inputMode="decimal" value={settings.materialRates.glassPerSqFt.dgu['5+12+5']} onChange={(e) => handleMaterialRateChange('dgu', '5+12+5', e.target.value === '' ? 0 : Number(e.target.value))} unit="₹ / sq ft" />}
+                </div>
+
+              </Section>
             </div>
             
             <div className="mt-6 p-4 bg-slate-900 border-t border-slate-700 flex flex-wrap justify-end items-center gap-4 rounded-b-lg -mx-6 -mb-6">
+                <div className="text-right text-sm">
+                    <span className="text-amber-300">Material Total (incl. making @ ₹{makingChargePerSqFt}/sq ft):</span>
+                    <span className="font-semibold text-amber-200 ml-2">₹{Math.round(materialCostSummary.totals.totalCost).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="text-right text-sm">
+                    <span className="text-amber-300">Avg Basic Rate:</span>
+                    <span className="font-semibold text-amber-200 ml-2">₹{Math.round(materialCostSummary.totals.basicRatePerSqFt).toLocaleString('en-IN')}/sq ft</span>
+                </div>
+                <div className="text-right text-sm">
+                    <span className="text-amber-300">Making Amount:</span>
+                    <span className="font-semibold text-amber-200 ml-2">₹{Math.round(materialCostSummary.totals.makingCost).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="text-right text-sm">
+                    <span className="text-amber-300">Profit (After Discount):</span>
+                    <span className={`font-semibold ml-2 ${profitAfterDiscount >= 0 ? 'text-amber-200' : 'text-red-300'}`}>
+                      ₹{Math.round(profitAfterDiscount).toLocaleString('en-IN')}
+                    </span>
+                </div>
+                <div className="text-right text-sm">
+                    <span className="text-amber-300">Used vs Purchased (rft):</span>
+                    <span className="font-semibold text-amber-200 ml-2">
+                      {materialCostSummary.totals.usedLengthFt.toFixed(2)} / {materialCostSummary.totals.purchasedLengthFt.toFixed(2)}
+                    </span>
+                </div>
+                <div className="text-right text-sm">
+                    <span className="text-amber-300">Wastage:</span>
+                    <span className="font-semibold text-amber-200 ml-2">{materialCostSummary.totals.wastageLengthFt.toFixed(2)} rft</span>
+                </div>
+                <div className="text-right text-sm">
+                    <span className="text-amber-300">Used vs Purchased (kg):</span>
+                    <span className="font-semibold text-amber-200 ml-2">
+                      {materialCostSummary.totals.usedWeightKg.toFixed(2)} / {materialCostSummary.totals.purchasedWeightKg.toFixed(2)}
+                    </span>
+                </div>
+                <div className="text-right text-sm">
+                    <span className="text-amber-300">Wastage (kg):</span>
+                    <span className="font-semibold text-amber-200 ml-2">{materialCostSummary.totals.wastageWeightKg.toFixed(2)} kg</span>
+                </div>
                 <div className="text-right text-sm">
                     <span className="text-slate-300">Sub Total:</span>
                     <span className="font-semibold text-white ml-2">₹{Math.round(subTotal).toLocaleString('en-IN')}</span>

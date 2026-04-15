@@ -47,6 +47,10 @@ export function autoContinueTermsSerial(value: string): string {
       continue;
     }
     const content = currentLine.replace(serialPrefix, '').trim();
+    if (!content) {
+      updated[i] = '';
+      continue;
+    }
     const nextToken = isNumeric ? String(serial) : numberToAlpha(serial);
     updated[i] = `${nextToken}${delimiter} ${content}`;
     serial += 1;
