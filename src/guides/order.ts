@@ -10,5 +10,6 @@ export const guideOrder: string[] = [
     'corner',
     'mirror',
     'georgian_bars',
+    'embed_api',
     'qna'
 ];

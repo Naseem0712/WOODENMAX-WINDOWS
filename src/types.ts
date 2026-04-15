@@ -316,11 +316,15 @@ export interface QuotationSettings {
     address: string;
     email: string;
     website: string;
+    gstNumber: string;
   };
   customer: {
     name: string;
     address: string;
     contactPerson: string;
+    email: string;
+    website: string;
+    gstNumber: string;
     architectName?: string;
   };
   financials: {

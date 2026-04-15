@@ -255,6 +255,43 @@ export const guides: Record<string, GuideContent> = {
             </dl>
         `
     },
+    'embed_api': {
+        title: '🔗 Embed, API Links & Ads',
+        html: `
+            <h2>Use WoodenMax in your own website, landing page or social campaigns</h2>
+            <p>You can publish direct feature links or embed the live designer in an iframe. This helps users interact with <strong>Sliding, Casement, Ventilator, Partitions, Louvers, Corner, Mirror</strong> directly from your page/post.</p>
+
+            <h3>1) Direct feature links</h3>
+            <ul>
+                <li><a href="/design/sliding" target="_blank" rel="noopener noreferrer">Sliding</a></li>
+                <li><a href="/design/casement" target="_blank" rel="noopener noreferrer">Casement</a></li>
+                <li><a href="/design/ventilator" target="_blank" rel="noopener noreferrer">Ventilator</a></li>
+                <li><a href="/design/glass_partition" target="_blank" rel="noopener noreferrer">Glass Partition</a></li>
+                <li><a href="/design/louvers" target="_blank" rel="noopener noreferrer">Louvers</a></li>
+                <li><a href="/design/corner" target="_blank" rel="noopener noreferrer">Corner</a></li>
+                <li><a href="/design/mirror" target="_blank" rel="noopener noreferrer">Mirror</a></li>
+            </ul>
+
+            <h3>2) API-style query parameters</h3>
+            <p>Use URL query params to preload live configuration:</p>
+            <pre>/design/sliding?type=sliding&amp;width=1800&amp;height=1200&amp;title=Campaign%20Demo&amp;qty=1&amp;rate=650&amp;area=sqft</pre>
+            <p><strong>Supported params:</strong> <code>type</code>, <code>width</code>, <code>height</code>, <code>title</code>, <code>qty</code>, <code>rate</code>, <code>area</code> (<code>sqft</code> or <code>sqm</code>), <code>embed=1</code>.</p>
+
+            <h3>3) Embed in your site (iframe)</h3>
+            <p>For ad landing pages or partner websites, use <code>embed=1</code> to show a cleaner in-page experience:</p>
+            <pre>&lt;iframe
+  src="https://window.woodenmax.in/design/sliding?embed=1&amp;type=sliding&amp;width=1800&amp;height=1200&amp;qty=1&amp;rate=650&amp;area=sqft"
+  width="100%"
+  height="820"
+  style="border:0;border-radius:12px;"
+  loading="lazy"
+  referrerpolicy="strict-origin-when-cross-origin"&gt;
+&lt;/iframe&gt;</pre>
+
+            <h3>4) Use in social media ads</h3>
+            <p>Create campaign-specific links by changing <code>title</code>, <code>rate</code>, and size params. Users can open the link and instantly start using the full designer flow.</p>
+        `
+    },
     'qna': {
         title: 'Q&A and FAQ',
         html: `

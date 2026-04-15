@@ -389,8 +389,8 @@ const DEFAULT_LOUVERS_SERIES: ProfileSeries = {
 };
 
 const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
-    company: { logo: '/logo.jpg', name: 'WoodenMax', address: '123 Wood Lane, Timber Town', email: 'info@woodenmax.com', website: 'www.woodenmax.in' },
-    customer: { name: '', address: '', contactPerson: '', architectName: '' },
+    company: { logo: '/logo.jpg', name: 'WoodenMax', address: '123 Wood Lane, Timber Town', email: 'info@woodenmax.com', website: 'www.woodenmax.in', gstNumber: '' },
+    customer: { name: '', address: '', contactPerson: '', email: '', website: '', gstNumber: '', architectName: '' },
     financials: { gstPercentage: 18, discount: 0, discountType: 'percentage' },
     bankDetails: { name: '', accountNumber: '', ifsc: '', branch: '', accountType: 'current' },
     title: 'Quotation - WoodenMax Window Designer',
@@ -934,6 +934,8 @@ interface DesignerViewProps {
   handleOpenConfigure: () => void;
   handleOpenQuote: () => void;
   handleCloseMobilePanels: () => void;
+  isEmbedded: boolean;
+  onOpenShortcuts: () => void;
 }
 
 const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
@@ -945,11 +947,14 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
     onSave, onUpdate, onCancelEdit, editingItemId,
     onBatchAdd, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount,
     onViewQuotation, bulkCorrectionLineCount, onApplyBulkCorrection,
-    activeMobilePanel, handleOpenConfigure, handleOpenQuote, handleCloseMobilePanels
+    activeMobilePanel, handleOpenConfigure, handleOpenQuote, handleCloseMobilePanels,
+    isEmbedded,
+    onOpenShortcuts
   } = props;
 
   return (
     <>
+      {!isEmbedded && (
       <header className="no-print z-40 flex flex-col gap-2 border-b border-slate-200/90 bg-gradient-to-b from-white to-slate-100 px-3 py-2.5 shadow-sm sm:flex-row sm:items-center sm:gap-3">
             <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
               <h1 className="sr-only">
@@ -966,6 +971,9 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
               <WoodenMaxCatalogMenu />
               <Button onClick={onOpenGuides} variant="secondary" className="hidden sm:inline-flex">
                 <DocumentTextIcon className="mr-2 h-5 w-5" /> Features &amp; Guides
+              </Button>
+              <Button onClick={onOpenShortcuts} variant="secondary" className="hidden sm:inline-flex">
+                Keyboard
               </Button>
               <Button
                 onClick={onOpenGuides}
@@ -984,6 +992,7 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
               )}
             </div>
         </header>
+      )}
         <main className="flex flex-row flex-grow min-h-0">
             <div ref={panelRef} className={`hidden lg:block flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
                 <div className={`h-full overflow-hidden ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
@@ -1104,7 +1113,7 @@ const App: React.FC = () => {
           if (item) {
               const savedSettings = JSON.parse(item);
               // Deep merge to ensure nested objects get new default properties from updates
-              return {
+              const mergedSettings: QuotationSettings = {
                   ...DEFAULT_QUOTATION_SETTINGS,
                   ...savedSettings,
                   company: { ...DEFAULT_QUOTATION_SETTINGS.company, ...savedSettings.company },
@@ -1112,6 +1121,9 @@ const App: React.FC = () => {
                   financials: { ...DEFAULT_QUOTATION_SETTINGS.financials, ...savedSettings.financials },
                   bankDetails: { ...DEFAULT_QUOTATION_SETTINGS.bankDetails, ...savedSettings.bankDetails },
               };
+              mergedSettings.company.gstNumber = (mergedSettings.company.gstNumber || '').toUpperCase();
+              mergedSettings.customer.gstNumber = (mergedSettings.customer.gstNumber || '').toUpperCase();
+              return mergedSettings;
           }
           return DEFAULT_QUOTATION_SETTINGS;
       } catch (error) { return DEFAULT_QUOTATION_SETTINGS; }
@@ -1119,7 +1131,10 @@ const App: React.FC = () => {
   
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [canvasKey, setCanvasKey] = useState(() => uuidv4());
+  const [isShortcutHelpOpen, setIsShortcutHelpOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const lastAppliedSearchRef = useRef<string>('');
+  const isEmbedded = useMemo(() => new URLSearchParams(location.search).get('embed') === '1', [location.search]);
 
   useEffect(() => {
     setQuotationBulkTargetIds((prev) => {
@@ -1242,6 +1257,48 @@ const App: React.FC = () => {
     link.href = canonicalUrl;
 
   }, [windowType, appView, guideSlug]);
+
+  useEffect(() => {
+    if (appView !== 'designer') return;
+    if (lastAppliedSearchRef.current === location.search) return;
+    lastAppliedSearchRef.current = location.search;
+
+    const params = new URLSearchParams(location.search);
+    const hasConfigParams = ['type', 'width', 'height', 'title', 'qty', 'rate', 'area'].some((key) => params.has(key));
+    if (!hasConfigParams) return;
+
+    const requestedType = params.get('type');
+    const isKnownType = requestedType && Object.values(WindowType).includes(requestedType as WindowType);
+    if (isKnownType && requestedType !== windowType) {
+      navigate(`/design/${requestedType}${location.search}`, { replace: true });
+      return;
+    }
+
+    const widthParam = Number(params.get('width'));
+    if (Number.isFinite(widthParam) && widthParam > 0) {
+      dispatch({ type: 'SET_FIELD', field: 'width', payload: widthParam });
+    }
+    const heightParam = Number(params.get('height'));
+    if (Number.isFinite(heightParam) && heightParam > 0) {
+      dispatch({ type: 'SET_FIELD', field: 'height', payload: heightParam });
+    }
+    const titleParam = params.get('title');
+    if (titleParam) {
+      setWindowTitle(titleParam);
+    }
+    const qtyParam = Number(params.get('qty'));
+    if (Number.isFinite(qtyParam) && qtyParam > 0) {
+      setQuantity(qtyParam);
+    }
+    const rateParam = Number(params.get('rate'));
+    if (Number.isFinite(rateParam) && rateParam >= 0) {
+      setRate(rateParam);
+    }
+    const areaParam = params.get('area');
+    if (areaParam === AreaType.SQFT || areaParam === AreaType.SQMT) {
+      setAreaType(areaParam as AreaType);
+    }
+  }, [appView, location.search, navigate, windowType]);
   
   const windowConfig: WindowConfig = useMemo(() => ({
     ...windowConfigState,
@@ -1806,15 +1863,117 @@ const App: React.FC = () => {
   const handleOpenQuote = () => setActiveMobilePanel('quotation');
   const handleCloseMobilePanels = () => setActiveMobilePanel('none');
   
-  const handleViewQuotation = () => {
+  const handleViewQuotation = useCallback(() => {
     setIsQuotationModalOpen(true);
-    handleCloseMobilePanels();
-  };
+    setActiveMobilePanel('none');
+  }, []);
 
-  const handleBatchAdd = () => {
+  const handleBatchAdd = useCallback(() => {
     setIsBatchAddModalOpen(true);
-    handleCloseMobilePanels();
-  };
+    setActiveMobilePanel('none');
+  }, []);
+
+  useEffect(() => {
+    const isTextInputTarget = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) return false;
+      return (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      );
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const hasModifier = event.ctrlKey || event.metaKey;
+      const typing = isTextInputTarget(event.target);
+
+      if (key === 'escape') {
+        if (isShortcutHelpOpen) {
+          setIsShortcutHelpOpen(false);
+          return;
+        }
+        if (isQuotationModalOpen) {
+          setIsQuotationModalOpen(false);
+          return;
+        }
+        if (isBatchAddModalOpen) {
+          setIsBatchAddModalOpen(false);
+          return;
+        }
+        if (activeMobilePanel !== 'none') {
+          setActiveMobilePanel('none');
+        }
+        return;
+      }
+
+      if (!hasModifier) return;
+      if (typing) return;
+
+      if (key === '/' || key === '?') {
+        event.preventDefault();
+        setIsShortcutHelpOpen((prev) => !prev);
+        return;
+      }
+
+      if (key === 's' && appView === 'designer') {
+        event.preventDefault();
+        if (editingItemId) handleUpdateQuotationItem();
+        else handleSaveToQuotation();
+        return;
+      }
+      if (key === 'q' && appView === 'designer') {
+        event.preventDefault();
+        handleViewQuotation();
+        return;
+      }
+      if (key === 'b' && appView === 'designer') {
+        event.preventDefault();
+        handleBatchAdd();
+        return;
+      }
+      if (key === 'r' && appView === 'designer') {
+        event.preventDefault();
+        handleResetDesign();
+        return;
+      }
+      if (key === 'g') {
+        event.preventDefault();
+        navigate('/guides/index');
+        return;
+      }
+
+      const typeByDigit: Record<string, WindowType> = {
+        '1': WindowType.SLIDING,
+        '2': WindowType.CASEMENT,
+        '3': WindowType.VENTILATOR,
+        '4': WindowType.GLASS_PARTITION,
+        '5': WindowType.LOUVERS,
+        '6': WindowType.CORNER,
+        '7': WindowType.MIRROR,
+      };
+      if (typeByDigit[key]) {
+        event.preventDefault();
+        navigate(`/design/${typeByDigit[key]}`);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    appView,
+    editingItemId,
+    handleBatchAdd,
+    handleResetDesign,
+    handleSaveToQuotation,
+    handleUpdateQuotationItem,
+    isBatchAddModalOpen,
+    isQuotationModalOpen,
+    isShortcutHelpOpen,
+    activeMobilePanel,
+    navigate,
+  ]);
   
   const loadingFallback = <div className="fixed inset-0 bg-slate-900 bg-opacity-80 flex items-center justify-center z-[100] no-print"><div className="text-white">Loading...</div></div>;
 
@@ -1827,6 +1986,30 @@ const App: React.FC = () => {
           <Suspense fallback={loadingFallback}>
               <BatchAddModal isOpen={isBatchAddModalOpen} onClose={() => setIsBatchAddModalOpen(false)} baseConfig={windowConfig} baseRate={rate} onSave={handleBatchSave} />
           </Suspense>
+      )}
+      {isShortcutHelpOpen && (
+        <div className="fixed inset-0 z-[120] bg-black/70 p-4 no-print" onClick={() => setIsShortcutHelpOpen(false)}>
+          <div className="mx-auto mt-12 w-full max-w-2xl rounded-lg border border-slate-600 bg-slate-900 p-5 text-slate-200 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-white">Keyboard Controls</h2>
+            <p className="mt-1 text-xs text-slate-400">Works across designer and guides. Use Ctrl on Windows/Linux, Cmd on macOS.</p>
+            <div className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+              <div><strong>Ctrl/Cmd + S</strong> Save/Update quotation line</div>
+              <div><strong>Ctrl/Cmd + Q</strong> Open quotation list</div>
+              <div><strong>Ctrl/Cmd + B</strong> Open batch add</div>
+              <div><strong>Ctrl/Cmd + R</strong> Reset design</div>
+              <div><strong>Ctrl/Cmd + G</strong> Open guides</div>
+              <div><strong>Ctrl/Cmd + /</strong> Toggle this help</div>
+              <div><strong>Ctrl/Cmd + 1..7</strong> Quick switch feature types</div>
+              <div><strong>Esc</strong> Close active modal/panel</div>
+            </div>
+            <div className="mt-4 rounded border border-slate-700 bg-slate-800/70 p-3 text-xs text-slate-300">
+              <p><strong>Embed/API params:</strong> <code>?embed=1&type=sliding&width=1800&height=1200&title=Ad%20Demo&qty=1&rate=650&area=sqft</code></p>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button variant="secondary" onClick={() => setIsShortcutHelpOpen(false)}>Close</Button>
+            </div>
+          </div>
+        </div>
       )}
       
       <div className={`flex flex-col h-screen font-sans bg-slate-900 overflow-hidden ${isPreviewing ? 'hidden' : ''}`}>
@@ -1866,6 +2049,8 @@ const App: React.FC = () => {
                     handleOpenConfigure={handleOpenConfigure}
                     handleOpenQuote={handleOpenQuote}
                     handleCloseMobilePanels={handleCloseMobilePanels}
+                    isEmbedded={isEmbedded}
+                    onOpenShortcuts={() => setIsShortcutHelpOpen(true)}
                 />
             ) : (
                 <GuidesViewer 

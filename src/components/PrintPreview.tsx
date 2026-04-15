@@ -24,6 +24,7 @@ import {
 } from '../utils/partitionPanelGeometry';
 import { resolveFoldFrameEdges } from '../utils/foldDoorFrame';
 import { FoldDoorOpeningGraphic } from './FoldDoorOpeningVisual';
+import { autoContinueTermsSerial, normalizeWebsiteUrl } from '../utils/quotationText';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
   return config.profileColor.startsWith('#') ? config.profileTexture || undefined : undefined;
@@ -843,31 +844,81 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
 };
 
 
-const EditableSection: React.FC<{title: string, value: string, onChange: (value: string) => void}> = ({ title, value, onChange }) => {
+function renderInlineBold(text: string): React.ReactNode[] {
+    const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    return parts.filter(Boolean).map((part, index) => {
+        if (/^\*\*[^*]+\*\*$/.test(part)) {
+            return <strong key={`${part}-${index}`}>{part.slice(2, -2)}</strong>;
+        }
+        return <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>;
+    });
+}
+
+function renderFormattedMultiline(value: string, serialAuto: boolean): React.ReactNode {
+    const source = serialAuto ? autoContinueTermsSerial(value) : value;
+    const lines = source.split('\n');
+    return (
+        <>
+            {lines.map((line, index) => {
+                const serialMatch = serialAuto ? line.match(/^\s*((?:[A-Za-z]+|\d+)[.)])\s+(.+)$/) : null;
+                if (serialMatch) {
+                    return (
+                        <p key={`${line}-${index}`} className="whitespace-pre-wrap">
+                            <strong>{serialMatch[1]}</strong>{' '}{renderInlineBold(serialMatch[2])}
+                        </p>
+                    );
+                }
+                return <p key={`${line}-${index}`} className="whitespace-pre-wrap">{renderInlineBold(line)}</p>;
+            })}
+        </>
+    );
+}
+
+const EditableSection: React.FC<{title: string, value: string, onChange: (value: string) => void; serialAuto?: boolean}> = ({ title, value, onChange, serialAuto = false }) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const id = useMemo(() => `editable-section-${title.toLowerCase().replace(/[\s&]+/g, '-').replace(/[^a-z0-9-]/g, 'x')}`, [title]);
+    const [isEditing, setIsEditing] = useState(false);
 
     useEffect(() => {
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
             textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
         }
-    }, [value]);
+    }, [value, isEditing]);
 
     return (
         <div className="print-final-details mt-4" style={{breakInside: 'avoid'}}>
             <h3 id={id} className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">{title}</h3>
-            <textarea 
-                ref={textareaRef}
-                id={id}
-                name={id}
-                value={value}
-                onChange={e => onChange(e.target.value)}
-                className="w-full text-xs whitespace-pre-wrap bg-transparent border-gray-300 rounded-md p-1 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 print-editable"
-                rows={1}
-                style={{overflow: 'hidden'}}
-                aria-labelledby={id}
-            />
+            {isEditing ? (
+                <textarea
+                    ref={textareaRef}
+                    id={id}
+                    name={id}
+                    value={value}
+                    onChange={e => onChange(serialAuto ? autoContinueTermsSerial(e.target.value) : e.target.value)}
+                    onBlur={() => setIsEditing(false)}
+                    className="w-full text-xs whitespace-pre-wrap bg-transparent border-gray-300 rounded-md p-1 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 print-editable"
+                    rows={1}
+                    style={{overflow: 'hidden'}}
+                    aria-labelledby={id}
+                    autoFocus
+                />
+            ) : (
+                <div
+                    className="w-full text-xs whitespace-pre-wrap bg-transparent border border-gray-300 rounded-md p-1 cursor-text min-h-[28px]"
+                    onClick={() => setIsEditing(true)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setIsEditing(true);
+                        }
+                    }}
+                >
+                    {renderFormattedMultiline(value, serialAuto)}
+                </div>
+            )}
         </div>
     );
 };
@@ -1135,7 +1186,22 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                             <div>
                                 <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
                                 <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
-                                <p className="text-xs">{settings.company.email} | {settings.company.website}</p>
+                                <p className="text-xs">
+                                    {settings.company.email ? (
+                                        <a href={`mailto:${settings.company.email}`} className="underline">
+                                            {settings.company.email}
+                                        </a>
+                                    ) : null}
+                                    {settings.company.email && settings.company.website ? ' | ' : ''}
+                                    {settings.company.website ? (
+                                        <a href={normalizeWebsiteUrl(settings.company.website)} target="_blank" rel="noreferrer" className="underline">
+                                            {settings.company.website}
+                                        </a>
+                                    ) : null}
+                                </p>
+                                {settings.company.gstNumber ? (
+                                    <p className="text-xs"><strong>GSTIN:</strong> {(settings.company.gstNumber || '').toUpperCase()}</p>
+                                ) : null}
                             </div>
                         </div>
                         <div className="text-right text-xs">
@@ -1149,6 +1215,23 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                             <p className="font-semibold">{settings.customer.name}</p>
                             <p className="whitespace-pre-wrap">{settings.customer.address}</p>
                             <p><strong>Attn:</strong> {settings.customer.contactPerson}</p>
+                            {settings.customer.email ? (
+                                <p>
+                                    <strong>Email:</strong>{' '}
+                                    <a href={`mailto:${settings.customer.email}`} className="underline">{settings.customer.email}</a>
+                                </p>
+                            ) : null}
+                            {settings.customer.website ? (
+                                <p>
+                                    <strong>Website:</strong>{' '}
+                                    <a href={normalizeWebsiteUrl(settings.customer.website)} target="_blank" rel="noreferrer" className="underline">
+                                        {settings.customer.website}
+                                    </a>
+                                </p>
+                            ) : null}
+                            {settings.customer.gstNumber ? (
+                                <p><strong>GSTIN:</strong> {(settings.customer.gstNumber || '').toUpperCase()}</p>
+                            ) : null}
                             <div className="show-for-arch mt-1">
                                 <p><strong>Architect:</strong> {settings.customer.architectName || 'N/A'}</p>
                             </div>
@@ -1273,7 +1356,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         
                         <EditableSection title="Description" value={settings.description} onChange={(val) => setSettings({...settings, description: val})} />
                         <div className="hide-for-arch">
-                            <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} />
+                            <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} serialAuto />
                         </div>
                         
                         <div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs hide-for-arch" style={{breakBefore: 'avoid'}}>

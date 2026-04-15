@@ -15,6 +15,7 @@ import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
 import { PencilIcon } from './icons/PencilIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { sanitizeFilenameSegment } from '../utils/pdfFilename';
+import { autoContinueTermsSerial } from '../utils/quotationText';
 interface QuotationListModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -191,7 +192,23 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
             const result = event.target?.result as string;
             const data = JSON.parse(result);
             if (data.settings && data.items && Array.isArray(data.items)) {
-                setSettings(data.settings);
+                const importedSettings: QuotationSettings = {
+                  ...settings,
+                  ...data.settings,
+                  company: {
+                    ...settings.company,
+                    ...data.settings.company,
+                    gstNumber: String(data.settings.company?.gstNumber || '').toUpperCase(),
+                  },
+                  customer: {
+                    ...settings.customer,
+                    ...data.settings.customer,
+                    gstNumber: String(data.settings.customer?.gstNumber || '').toUpperCase(),
+                  },
+                  financials: { ...settings.financials, ...data.settings.financials },
+                  bankDetails: { ...settings.bankDetails, ...data.settings.bankDetails },
+                };
+                setSettings(importedSettings);
                 setItems(data.items);
                 alert('Quotation imported successfully!');
             } else {
@@ -279,11 +296,29 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                           <Input id="modal-company-email" name="modal-company-email" label="Email" type="email" value={settings.company.email} onChange={e => handleSettingsChange('company', 'email', e.target.value)} />
                           <Input id="modal-company-website" name="modal-company-website" label="Website" value={settings.company.website} onChange={e => handleSettingsChange('company', 'website', e.target.value)} />
                       </div>
+                      <Input
+                        id="modal-company-gst-number"
+                        name="modal-company-gst-number"
+                        label="GST Number (Optional)"
+                        value={settings.company.gstNumber || ''}
+                        onChange={e => handleSettingsChange('company', 'gstNumber', e.target.value.toUpperCase())}
+                      />
                   </Section>
                   <Section title="Customer Details">
                       <Input id="modal-customer-name" name="modal-customer-name" label="Customer Name" value={settings.customer.name} onChange={e => handleSettingsChange('customer', 'name', e.target.value)} />
                       <Input id="modal-customer-address" name="modal-customer-address" label="Address" value={settings.customer.address} onChange={e => handleSettingsChange('customer', 'address', e.target.value)} />
                       <Input id="modal-customer-contact" name="modal-customer-contact" label="Contact Person" value={settings.customer.contactPerson} onChange={e => handleSettingsChange('customer', 'contactPerson', e.target.value)} />
+                      <div className="grid grid-cols-2 gap-4">
+                          <Input id="modal-customer-email" name="modal-customer-email" label="Email (Optional)" type="email" value={settings.customer.email || ''} onChange={e => handleSettingsChange('customer', 'email', e.target.value)} />
+                          <Input id="modal-customer-website" name="modal-customer-website" label="Website (Optional)" value={settings.customer.website || ''} onChange={e => handleSettingsChange('customer', 'website', e.target.value)} />
+                      </div>
+                      <Input
+                        id="modal-customer-gst-number"
+                        name="modal-customer-gst-number"
+                        label="Customer GST Number (Optional)"
+                        value={settings.customer.gstNumber || ''}
+                        onChange={e => handleSettingsChange('customer', 'gstNumber', e.target.value.toUpperCase())}
+                      />
                   </Section>
               </div>
               
@@ -389,7 +424,9 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
               <div className="grid md:grid-cols-2 gap-4">
                   <Section title="Details & Terms">
                       <TextArea id="modal-quotation-description" name="modal-quotation-description" label="Description" value={settings.description} onChange={e => setSettings({...settings, description: e.target.value})} maxLength={1500} />
-                      <TextArea id="modal-quotation-terms" name="modal-quotation-terms" label="Terms & Conditions" value={settings.terms} onChange={e => setSettings({...settings, terms: e.target.value})} />
+                      <p className="text-[11px] text-slate-400 -mt-2">Use **double stars** to make text bold in preview/print.</p>
+                      <TextArea id="modal-quotation-terms" name="modal-quotation-terms" label="Terms & Conditions" value={settings.terms} onChange={e => setSettings({...settings, terms: autoContinueTermsSerial(e.target.value)})} />
+                      <p className="text-[11px] text-slate-400 -mt-2">Use **bold** text and start first line with `a`/`1`; next lines auto-continue serials.</p>
                   </Section>
                   <Section title="Bank & Signature">
                       <div className="grid grid-cols-2 gap-4">
