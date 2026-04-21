@@ -1,0 +1,1167 @@
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { NavLink } from 'react-router-dom';
+import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, PartitionPanelConfig } from '../types';
+import { getDefaultHandleConfig } from '../utils/handleDefaults';
+import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType, MirrorShape } from '../types';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Select } from './ui/Select';
+import { PlusIcon } from './icons/PlusIcon';
+import { TrashIcon } from './icons/TrashIcon';
+import { DimensionInput, type Unit } from './ui/DimensionInput';
+import { v4 as uuidv4 } from 'uuid';
+import { XMarkIcon } from './icons/XMarkIcon';
+import { CollapsibleCard } from './ui/CollapsibleCard';
+import { SearchableSelect } from './ui/SearchableSelect';
+import { UploadIcon } from './icons/UploadIcon';
+import {
+  getOrderedProfileDimensionKeys,
+  getAddableProfileDimensionKeys,
+  dimensionKeyLabel,
+} from '../utils/profileDimensionKeys';
+import { DOOR_WINDOW_COMBO_PRESETS } from '../utils/doorWindowComboPresets';
+import { clampFoldLeafCount } from '../utils/partitionPanelGeometry';
+import { scrollNearestVerticalOverflowAncestor } from '../utils/scrollParentWheel';
+const PROFILE_QUICK_PRESETS: { name: string; value: string }[] = [
+  { name: 'Grey', value: '#6b7280' },
+  { name: 'Black', value: '#2f3238' },
+  { name: 'Brown', value: '#5c4033' },
+  { name: 'Champion gold', value: '#d4a84b' },
+  { name: 'Off white', value: '#f5f5f0' },
+];
+
+interface ControlsPanelProps {
+  config: WindowConfig;
+  onClose: () => void;
+  setConfig: (field: keyof WindowConfig, value: any) => void;
+  setSideConfig: (config: Partial<CornerSideConfig>) => void;
+  setGridSize: (rows: number, cols: number) => void;
+  
+  availableSeries: ProfileSeries[];
+  onSeriesSelect: (id: string) => void;
+  onSeriesSave: (name: string) => void;
+  onSeriesDelete: (id: string) => void;
+
+  addFixedPanel: (position: FixedPanelPosition) => void;
+  removeFixedPanel: (id: string) => void;
+  updateFixedPanelSize: (id: string, size: number) => void;
+
+  onHardwareChange: (id: string, field: keyof HardwareItem, value: string | number) => void;
+  onAddHardware: () => void;
+  onRemoveHardware: (id: string) => void;
+  
+  toggleDoorPosition: (row: number, col: number) => void;
+  onVentilatorCellClick: (row: number, col: number) => void;
+
+  savedColors: SavedColor[];
+  setSavedColors: (colors: SavedColor[]) => void;
+  onUpdateHandle: (panelId: string, newConfig: HandleConfig | null) => void;
+
+  onSetPartitionPanelCount: (count: number) => void;
+  onSetPartitionPreset?: (panels: WindowConfig['partitionPanels']) => void;
+  onSetPartitionWidthFractions?: (fractions: number[]) => void;
+  onCyclePartitionPanelType: (index: number) => void;
+  onSetPartitionHasTopChannel: (hasChannel: boolean) => void;
+  onCyclePartitionPanelFraming: (index: number) => void;
+  /** Per-panel width/height (mm) and bi-fold leaf count. */
+  onUpdatePartitionPanel: (index: number, partial: Partial<PartitionPanelConfig>) => void;
+
+  onAddLouverItem: (type: 'profile' | 'gap') => void;
+  onRemoveLouverItem: (id: string) => void;
+  onUpdateLouverItem: (id: string, size: number | '') => void;
+
+  onLaminatedConfigChange: (payload: Partial<LaminatedGlassConfig>) => void;
+  onDguConfigChange: (payload: Partial<DguGlassConfig>) => void;
+  onUpdateMirrorConfig: (payload: Partial<WindowConfig['mirrorConfig']>) => void;
+  onResetDesign: () => void;
+
+  activeCornerSide: 'left' | 'right';
+  setActiveCornerSide: (side: 'left' | 'right') => void;
+  idPrefix?: string;
+}
+
+const Slider: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string, unit?: string }> = ({ id, label, unit, onWheel, ...props }) => {
+  const rangeRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const el = rangeRef.current;
+    if (!el) return;
+    const onWheelNative = (e: WheelEvent) => {
+      e.preventDefault();
+      scrollNearestVerticalOverflowAncestor(el, e);
+    };
+    el.addEventListener('wheel', onWheelNative, { passive: false });
+    return () => el.removeEventListener('wheel', onWheelNative);
+  }, []);
+  return (
+    <div className='flex-1'>
+        <label htmlFor={id} className="block text-xs font-medium text-slate-300 mb-1">{label} <span className='text-slate-400'>{props.value}{unit}</span></label>
+        <input
+          ref={rangeRef}
+          type="range"
+          id={id}
+          name={id}
+          className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+          onWheel={onWheel}
+          {...props}
+        />
+    </div>
+  );
+};
+
+export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefix = '', ...props }) => {
+  const { 
+    config, onClose, setConfig, setSideConfig, setGridSize, availableSeries, onSeriesSelect, onSeriesSave, onSeriesDelete,
+    addFixedPanel, removeFixedPanel, updateFixedPanelSize,
+    onHardwareChange, onAddHardware, onRemoveHardware,
+    toggleDoorPosition, onVentilatorCellClick,
+    savedColors, setSavedColors, onUpdateHandle,
+    onSetPartitionPanelCount, onSetPartitionPreset, onSetPartitionWidthFractions, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onUpdatePartitionPanel,
+    onAddLouverItem, onRemoveLouverItem, onUpdateLouverItem,
+    onLaminatedConfigChange, onDguConfigChange, onUpdateMirrorConfig,
+    onResetDesign,
+    activeCornerSide, setActiveCornerSide
+  } = props;
+
+  const { windowType, series, fixedPanels, glassGrid } = config;
+  const [openCard, setOpenCard] = useState<string | null>('Design Type');
+  const [isSavingSeries, setIsSavingSeries] = useState(false);
+  const [newSeriesName, setNewSeriesName] = useState('');
+  const [isAddingPreset, setIsAddingPreset] = useState(false);
+  const [newPreset, setNewPreset] = useState<{name: string, value: string, type: 'color' | 'texture'}>({ name: '', value: '#ffffff', type: 'color' });
+  const [selectedPanelId, setSelectedPanelId] = useState<string>('');
+  const glassTextureUploadRef = useRef<HTMLInputElement>(null);
+  const profileTextureUploadRef = useRef<HTMLInputElement>(null);
+  const profileOverlayUploadRef = useRef<HTMLInputElement>(null);
+  const isCorner = windowType === WindowType.CORNER;
+
+  // Georgian Bars Logic
+  const [activeGeorgianPanelId, setActiveGeorgianPanelId] = useState('default');
+  const [georgianUnit, setGeorgianUnit] = useState<Unit>('mm');
+  const [addDimNonce, setAddDimNonce] = useState(0);
+
+  const availableGeorgianPanels = useMemo(() => {
+    const panels: { id: string, name: string }[] = [];
+    switch(windowType) {
+        case WindowType.SLIDING:
+            const numShutters = config.shutterConfig === '2G' ? 2 : config.shutterConfig === '4G' ? 4 : config.shutterConfig === '4G2M' ? 6 : 3;
+            for (let i = 0; i < numShutters; i++) panels.push({ id: `sliding-${i}`, name: `Shutter ${i+1}`});
+            break;
+        case WindowType.CASEMENT:
+        case WindowType.VENTILATOR:
+            const rows = config.horizontalDividers.length + 1;
+            const cols = config.verticalDividers.length + 1;
+            for(let r=0; r<rows; r++) {
+                for(let c=0; c<cols; c++) {
+                    panels.push({ id: `cell-${r}-${c}`, name: `Panel (R${r+1},C${c+1})`});
+                }
+            }
+            break;
+        case WindowType.GLASS_PARTITION:
+            for(let i=0; i<config.partitionPanels.count; i++) panels.push({ id: `partition-${i}`, name: `Panel ${i+1}`});
+            break;
+    }
+    config.fixedPanels.forEach(p => panels.push({id: `fixed-${p.position}`, name: `Fixed ${p.position}`}));
+    return panels;
+  }, [config]);
+
+  useEffect(() => {
+    if (!glassGrid.applyToAll && !availableGeorgianPanels.some(p => p.id === activeGeorgianPanelId)) {
+        setActiveGeorgianPanelId('default');
+    }
+  }, [availableGeorgianPanels, activeGeorgianPanelId, glassGrid.applyToAll]);
+
+  const activeGeorgianPattern = glassGrid.patterns[activeGeorgianPanelId] || glassGrid.patterns['default'];
+  
+  const handleGeorgianPatternChange = (direction: 'horizontal' | 'vertical', field: 'count' | 'offset' | 'gap', value: number) => {
+    const newPatterns = { ...glassGrid.patterns };
+    const targetId = glassGrid.applyToAll ? 'default' : activeGeorgianPanelId;
+
+    const currentPattern = newPatterns[targetId] || newPatterns['default'];
+    
+    newPatterns[targetId] = {
+        ...currentPattern,
+        [direction]: {
+            ...currentPattern[direction],
+            [field]: value
+        }
+    };
+    setConfig('glassGrid', { ...glassGrid, patterns: newPatterns });
+  };
+
+  const handleApplyToAllChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setConfig('glassGrid', { ...glassGrid, applyToAll: e.target.checked });
+    if(e.target.checked) setActiveGeorgianPanelId('default');
+  }
+  // End Georgian Bars Logic
+
+  const handleGlassTextureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setConfig('glassTexture', reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    }
+  };
+  
+  const handleProfileOverlayUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setConfig('profileTexture', reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    }
+    e.target.value = '';
+  };
+
+  const handleToggleCard = (title: string) => {
+    setOpenCard(prev => prev === title ? null : title);
+  };
+
+  const displayConfig = useMemo(() => {
+    if (isCorner && config.leftConfig && config.rightConfig) {
+        const sideConfig = activeCornerSide === 'left' ? config.leftConfig : config.rightConfig;
+        return { ...config, ...sideConfig };
+    }
+    return config;
+  }, [config, isCorner, activeCornerSide]);
+
+  const gridRows = displayConfig.horizontalDividers.length + 1;
+  const gridCols = displayConfig.verticalDividers.length + 1;
+  const activeWindowType = displayConfig.windowType;
+
+  const operablePanels = useMemo(() => {
+    const panels: { id: string; label: string }[] = [];
+    switch (activeWindowType) {
+        case WindowType.SLIDING:
+            displayConfig.slidingHandles.forEach((_, i) => { panels.push({ id: `sliding-${i}`, label: `Shutter ${i + 1}` }); });
+            break;
+        case WindowType.CASEMENT:
+            displayConfig.doorPositions.forEach(p => { panels.push({ id: `casement-${p.row}-${p.col}`, label: `Door (R${p.row + 1}, C${p.col + 1})` }); });
+            break;
+        case WindowType.VENTILATOR:
+            displayConfig.ventilatorGrid.forEach((row, r) => { row.forEach((cell, c) => { if (cell.type === 'door') { panels.push({ id: `ventilator-${r}-${c}`, label: `Door (R${r + 1}, C${c + 1})` }); } }); });
+            break;
+        case WindowType.GLASS_PARTITION:
+            config.partitionPanels.types.forEach((p, i) => {
+                if (p.type !== 'fixed') {
+                    const pl = p.type === 'fold' ? 'Bi-fold' : p.type;
+                    panels.push({ id: `partition-${i}`, label: `Panel ${i + 1} (${pl})` });
+                }
+            });
+            break;
+    }
+    if (selectedPanelId && !panels.some(p => p.id === selectedPanelId)) {
+        setSelectedPanelId(panels[0]?.id || '');
+    } else if (!selectedPanelId && panels.length > 0) {
+        setSelectedPanelId(panels[0].id);
+    }
+    return panels;
+  }, [displayConfig, config, selectedPanelId, activeWindowType]);
+
+  const currentHandle = useMemo((): HandleConfig | null => {
+    if (!selectedPanelId) return null;
+    const parts = selectedPanelId.split('-');
+    const type = parts[0];
+
+    switch (type) {
+        case 'sliding': return displayConfig.slidingHandles[parseInt(parts[1], 10)] || null;
+        case 'casement': return displayConfig.doorPositions.find(p => p.row === parseInt(parts[1], 10) && p.col === parseInt(parts[2], 10))?.handle || null;
+        case 'ventilator': return displayConfig.ventilatorGrid[parseInt(parts[1], 10)]?.[parseInt(parts[2], 10)]?.handle || null;
+        case 'partition': return config.partitionPanels.types[parseInt(parts[1], 10)]?.handle || null;
+        default: return null;
+    }
+  }, [selectedPanelId, displayConfig, config]);
+
+  const handleDimensionChange = (key: keyof ProfileSeries['dimensions'], value: number | '') => {
+    setConfig('series', { ...series, dimensions: { ...series.dimensions, [key]: value } });
+  };
+
+  const handleRemoveExtraDimension = (key: keyof ProfileDimensions) => {
+    setConfig('series', {
+      ...series,
+      extraDimensionKeys: (series.extraDimensionKeys ?? []).filter((k) => k !== key),
+    });
+  };
+
+  const handleProfileDetailChange = (field: 'weights' | 'lengths', key: keyof ProfileDimensions, value: number | '') => {
+      setConfig('series', { ...series, [field]: { ...(series[field] || {}), [key]: value } });
+  };
+
+  const handleFixShutterChange = (index: number, isChecked: boolean) => {
+      const newFixedShutters = [...displayConfig.fixedShutters];
+      newFixedShutters[index] = isChecked;
+      if (isCorner) { setSideConfig({ fixedShutters: newFixedShutters }); } 
+      else { setConfig('fixedShutters', newFixedShutters); }
+  };
+  
+  const handleInitiateSave = () => { setNewSeriesName(series.name.includes('Standard') ? '' : series.name); setIsSavingSeries(true); };
+  const handleConfirmSave = () => { if (newSeriesName.trim()) { onSeriesSave(newSeriesName.trim()); setIsSavingSeries(false); setNewSeriesName(''); } };
+  
+  const handleInitiateAddPreset = () => {
+    const isTexture = !config.profileColor.startsWith('#') || Boolean(config.profileTexture);
+    setNewPreset({
+        name: '',
+        value: config.profileTexture || config.profileColor,
+        type: isTexture ? 'texture' : 'color'
+    });
+    setIsAddingPreset(true);
+  };
+  const handleAddPreset = () => { if (newPreset.name.trim() && newPreset.value) { setSavedColors([...savedColors, { ...newPreset, id: uuidv4() }]); setNewPreset({ name: '', value: '#ffffff', type: 'color' }); setIsAddingPreset(false); } };
+  const handleDeleteColor = (id: string) => { setSavedColors(savedColors.filter(c => c.id !== id)); }
+
+  const isDefaultSeries = series.id.includes('-default');
+  
+  const seriesOptions = useMemo(() => {
+    return availableSeries
+      .filter(s => s.type === activeWindowType)
+      .map(s => ({ value: s.id, label: s.name }));
+  }, [availableSeries, activeWindowType]);
+
+  const getVentilatorCellLabel = (type: VentilatorCellType) => {
+    switch(type) {
+        case 'glass': return 'Glass'; case 'louvers': return 'Louvers'; case 'door': return 'Door'; case 'exhaust_fan': return 'Ex-Fan';
+        default: return 'Fixed';
+    }
+  };
+  
+  const isCustomThickness = useMemo(() => {
+    return series.glassOptions.customThicknessAllowed && displayConfig.glassThickness !== '' && !series.glassOptions.thicknesses.includes(Number(displayConfig.glassThickness));
+  }, [displayConfig.glassThickness, series.glassOptions]);
+
+  const handleThicknessChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    const thickness = value === 'custom' ? 15 : (value === '' ? '' : Number(value));
+    setConfig('glassThickness', thickness);
+  };
+  
+  const glassTypeOptions = [
+    { value: GlassType.CLEAR, label: "Clear" },
+    { value: GlassType.FROSTED, label: "Frosted" },
+    { value: GlassType.VERTICAL_FLUTED, label: "Vertical Fluted" },
+    { value: GlassType.TINTED_BLUE, label: "Tinted Blue" },
+    { value: GlassType.TINTED_GREY, label: "Tinted Grey" },
+    { value: GlassType.CLEAR_SAPPHIRE, label: "Clear Sapphire" },
+    { value: GlassType.BROWN_TINTED, label: "Brown Tinted" },
+    { value: GlassType.BLACK_TINTED, label: "Black Tinted" },
+  ];
+
+  return (
+    <div className="custom-scrollbar flex h-full min-h-0 w-full min-w-0 basis-0 flex-1 flex-col space-y-4 overflow-x-hidden overflow-y-auto overscroll-y-contain bg-slate-800 p-4">
+      <div className="flex justify-between items-center pb-2 border-b border-slate-700">
+        <h2 className="text-2xl font-bold text-white">Configuration</h2>
+        <div className="flex items-center gap-2">
+            <button onClick={onResetDesign} className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white" aria-label="Reset design" title="Reset Design"> <TrashIcon className="w-6 h-6" /> </button>
+            <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white" aria-label="Close panel"> <XMarkIcon className="w-6 h-6" /> </button>
+        </div>
+      </div>
+
+      <CollapsibleCard title="Design Type" isOpen={openCard === 'Design Type'} onToggle={() => handleToggleCard('Design Type')}>
+          <div className="grid grid-cols-4 bg-slate-700 rounded-md p-1 gap-1">
+              {[WindowType.SLIDING, WindowType.CASEMENT, WindowType.VENTILATOR, WindowType.GLASS_PARTITION, WindowType.LOUVERS, WindowType.CORNER, WindowType.MIRROR].map(type => {
+                  const typeLabel =
+                    type === WindowType.GLASS_PARTITION
+                      ? 'Glass / door+window'
+                      : type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+                  return (
+                    <NavLink
+                      key={type}
+                      to={`/design/${type}`}
+                      className={({ isActive }) =>
+                        `block text-center p-2 text-xs font-semibold rounded capitalize ${
+                          isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'
+                        }`
+                      }
+                    >
+                      {typeLabel}
+                    </NavLink>
+                  );
+              })}
+          </div>
+      </CollapsibleCard>
+      
+      <CollapsibleCard title="Overall Dimensions" isOpen={openCard === 'Overall Dimensions'} onToggle={() => handleToggleCard('Overall Dimensions')}>
+        {isCorner ? (
+            <>
+                <div className="grid grid-cols-2 gap-4">
+                    <DimensionInput id={`${idPrefix}left-width`} name="left-width" label="Left Wall Width" value_mm={config.leftWidth ?? ''} onChange_mm={v => setConfig('leftWidth', v)} placeholder="e.g., 1200" />
+                    <DimensionInput id={`${idPrefix}right-width`} name="right-width" label="Right Wall Width" value_mm={config.rightWidth ?? ''} onChange_mm={v => setConfig('rightWidth', v)} placeholder="e.g., 1200" />
+                </div>
+                 <DimensionInput id={`${idPrefix}corner-post-width`} name="corner-post-width" label="Corner Post Width" value_mm={config.cornerPostWidth} onChange_mm={v => setConfig('cornerPostWidth', v)} placeholder="e.g., 100" />
+            </>
+        ) : (
+            <DimensionInput id={`${idPrefix}total-width`} name="total-width" label="Total Width" value_mm={config.width} onChange_mm={v => setConfig('width', v)} placeholder="e.g., 1800" />
+        )}
+        <DimensionInput id={`${idPrefix}total-height`} name="total-height" label="Total Height" value_mm={config.height} onChange_mm={v => setConfig('height', v)} placeholder="e.g., 1200" />
+      </CollapsibleCard>
+      
+      {isCorner && (
+         <CollapsibleCard title="Corner Window Setup" isOpen={openCard === 'Corner Window Setup'} onToggle={() => handleToggleCard('Corner Window Setup')}>
+            <div className="mb-4 grid grid-cols-2 bg-slate-700 rounded-md p-1 gap-1">
+                <button onClick={() => setActiveCornerSide('left')} className={`p-2 text-sm font-semibold rounded ${activeCornerSide === 'left' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Left Wall</button>
+                <button onClick={() => setActiveCornerSide('right')} className={`p-2 text-sm font-semibold rounded ${activeCornerSide === 'right' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>Right Wall</button>
+            </div>
+            <Select id={`${idPrefix}corner-side-type`} name="corner-side-type" label={`${activeCornerSide === 'left' ? 'Left' : 'Right'} Wall Type`} value={displayConfig.windowType} onChange={(e) => setSideConfig({ windowType: e.target.value as CornerSideConfig['windowType'] })}>
+              <option value={WindowType.SLIDING}>Sliding</option>
+              <option value={WindowType.CASEMENT}>Casement / Fixed</option>
+              <option value={WindowType.VENTILATOR}>Ventilator</option>
+            </Select>
+         </CollapsibleCard>
+      )}
+
+      {windowType === WindowType.LOUVERS && (
+        <CollapsibleCard title="Louver Pattern" isOpen={openCard === 'Louver Pattern'} onToggle={() => handleToggleCard('Louver Pattern')}>
+            <div className="space-y-2">
+                {config.louverPattern.map((item, index) => (
+                    <div key={item.id} className="flex items-end gap-2 p-2 bg-slate-900/50 rounded-md">
+                        <div className="flex-shrink-0 w-16 text-center">
+                            <span className={`text-xs font-bold ${item.type === 'profile' ? 'text-indigo-300' : 'text-slate-400'}`}>
+                                {item.type.toUpperCase()}
+                            </span>
+                        </div>
+                        <DimensionInput
+                            id={`${idPrefix}louver-item-${item.id}`}
+                            name={`louver-item-${item.id}`}
+                            label={`Size ${index + 1}`}
+                            value_mm={item.size}
+                            onChange_mm={v => onUpdateLouverItem(item.id, v)}
+                        />
+                        <Button variant="danger" onClick={() => onRemoveLouverItem(item.id)} className="p-2 h-10 w-10 flex-shrink-0">
+                            <TrashIcon className="w-5 h-5"/>
+                        </Button>
+                    </div>
+                ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-3">
+                <Button variant="secondary" onClick={() => onAddLouverItem('profile')}><PlusIcon className="w-4 h-4 mr-2"/> Add Profile</Button>
+                <Button variant="secondary" onClick={() => onAddLouverItem('gap')}><PlusIcon className="w-4 h-4 mr-2"/> Add Gap</Button>
+            </div>
+             <div className="mt-4 pt-4 border-t border-slate-700">
+                <label className="block text-sm font-medium text-slate-300 mb-2">Orientation</label>
+                <div className="grid grid-cols-2 gap-2">
+                    <Button variant={config.orientation === 'vertical' ? 'primary' : 'secondary'} onClick={() => setConfig('orientation', 'vertical')}>Vertical</Button>
+                    <Button variant={config.orientation === 'horizontal' ? 'primary' : 'secondary'} onClick={() => setConfig('orientation', 'horizontal')}>Horizontal</Button>
+                </div>
+            </div>
+        </CollapsibleCard>
+      )}
+
+      {windowType === WindowType.MIRROR && (
+        <CollapsibleCard title="Mirror Shape & Style" isOpen={openCard === 'Mirror Shape & Style'} onToggle={() => handleToggleCard('Mirror Shape & Style')}>
+            <div className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Shape</label>
+                    <div className="grid grid-cols-2 gap-2">
+                        {[MirrorShape.RECTANGLE, MirrorShape.ROUNDED_RECTANGLE, MirrorShape.CAPSULE, MirrorShape.OVAL].map(shape => (
+                            <Button 
+                                key={shape}
+                                variant={config.mirrorConfig.shape === shape ? 'primary' : 'secondary'}
+                                onClick={() => onUpdateMirrorConfig({ shape })}
+                                className="capitalize"
+                            >
+                                {shape.replace('_', ' ')}
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+
+                {config.mirrorConfig.shape === MirrorShape.ROUNDED_RECTANGLE && (
+                    <DimensionInput 
+                        id={`${idPrefix}mirror-corner-radius`} 
+                        name="mirror-corner-radius" 
+                        label="Corner Radius" 
+                        value_mm={config.mirrorConfig.cornerRadius} 
+                        onChange_mm={v => onUpdateMirrorConfig({ cornerRadius: v })} 
+                    />
+                )}
+
+                <label className="flex items-center space-x-2 cursor-pointer pt-2">
+                    <input 
+                        type="checkbox" 
+                        id={`${idPrefix}mirror-frameless`} 
+                        name="mirror-frameless" 
+                        checked={config.mirrorConfig.isFrameless} 
+                        onChange={e => onUpdateMirrorConfig({ isFrameless: e.target.checked })} 
+                        className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm text-slate-200">Frameless Design</span>
+                </label>
+                
+                {!config.mirrorConfig.isFrameless && (
+                     <p className="text-xs text-slate-400">Frame thickness can be adjusted in the "Profile Series" section under "Outer Frame".</p>
+                )}
+            </div>
+        </CollapsibleCard>
+      )}
+
+      {activeWindowType === WindowType.SLIDING && (
+        <CollapsibleCard title="Track & Shutter Setup" isOpen={openCard === 'Track & Shutter Setup'} onToggle={() => handleToggleCard('Track & Shutter Setup')}>
+            <Select id={`${idPrefix}track-type`} name="track-type" label="Track Type" value={displayConfig.trackType} onChange={(e) => isCorner ? setSideConfig({trackType: parseInt(e.target.value)}) : setConfig('trackType', parseInt(e.target.value) as TrackType)}>
+                <option value={TrackType.TWO_TRACK}>2-Track</option>
+                <option value={TrackType.THREE_TRACK}>3-Track</option>
+            </Select>
+            <Select id={`${idPrefix}shutter-config`} name="shutter-config" label="Shutter Configuration" value={displayConfig.shutterConfig} onChange={(e) => isCorner ? setSideConfig({shutterConfig: e.target.value as ShutterConfigType}) : setConfig('shutterConfig', e.target.value as ShutterConfigType)}>
+                {displayConfig.trackType === TrackType.TWO_TRACK && <><option value="2G">2 Glass Shutters</option><option value="4G">4 Glass Shutters</option></>}
+                {displayConfig.trackType === TrackType.THREE_TRACK && <><option value="3G">3 Glass Shutters</option><option value="2G1M">2 Glass + 1 Mesh</option><option value="4G2M">4 Glass + 2 Mesh</option></>}
+            </Select>
+            {displayConfig.fixedShutters.length > 0 && (
+              <div className="pt-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">Shutter Fixing</label>
+                <div className="grid grid-cols-2 gap-2">
+                    {displayConfig.fixedShutters.map((_, i) => (
+                        <label key={i} className="flex items-center space-x-2 p-2 bg-slate-700 rounded-md cursor-pointer hover:bg-slate-600">
+                            <input type="checkbox" id={`${idPrefix}fix-shutter-${i}`} name={`fix-shutter-${i}`} checked={displayConfig.fixedShutters[i] || false} onChange={e => handleFixShutterChange(i, e.target.checked)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                            <span className="text-sm text-slate-200">Fix Shutter {i + 1}</span>
+                        </label>
+                    ))}
+                </div>
+              </div>
+            )}
+        </CollapsibleCard>
+      )}
+
+      {(activeWindowType === WindowType.CASEMENT || activeWindowType === WindowType.VENTILATOR) && (
+          <CollapsibleCard title="Grid Layout" isOpen={openCard === 'Grid Layout'} onToggle={() => handleToggleCard('Grid Layout')}>
+              <div className="grid grid-cols-2 gap-4">
+                  <Input id={`${idPrefix}grid-rows`} name="grid-rows" label="Rows" type="number" inputMode="numeric" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
+                  <Input id={`${idPrefix}grid-cols`} name="grid-cols" label="Columns" type="number" inputMode="numeric" value={gridCols} min={1} onChange={e => setGridSize(gridRows, Math.max(1, parseInt(e.target.value) || 1))} />
+              </div>
+              <div className="mt-4">
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Panel Configuration (Click to toggle)</label>
+                  <p className="text-xs text-slate-400 mb-2">You can also click grid lines on the canvas to merge panels.</p>
+                  <div className="max-h-64 overflow-y-auto custom-scrollbar touch-pan-y bg-slate-900 p-2 rounded-md">
+                    <div className="grid gap-1" style={{gridTemplateRows: `repeat(${gridRows}, 1fr)`, gridTemplateColumns: `repeat(${gridCols}, 1fr)`}}>
+                        {Array.from({length: gridRows * gridCols}).map((_, index) => {
+                            const row = Math.floor(index / gridCols);
+                            const col = index % gridCols;
+                            if (activeWindowType === WindowType.CASEMENT) {
+                                const isDoor = displayConfig.doorPositions.some(p => p.row === row && p.col === col);
+                                return ( <button key={`${row}-${col}`} onClick={() => toggleDoorPosition(row, col)} className={`aspect-square rounded text-xs font-semibold flex items-center justify-center ${isDoor ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{isDoor ? 'Door' : 'Fixed'}</button> );
+                            }
+                            if (activeWindowType === WindowType.VENTILATOR) {
+                                const cell = displayConfig.ventilatorGrid[row]?.[col];
+                                const cellType = cell?.type || 'glass';
+                                const colorClass = cellType === 'door' ? 'bg-indigo-500 text-white' : cellType === 'louvers' ? 'bg-sky-600 text-white' : cellType === 'exhaust_fan' ? 'bg-teal-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600';
+                                return ( <button key={`${row}-${col}`} onClick={() => onVentilatorCellClick(row, col)} className={`aspect-square rounded text-xs font-semibold flex items-center justify-center ${colorClass}`}>{getVentilatorCellLabel(cellType)}</button> );
+                            }
+                            return null;
+                        })}
+                    </div>
+                  </div>
+              </div>
+          </CollapsibleCard>
+      )}
+
+      {windowType === WindowType.GLASS_PARTITION && onSetPartitionPreset && (
+        <CollapsibleCard title="Door + window combinations" isOpen={openCard === 'Door + window combinations'} onToggle={() => handleToggleCard('Door + window combinations')}>
+          <p className="text-xs text-slate-400 mb-3 leading-snug">
+            Main entrance–style layouts: door leaf with fixed or sliding sidelight, shower enclosures, bi-fold + slider, etc. Set <strong className="text-slate-300">total width × height</strong> in Overall Dimensions (e.g. 2134 × 1219 mm ≈ 7′ × 4′), then tap a preset. Fine-tune panel types in Partition Panel Setup below.
+          </p>
+          <div className="flex flex-col gap-2">
+            {DOOR_WINDOW_COMBO_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => onSetPartitionPreset(preset.panels)}
+                className="text-left rounded-md border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm text-slate-100 transition hover:border-indigo-500 hover:bg-slate-800"
+              >
+                <span className="font-semibold text-indigo-200 block">{preset.label}</span>
+                <span className="text-xs text-slate-400 font-normal">{preset.hint}</span>
+              </button>
+            ))}
+          </div>
+        </CollapsibleCard>
+      )}
+
+      {windowType === WindowType.GLASS_PARTITION && (
+        <CollapsibleCard title="Partition Panel Setup" isOpen={openCard === 'Partition Panel Setup'} onToggle={() => handleToggleCard('Partition Panel Setup')}>
+          <Input id={`${idPrefix}partition-count`} name="partition-count" label="Number of Panels" type="number" inputMode="numeric" min={1} max={8} value={config.partitionPanels.count} onChange={e => onSetPartitionPanelCount(Math.max(1, parseInt(e.target.value) || 1))}/>
+           <label className="flex items-center space-x-2 cursor-pointer mt-2">
+              <input type="checkbox" id={`${idPrefix}partition-has-top-channel`} name="partition-has-top-channel" checked={config.partitionPanels.hasTopChannel} onChange={e => onSetPartitionHasTopChannel(e.target.checked)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
+              <span className="text-sm text-slate-200">Enable Top/Bottom Channel</span>
+          </label>
+          {config.partitionPanels.count > 0 && (
+            <div className="pt-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">Panel Types (Click to change)</label>
+              <div className="grid grid-cols-1 gap-2">
+                  {Array.from({length: config.partitionPanels.count}).map((_, i) => {
+                      const panelConfig = config.partitionPanels.types[i] || { type: 'fixed' as const };
+                      const {type, framing = 'none'} = panelConfig;
+                      const typeColorClass = type === 'sliding' ? 'bg-sky-600 hover:bg-sky-700' : type === 'hinged' ? 'bg-indigo-600 hover:bg-indigo-700' : type === 'fold' ? 'bg-violet-600 hover:bg-violet-700' : 'bg-slate-700 hover:bg-slate-600';
+                      const typeLabel = type === 'fold' ? 'Bi-fold' : type;
+                      const frameColorClass = framing === 'full' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-700 hover:bg-slate-600';
+                      const wVal = panelConfig.widthMm;
+                      const hVal = panelConfig.heightMm;
+                      const hAlign = panelConfig.heightAlign ?? 'bottom';
+                      const hasReducedHeight =
+                        hVal !== '' && hVal != null && Number.isFinite(Number(hVal)) && Number(hVal) > 0;
+                      const leaves = clampFoldLeafCount(panelConfig.foldLeafCount);
+                      return (
+                        <div key={i} className="rounded-md border border-slate-600 overflow-hidden">
+                          <div className="grid grid-cols-3 gap-1 text-white text-sm font-semibold">
+                            <div className="p-2 rounded-l-md bg-slate-800 col-span-1 flex items-center justify-center">Panel {i + 1}</div>
+                            <button type="button" onClick={() => onCyclePartitionPanelType(i)} className={`p-2 capitalize ${typeColorClass} transition-colors`}>{typeLabel}</button>
+                            <button type="button" onClick={() => onCyclePartitionPanelFraming(i)} disabled={type === 'hinged'} className={`p-2 rounded-r-md capitalize ${frameColorClass} transition-colors ${type === 'hinged' ? 'opacity-50 cursor-not-allowed' : ''}`}>{type === 'hinged' ? 'Framed' : (framing === 'full' ? 'Framed' : 'Frameless')}</button>
+                          </div>
+                          <div className="p-2 bg-slate-900/60 border-t border-slate-600 space-y-2">
+                            <p className="text-[11px] text-slate-400 leading-snug">Optional: exact width / height (mm) for this zone. Leave empty to use split % or equal columns.</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Input
+                                id={`${idPrefix}partition-panel-${i}-w`}
+                                name={`partition-panel-${i}-w`}
+                                label="Width (mm)"
+                                type="number"
+                                inputMode="decimal"
+                                min={1}
+                                placeholder="Auto"
+                                value={wVal === '' || wVal == null ? '' : wVal}
+                                onChange={(e) => {
+                                  const v = e.target.value.trim();
+                                  if (v === '') onUpdatePartitionPanel(i, { widthMm: '' });
+                                  else {
+                                    const n = parseFloat(v);
+                                    if (Number.isFinite(n) && n > 0) onUpdatePartitionPanel(i, { widthMm: n });
+                                  }
+                                }}
+                              />
+                              <Input
+                                id={`${idPrefix}partition-panel-${i}-h`}
+                                name={`partition-panel-${i}-h`}
+                                label="Height (mm)"
+                                type="number"
+                                inputMode="decimal"
+                                min={1}
+                                placeholder="Full opening"
+                                value={hVal === '' || hVal == null ? '' : hVal}
+                                onChange={(e) => {
+                                  const v = e.target.value.trim();
+                                  if (v === '') onUpdatePartitionPanel(i, { heightMm: '' });
+                                  else {
+                                    const n = parseFloat(v);
+                                    if (Number.isFinite(n) && n > 0) onUpdatePartitionPanel(i, { heightMm: n });
+                                  }
+                                }}
+                              />
+                            </div>
+                            {hasReducedHeight && (
+                              <div>
+                                <span className="block text-xs font-medium text-slate-300 mb-1.5">Shorter height aligns from</span>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => onUpdatePartitionPanel(i, { heightAlign: 'top' })}
+                                    className={`rounded-md px-2 py-2 text-xs font-semibold transition-colors ${
+                                      hAlign === 'top'
+                                        ? 'bg-indigo-600 text-white ring-2 ring-indigo-400'
+                                        : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+                                    }`}
+                                  >
+                                    Top (head)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => onUpdatePartitionPanel(i, { heightAlign: 'bottom' })}
+                                    className={`rounded-md px-2 py-2 text-xs font-semibold transition-colors ${
+                                      hAlign === 'bottom'
+                                        ? 'bg-indigo-600 text-white ring-2 ring-indigo-400'
+                                        : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+                                    }`}
+                                  >
+                                    Bottom (sill)
+                                  </button>
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-1.5 leading-snug">
+                                  Top: glass meets the top channel; bottom track sits under the door/window. Bottom: glass meets the sill (default).
+                                </p>
+                              </div>
+                            )}
+                            {type === 'fold' && (
+                              <>
+                                <Input
+                                  id={`${idPrefix}partition-panel-${i}-leaves`}
+                                  name={`partition-panel-${i}-leaves`}
+                                  label="Folding leaves (1–12)"
+                                  type="number"
+                                  inputMode="numeric"
+                                  min={1}
+                                  max={12}
+                                  value={leaves}
+                                  onChange={(e) => {
+                                    const n = parseInt(e.target.value, 10);
+                                    if (!Number.isFinite(n)) return;
+                                    onUpdatePartitionPanel(i, { foldLeafCount: clampFoldLeafCount(n) });
+                                  }}
+                                />
+                                <div
+                                  className={`space-y-2 pt-1 border-t border-slate-600/80 ${framing !== 'full' ? 'opacity-45 pointer-events-none' : ''}`}
+                                >
+                                  <p className="text-[11px] text-slate-400 leading-snug">
+                                    Bi-fold outer frame (mm) when <strong className="text-slate-300">Framed</strong> is on. Leave blank to use the series casement depth for that edge. Top / bottom can differ from vertical stiles; use Left / Right only if stiles are not equal.
+                                  </p>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <Input
+                                      id={`${idPrefix}partition-panel-${i}-ft`}
+                                      name={`partition-panel-${i}-ft`}
+                                      label="Top frame"
+                                      type="number"
+                                      inputMode="decimal"
+                                      min={1}
+                                      placeholder="Series"
+                                      value={panelConfig.foldFrameTopMm === '' || panelConfig.foldFrameTopMm == null ? '' : panelConfig.foldFrameTopMm}
+                                      onChange={(e) => {
+                                        const v = e.target.value.trim();
+                                        if (v === '') onUpdatePartitionPanel(i, { foldFrameTopMm: '' });
+                                        else {
+                                          const n = parseFloat(v);
+                                          if (Number.isFinite(n) && n > 0) onUpdatePartitionPanel(i, { foldFrameTopMm: n });
+                                        }
+                                      }}
+                                    />
+                                    <Input
+                                      id={`${idPrefix}partition-panel-${i}-fb`}
+                                      name={`partition-panel-${i}-fb`}
+                                      label="Bottom frame"
+                                      type="number"
+                                      inputMode="decimal"
+                                      min={1}
+                                      placeholder="Series"
+                                      value={panelConfig.foldFrameBottomMm === '' || panelConfig.foldFrameBottomMm == null ? '' : panelConfig.foldFrameBottomMm}
+                                      onChange={(e) => {
+                                        const v = e.target.value.trim();
+                                        if (v === '') onUpdatePartitionPanel(i, { foldFrameBottomMm: '' });
+                                        else {
+                                          const n = parseFloat(v);
+                                          if (Number.isFinite(n) && n > 0) onUpdatePartitionPanel(i, { foldFrameBottomMm: n });
+                                        }
+                                      }}
+                                    />
+                                    <Input
+                                      id={`${idPrefix}partition-panel-${i}-fs`}
+                                      name={`partition-panel-${i}-fs`}
+                                      label="Sides (L+R)"
+                                      type="number"
+                                      inputMode="decimal"
+                                      min={1}
+                                      placeholder="Series"
+                                      value={panelConfig.foldFrameSideMm === '' || panelConfig.foldFrameSideMm == null ? '' : panelConfig.foldFrameSideMm}
+                                      onChange={(e) => {
+                                        const v = e.target.value.trim();
+                                        if (v === '') onUpdatePartitionPanel(i, { foldFrameSideMm: '' });
+                                        else {
+                                          const n = parseFloat(v);
+                                          if (Number.isFinite(n) && n > 0) onUpdatePartitionPanel(i, { foldFrameSideMm: n });
+                                        }
+                                      }}
+                                    />
+                                    <div className="col-span-2 text-[10px] text-slate-500">Optional: different left / right stile (overrides Sides)</div>
+                                    <Input
+                                      id={`${idPrefix}partition-panel-${i}-fl`}
+                                      name={`partition-panel-${i}-fl`}
+                                      label="Left stile"
+                                      type="number"
+                                      inputMode="decimal"
+                                      min={1}
+                                      placeholder="Sides / series"
+                                      value={panelConfig.foldFrameLeftMm === '' || panelConfig.foldFrameLeftMm == null ? '' : panelConfig.foldFrameLeftMm}
+                                      onChange={(e) => {
+                                        const v = e.target.value.trim();
+                                        if (v === '') onUpdatePartitionPanel(i, { foldFrameLeftMm: '' });
+                                        else {
+                                          const n = parseFloat(v);
+                                          if (Number.isFinite(n) && n > 0) onUpdatePartitionPanel(i, { foldFrameLeftMm: n });
+                                        }
+                                      }}
+                                    />
+                                    <Input
+                                      id={`${idPrefix}partition-panel-${i}-fr`}
+                                      name={`partition-panel-${i}-fr`}
+                                      label="Right stile"
+                                      type="number"
+                                      inputMode="decimal"
+                                      min={1}
+                                      placeholder="Sides / series"
+                                      value={panelConfig.foldFrameRightMm === '' || panelConfig.foldFrameRightMm == null ? '' : panelConfig.foldFrameRightMm}
+                                      onChange={(e) => {
+                                        const v = e.target.value.trim();
+                                        if (v === '') onUpdatePartitionPanel(i, { foldFrameRightMm: '' });
+                                        else {
+                                          const n = parseFloat(v);
+                                          if (Number.isFinite(n) && n > 0) onUpdatePartitionPanel(i, { foldFrameRightMm: n });
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                  })}
+              </div>
+            </div>
+          )}
+          {config.partitionPanels.count === 2 && onSetPartitionWidthFractions && (() => {
+            const wf = config.partitionPanels.widthFractions;
+            const leftPct =
+              wf && wf.length === 2
+                ? Math.round((100 * wf[0]) / (wf[0] + wf[1]))
+                : 50;
+            return (
+              <div className="pt-4 mt-2 border-t border-slate-600">
+                <Slider
+                  id={`${idPrefix}partition-split`}
+                  name="partition-split"
+                  label="Left zone width (two panels)"
+                  min={10}
+                  max={90}
+                  value={leftPct}
+                  unit="%"
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    onSetPartitionWidthFractions([v, 100 - v]);
+                  }}
+                />
+                <p className="text-xs text-slate-500 mt-1">Split between two zones when you do not set per-panel width (mm) above. Presets set typical ratios.</p>
+              </div>
+            );
+          })()}
+        </CollapsibleCard>
+      )}
+
+      {operablePanels.length > 0 && (
+          <CollapsibleCard title="Handle Configuration" isOpen={openCard === 'Handle Configuration'} onToggle={() => handleToggleCard('Handle Configuration')}>
+              <Select id={`${idPrefix}handle-panel-select`} name="handle-panel-select" label="Select Panel" value={selectedPanelId} onChange={e => setSelectedPanelId(e.target.value)}>
+                {operablePanels.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </Select>
+              {selectedPanelId && (
+                  <div className="p-2 bg-slate-700 rounded-md space-y-3">
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                          <input type="checkbox" id={`${idPrefix}handle-enable`} name="handle-enable" checked={!!currentHandle} onChange={e => onUpdateHandle(selectedPanelId, e.target.checked ? getDefaultHandleConfig(selectedPanelId, displayConfig) : null)} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
+                          <span className="text-sm text-slate-200">Enable Handle</span>
+                      </label>
+                      <p className="text-xs text-slate-400 leading-snug">
+                        Position uses the crosshair at the handle centre (default 50% / 50%). Size grows <span className="text-slate-300">up and down</span> from that point. Sliding levers sit on frame members by default.
+                      </p>
+                      {currentHandle && (
+                          <div className="space-y-3">
+                              <Button variant="secondary" className="w-full text-sm" onClick={() => onUpdateHandle(selectedPanelId, getDefaultHandleConfig(selectedPanelId, displayConfig))}>
+                                Reset to recommended position
+                              </Button>
+                              <Slider id={`${idPrefix}handle-pos-x`} name="handle-pos-x" label={`Horizontal — ${currentHandle.x}% (left ↔ right of panel)`} value={currentHandle.x} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, x: parseInt(e.target.value)})}/>
+                              <Slider id={`${idPrefix}handle-pos-y`} name="handle-pos-y" label={`Vertical — ${currentHandle.y}% (crosshair / centre height)`} value={currentHandle.y} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, y: parseInt(e.target.value)})}/>
+                              <Slider id={`${idPrefix}handle-length`} name="handle-length" label={`Overall size — ${currentHandle.length || 158} mm (height; balanced above & below crosshair)`} value={currentHandle.length || 158} min={100} max={420} step={5} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, length: parseInt(e.target.value)})}/>
+                               <div className="grid grid-cols-2 gap-2">
+                                <Button variant={currentHandle.orientation === 'vertical' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, { ...currentHandle, orientation: 'vertical', variant: 'casement' })}>Vertical (lever)</Button>
+                                <Button variant={currentHandle.orientation === 'horizontal' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, { ...currentHandle, orientation: 'horizontal', variant: 'sliding' })}>Horizontal (pull bar)</Button>
+                              </div>
+                          </div>
+                      )}
+                  </div>
+              )}
+          </CollapsibleCard>
+      )}
+
+      <CollapsibleCard title="Appearance" isOpen={openCard === 'Appearance'} onToggle={() => handleToggleCard('Appearance')}>
+        {windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS && (
+            <>
+                <div className="grid grid-cols-2 gap-4">
+                    <Select id={`${idPrefix}appearance-glass-tint`} name="appearance-glass-tint" label="Glass Tint" value={config.glassType} onChange={(e) => setConfig('glassType', e.target.value as GlassType)}>
+                    {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </Select>
+                    <Select id={`${idPrefix}appearance-special-type`} name="appearance-special-type" label="Special Type" value={config.glassSpecialType} onChange={e => setConfig('glassSpecialType', e.target.value as GlassSpecialType)}>
+                        <option value="none">None</option>
+                        {series.glassOptions.specialTypes.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+                    </Select>
+                </div>
+                {config.glassSpecialType === 'laminated' && config.laminatedGlassConfig && (
+                    <div className="p-3 bg-slate-900/50 rounded-md mt-4 space-y-3">
+                        <h4 className="text-base font-semibold text-slate-200">Laminated Glass Details</h4>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                            <Input id={`${idPrefix}laminated-g1-thickness`} name="laminated-g1-thickness" label="Glass 1 Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.glass1Thickness} onChange={e => onLaminatedConfigChange({ glass1Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                            <Select id={`${idPrefix}laminated-g1-type`} name="laminated-g1-type" label="Glass 1 Type" value={config.laminatedGlassConfig.glass1Type} onChange={e => onLaminatedConfigChange({ glass1Type: e.target.value as GlassType })}>
+                                {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </Select>
+                            <Input id={`${idPrefix}laminated-pvb-thickness`} name="laminated-pvb-thickness" label="PVB Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.pvbThickness} onChange={e => onLaminatedConfigChange({ pvbThickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                            <Select id={`${idPrefix}laminated-pvb-type`} name="laminated-pvb-type" label="PVB Type" value={config.laminatedGlassConfig.pvbType} onChange={e => onLaminatedConfigChange({ pvbType: e.target.value as LaminatedGlassConfig['pvbType'] })}>
+                                <option value="clear">Clear</option>
+                                <option value="milky_white">Milky White</option>
+                            </Select>
+                            <Input id={`${idPrefix}laminated-g2-thickness`} name="laminated-g2-thickness" label="Glass 2 Thickness" type="number" inputMode="decimal" value={config.laminatedGlassConfig.glass2Thickness} onChange={e => onLaminatedConfigChange({ glass2Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                            <Select id={`${idPrefix}laminated-g2-type`} name="laminated-g2-type" label="Glass 2 Type" value={config.laminatedGlassConfig.glass2Type} onChange={e => onLaminatedConfigChange({ glass2Type: e.target.value as GlassType })}>
+                                {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </Select>
+                        </div>
+                        <label className="flex items-center space-x-2 cursor-pointer pt-2">
+                            <input type="checkbox" id={`${idPrefix}laminated-is-toughened`} name="laminated-is-toughened" checked={config.laminatedGlassConfig.isToughened} onChange={e => onLaminatedConfigChange({ isToughened: e.target.checked })} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                            <span className="text-sm text-slate-200">Toughened / Tempered Glass</span>
+                        </label>
+                    </div>
+                )}
+                {config.glassSpecialType === 'dgu' && config.dguGlassConfig && (
+                    <div className="p-3 bg-slate-900/50 rounded-md mt-4 space-y-3">
+                        <h4 className="text-base font-semibold text-slate-200">DGU Glass Details</h4>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                            <Input id={`${idPrefix}dgu-g1-thickness`} name="dgu-g1-thickness" label="Glass 1 Thickness" type="number" inputMode="decimal" value={config.dguGlassConfig.glass1Thickness} onChange={e => onDguConfigChange({ glass1Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                            <Select id={`${idPrefix}dgu-g1-type`} name="dgu-g1-type" label="Glass 1 Type" value={config.dguGlassConfig.glass1Type} onChange={e => onDguConfigChange({ glass1Type: e.target.value as GlassType })}>
+                                {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </Select>
+                            <Input id={`${idPrefix}dgu-air-gap`} name="dgu-air-gap" label="Air Gap" type="number" inputMode="decimal" value={config.dguGlassConfig.airGap} onChange={e => onDguConfigChange({ airGap: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                            <div />
+                            <Input id={`${idPrefix}dgu-g2-thickness`} name="dgu-g2-thickness" label="Glass 2 Thickness" type="number" inputMode="decimal" value={config.dguGlassConfig.glass2Thickness} onChange={e => onDguConfigChange({ glass2Thickness: e.target.value === '' ? '' : Number(e.target.value) })} unit="mm" />
+                            <Select id={`${idPrefix}dgu-g2-type`} name="dgu-g2-type" label="Glass 2 Type" value={config.dguGlassConfig.glass2Type} onChange={e => onDguConfigChange({ glass2Type: e.target.value as GlassType })}>
+                                {glassTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </Select>
+                        </div>
+                        <label className="flex items-center space-x-2 cursor-pointer pt-2">
+                            <input type="checkbox" id={`${idPrefix}dgu-is-toughened`} name="dgu-is-toughened" checked={config.dguGlassConfig.isToughened} onChange={e => onDguConfigChange({ isToughened: e.target.checked })} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500"/>
+                            <span className="text-sm text-slate-200">Toughened / Tempered Glass</span>
+                        </label>
+                    </div>
+                )}
+            </>
+        )}
+        {windowType !== WindowType.LOUVERS && (
+            <div className={`grid grid-cols-2 gap-4 ${windowType !== WindowType.MIRROR ? 'mt-4' : ''}`}>
+                <Select id={`${idPrefix}appearance-glass-thickness`} name="appearance-glass-thickness" label={windowType === WindowType.MIRROR ? "Mirror Thickness" : "Glass Thickness"} value={isCustomThickness ? 'custom' : config.glassThickness} onChange={handleThicknessChange}>
+                    <option value="">Default</option>
+                    {series.glassOptions.thicknesses.map(t => <option key={t} value={t}>{t} mm</option>)}
+                    {series.glassOptions.customThicknessAllowed && <option value="custom">Custom...</option>}
+                </Select>
+                {isCustomThickness && <Input id={`${idPrefix}appearance-glass-thickness-custom`} name="appearance-glass-thickness-custom" label="Custom Thickness" type="number" inputMode="decimal" value={config.glassThickness} onChange={e => setConfig('glassThickness', e.target.value === '' ? '' : Number(e.target.value))} unit="mm" />}
+            </div>
+        )}
+        {(windowType !== WindowType.LOUVERS) && (
+             <Input id={`${idPrefix}custom-glass-name`} name="custom-glass-name" label="Custom Name (Optional)" type="text" placeholder={windowType === WindowType.MIRROR ? "e.g., Saint-Gobain Vision" : "e.g., Saint-Gobain Sun Ban"} value={config.customGlassName} onChange={e => setConfig('customGlassName', e.target.value)} />
+        )}
+       
+        {windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS && (
+            <div className='mt-4 pt-4 border-t border-slate-700'>
+                <h4 className="text-base font-semibold text-slate-200 mb-2">Glass Texture</h4>
+                <Button variant="secondary" className="w-full" onClick={() => glassTextureUploadRef.current?.click()}> <UploadIcon className="w-4 h-4 mr-2" /> Upload Texture </Button>
+                <input type="file" ref={glassTextureUploadRef} onChange={handleGlassTextureUpload} className="hidden" accept="image/*" />
+                {config.glassTexture && <Button variant="danger" className="w-full mt-2" onClick={() => setConfig('glassTexture', '')}> Remove Texture </Button>}
+            </div>
+        )}
+        <div className='mt-4 pt-4 border-t border-slate-700'>
+            <h4 className="text-base font-semibold text-slate-200 mb-2">Profile color</h4>
+            <p className="text-xs text-slate-400 mb-2">Quick colors (tap to apply)</p>
+            <div className="flex flex-wrap gap-2 mb-4">
+                {PROFILE_QUICK_PRESETS.map((p) => (
+                    <button
+                        key={p.value}
+                        type="button"
+                        title={p.name}
+                        onClick={() => setConfig('profileColor', p.value)}
+                        className="relative w-12 h-12 rounded-md border-2 transition-colors"
+                        style={{
+                            borderColor: config.profileColor === p.value ? '#4f46e5' : 'transparent',
+                            backgroundColor: p.value,
+                        }}
+                    >
+                        <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-1 rounded opacity-0 hover:opacity-100 pointer-events-none whitespace-nowrap z-10">{p.name}</span>
+                    </button>
+                ))}
+            </div>
+            <h4 className="text-base font-semibold text-slate-200 mb-2">Texture over color</h4>
+            <p className="text-xs text-slate-400 mb-2">Works with any solid profile color above — multiplies a wood-grain or finish image on top.</p>
+            <div className="flex flex-wrap gap-2 mb-2">
+                <Button variant="secondary" className="flex-1 min-w-[140px]" onClick={() => profileOverlayUploadRef.current?.click()}>
+                    <UploadIcon className="w-4 h-4 mr-2" /> Upload texture overlay
+                </Button>
+                <input type="file" ref={profileOverlayUploadRef} onChange={handleProfileOverlayUpload} className="hidden" accept="image/*" />
+                {config.profileTexture ? (
+                    <Button variant="danger" onClick={() => setConfig('profileTexture', '')}>Remove overlay</Button>
+                ) : null}
+            </div>
+            <h4 className="text-base font-semibold text-slate-200 mb-2 mt-4">Saved swatches</h4>
+            <div className="flex flex-wrap gap-2">
+                {savedColors.map(color => (
+                    <button key={color.id} onClick={() => { if (color.type === 'color') setConfig('profileColor', color.value); else setConfig('profileTexture', color.value); }} onContextMenu={(e) => { e.preventDefault(); if (window.confirm(`Delete color "${color.name}"?`)) { handleDeleteColor(color.id); } }} className="relative group w-12 h-12 rounded-md border-2" style={{ borderColor: (color.type === 'color' ? config.profileColor === color.value : config.profileTexture === color.value) ? '#4f46e5' : 'transparent', background: color.type === 'color' ? color.value : `url(${color.value})`, backgroundSize: 'cover' }}>
+                        <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{color.name}</span>
+                    </button>
+                ))}
+                <button onClick={handleInitiateAddPreset} className="w-12 h-12 rounded-md border-2 border-dashed border-slate-500 flex items-center justify-center hover:bg-slate-600"> <PlusIcon className="w-6 h-6 text-slate-400" /> </button>
+            </div>
+             {isAddingPreset && (
+              <div className="mt-2 p-3 bg-slate-600 rounded-md space-y-2">
+                  <Input id={`${idPrefix}new-preset-name`} name="new-preset-name" label="Preset Name" value={newPreset.name} onChange={e => setNewPreset({...newPreset, name: e.target.value})}/>
+                  <div className='flex gap-2 items-end'>
+                    <Input id={`${idPrefix}new-preset-value`} name="new-preset-value" label="Color Value" type="color" value={newPreset.value} onChange={e => setNewPreset({...newPreset, value: e.target.value, type: 'color'})} className='p-1 h-10'/>
+                    <Button variant="secondary" className="h-10" onClick={() => profileTextureUploadRef.current?.click()}><UploadIcon className='w-4 h-4'/></Button>
+                    <input type="file" ref={profileTextureUploadRef} onChange={e => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setNewPreset({...newPreset, value: reader.result as string, type: 'texture'}); reader.readAsDataURL(file); } }} className="hidden" accept="image/*" />
+                  </div>
+                  <div className="flex gap-2"> <Button onClick={handleAddPreset} className="flex-grow">Save</Button> <Button variant="secondary" onClick={() => setIsAddingPreset(false)} className="flex-grow">Cancel</Button> </div>
+              </div>
+            )}
+        </div>
+      </CollapsibleCard>
+
+      {windowType !== WindowType.LOUVERS && (
+          <CollapsibleCard title="Georgian Bars" isOpen={openCard === 'Georgian Bars'} onToggle={() => handleToggleCard('Georgian Bars')}>
+            <div className="grid grid-cols-2 gap-4">
+                <DimensionInput id={`${idPrefix}georgian-bar-thickness`} name="georgian-bar-thickness" label="Bar Thickness" value_mm={glassGrid.barThickness} onChange_mm={v => setConfig('glassGrid', {...glassGrid, barThickness: v === '' ? 0 : v})} controlledUnit={georgianUnit} />
+                <Select id={`${idPrefix}georgian-unit-select`} label="Unit" value={georgianUnit} onChange={e => setGeorgianUnit(e.target.value as Unit)}>
+                    <option value="mm">mm</option>
+                    <option value="cm">cm</option>
+                    <option value="in">in</option>
+                    <option value="ft-in">ft-in</option>
+                </Select>
+            </div>
+            <label className="flex items-center space-x-2 cursor-pointer mt-4">
+                  <input type="checkbox" id={`${idPrefix}georgian-apply-all`} name="georgian-apply-all" checked={glassGrid.applyToAll} onChange={handleApplyToAllChange} className="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600 focus:ring-indigo-500" />
+                  <span className="text-sm text-slate-200">Apply to all panels</span>
+            </label>
+            {!glassGrid.applyToAll && availableGeorgianPanels.length > 0 && (
+              <Select id={`${idPrefix}georgian-panel-select`} name="georgian-panel-select" label="Target Panel" value={activeGeorgianPanelId} onChange={e => setActiveGeorgianPanelId(e.target.value)}>
+                 <option value="default">Default Pattern</option>
+                 {availableGeorgianPanels.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </Select>
+            )}
+            <div className="mt-4 pt-4 border-t border-slate-700 space-y-4">
+                <div>
+                    <h4 className="text-base font-semibold text-slate-200 mb-2">Horizontal Bars</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                        <Input id={`${idPrefix}georgian-h-count`} name="georgian-h-count" label="Count" type="number" value={activeGeorgianPattern.horizontal.count} onChange={e => handleGeorgianPatternChange('horizontal', 'count', parseInt(e.target.value) || 0)} />
+                        <DimensionInput id={`${idPrefix}georgian-h-offset`} name="georgian-h-offset" label="Offset" value_mm={activeGeorgianPattern.horizontal.offset} onChange_mm={v => handleGeorgianPatternChange('horizontal', 'offset', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+                        <DimensionInput id={`${idPrefix}georgian-h-gap`} name="georgian-h-gap" label="Gap" value_mm={activeGeorgianPattern.horizontal.gap} onChange_mm={v => handleGeorgianPatternChange('horizontal', 'gap', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+                    </div>
+                </div>
+                 <div>
+                    <h4 className="text-base font-semibold text-slate-200 mb-2">Vertical Bars</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                        <Input id={`${idPrefix}georgian-v-count`} name="georgian-v-count" label="Count" type="number" value={activeGeorgianPattern.vertical.count} onChange={e => handleGeorgianPatternChange('vertical', 'count', parseInt(e.target.value) || 0)} />
+                        <DimensionInput id={`${idPrefix}georgian-v-offset`} name="georgian-v-offset" label="Offset" value_mm={activeGeorgianPattern.vertical.offset} onChange_mm={v => handleGeorgianPatternChange('vertical', 'offset', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+                        <DimensionInput id={`${idPrefix}georgian-v-gap`} name="georgian-v-gap" label="Gap" value_mm={activeGeorgianPattern.vertical.gap} onChange_mm={v => handleGeorgianPatternChange('vertical', 'gap', v === '' ? 0 : v)} controlledUnit={georgianUnit} />
+                    </div>
+                </div>
+            </div>
+          </CollapsibleCard>
+      )}
+      
+      {windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS && (
+          <CollapsibleCard title="Fixed Panels" isOpen={openCard === 'Fixed Panels'} onToggle={() => handleToggleCard('Fixed Panels')}>
+          <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.TOP)}><PlusIcon className="w-4 h-4 mr-2"/> Top</Button>
+              <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.BOTTOM)}><PlusIcon className="w-4 h-4 mr-2"/> Bottom</Button>
+              <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.LEFT)}><PlusIcon className="w-4 h-4 mr-2"/> Left</Button>
+              <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.RIGHT)}><PlusIcon className="w-4 h-4 mr-2"/> Right</Button>
+          </div>
+          {fixedPanels.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
+              {fixedPanels.map(panel => (
+                <div key={panel.id} className="flex items-end gap-2">
+                  <DimensionInput id={`${idPrefix}fixed-panel-${panel.id}`} name={`fixed-panel-${panel.id}`} label={`Fixed Panel ${panel.position}`} value_mm={panel.size} onChange_mm={v => updateFixedPanelSize(panel.id, v === '' ? 0 : v)} />
+                  <Button variant="danger" onClick={() => removeFixedPanel(panel.id)} className="p-2 h-10 w-10 flex-shrink-0"><TrashIcon className="w-5 h-5"/></Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CollapsibleCard>
+      )}
+
+      <CollapsibleCard title="Profile Series" isOpen={openCard === 'Profile Series'} onToggle={() => handleToggleCard('Profile Series')}>
+        <SearchableSelect id={`${idPrefix}series-select`} label="Select Series" options={seriesOptions} value={series.id} onChange={onSeriesSelect} />
+        <div className="flex gap-2 mt-2">
+            <Button variant="secondary" className="w-full" onClick={handleInitiateSave}>Save as New...</Button>
+            {!isDefaultSeries && <Button variant="danger" className="w-full" onClick={() => onSeriesDelete(series.id)}>Delete</Button>}
+        </div>
+        {isSavingSeries && (
+          <div className="mt-2 p-3 bg-slate-600 rounded-md space-y-2">
+            <Input id={`${idPrefix}new-series-name`} name="new-series-name" label="New Series Name" value={newSeriesName} onChange={e => setNewSeriesName(e.target.value)} />
+            <div className="flex gap-2"> <Button onClick={handleConfirmSave} className="flex-grow">Save</Button> <Button variant="secondary" onClick={() => setIsSavingSeries(false)} className="flex-grow">Cancel</Button> </div>
+          </div>
+        )}
+        <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
+          <h4 className="text-base font-semibold text-slate-200">Profile Dimensions</h4>
+          <p className="text-xs text-slate-400 mb-2">
+            Only sections used for this window type are listed. Add another profile size if your series needs it.
+          </p>
+          {getOrderedProfileDimensionKeys(series).map((key) => {
+            const label = dimensionKeyLabel(key);
+            const isExtra = (series.extraDimensionKeys ?? []).includes(key);
+            return (
+              <div key={key} className="flex gap-2 items-end">
+                <div className="flex-1 min-w-0">
+                  <DimensionInput
+                    id={`${idPrefix}dim-${key}`}
+                    name={`dim-${key}`}
+                    label={label}
+                    value_mm={series.dimensions[key] ?? ''}
+                    onChange_mm={(v) => handleDimensionChange(key, v)}
+                    weightValue={series.weights?.[key]}
+                    onWeightChange={(v) => handleProfileDetailChange('weights', key, v)}
+                    lengthValue={series.lengths?.[key]}
+                    onLengthChange={(v) => handleProfileDetailChange('lengths', key, v)}
+                  />
+                </div>
+                {isExtra ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="shrink-0 h-10 px-2"
+                    title="Remove this section from the list"
+                    aria-label={`Remove ${label}`}
+                    onClick={() => handleRemoveExtraDimension(key)}
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </Button>
+                ) : null}
+              </div>
+            );
+          })}
+          {getAddableProfileDimensionKeys(series).length > 0 ? (
+            <Select
+              key={addDimNonce}
+              id={`${idPrefix}add-profile-dimension`}
+              label=""
+              value=""
+              onChange={(e) => {
+                const v = e.target.value as keyof ProfileDimensions;
+                if (v) {
+                  setConfig('series', {
+                    ...series,
+                    extraDimensionKeys: [...(series.extraDimensionKeys ?? []), v],
+                  });
+                  setAddDimNonce((n) => n + 1);
+                }
+              }}
+            >
+              <option value="">Add dimension…</option>
+              {getAddableProfileDimensionKeys(series).map((k) => (
+                <option key={k} value={k}>
+                  {dimensionKeyLabel(k)}
+                </option>
+              ))}
+            </Select>
+          ) : null}
+        </div>
+        <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
+          <h4 className="text-base font-semibold text-slate-200">Hardware Items</h4>
+          {series.hardwareItems.map(item => (
+            <div key={item.id} className="bg-slate-900/50 p-3 rounded-md grid grid-cols-12 gap-2">
+              <div className="col-span-12"><Input id={`${idPrefix}hw-${item.id}-name`} name={`hw-${item.id}-name`} label="Name" value={item.name} disabled={activeWindowType === WindowType.SLIDING} onChange={e => onHardwareChange(item.id, 'name', e.target.value)} /></div>
+              <div className="col-span-4"><Input id={`${idPrefix}hw-${item.id}-qty`} name={`hw-${item.id}-qty`} label="Qty" type="number" value={item.qtyPerShutter} onChange={e => onHardwareChange(item.id, 'qtyPerShutter', e.target.value === '' ? '' : Number(e.target.value))} /></div>
+              <div className="col-span-5"><Input id={`${idPrefix}hw-${item.id}-rate`} name={`hw-${item.id}-rate`} label="Rate" type="number" value={item.rate} onChange={e => onHardwareChange(item.id, 'rate', e.target.value === '' ? '' : Number(e.target.value))} /></div>
+              <div className="col-span-3 flex items-end">
+                {activeWindowType === WindowType.SLIDING ? (
+                  <Button variant="secondary" className="p-2 h-10 w-full" disabled>Locked</Button>
+                ) : (
+                  <Button variant="danger" onClick={() => onRemoveHardware(item.id)} className="p-2 h-10 w-full"><TrashIcon className="w-5 h-5"/></Button>
+                )}
+              </div>
+              <div className="col-span-12"><Select id={`${idPrefix}hw-${item.id}-unit`} name={`hw-${item.id}-unit`} label="Unit" value={item.unit} onChange={e => onHardwareChange(item.id, 'unit', e.target.value as HardwareItem['unit'])}><option value="per_shutter_or_door">Per Shutter/Door</option><option value="per_window">Per Window</option></Select></div>
+            </div>
+          ))}
+          {activeWindowType !== WindowType.SLIDING && (
+            <Button variant="secondary" className="w-full" onClick={onAddHardware}><PlusIcon className="w-4 h-4 mr-2"/> Add Hardware Item</Button>
+          )}
+        </div>
+      </CollapsibleCard>
+
+    </div>
+  );
+});
