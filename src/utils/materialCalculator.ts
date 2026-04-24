@@ -1,13 +1,32 @@
 import type { WindowConfig, QuotationItem, ProfileDimensions, BOM, BOMSeries, BOMProfile, GlassType, BOMGlassCutRow, BOMMeshCutRow } from '../types';
 import { WindowType, ShutterConfigType, FixedPanelPosition } from '../types';
+import { computeSlidingCutLayout, isSlidingSeriesUnifiedOuter } from './slidingCutFormula';
+import { hasResolvedSeriesValue, resolveSeriesNumeric } from './profileDimensionKeys';
 
 const FEET_TO_MM = 304.8;
 const SQFT_TO_SQMM = 92903.04;
 const SQMT_TO_SQMM = 1000000;
 const DEFAULT_STANDARD_LENGTH_MM = 16 * FEET_TO_MM; // 4876.8
 
-type GlassCutAcc = { description: string; widthMm: number; heightMm: number; panels: number };
-type MeshCutAcc = { widthMm: number; heightMm: number; panels: number };
+type GlassCutAcc = {
+  description: string;
+  widthMm: number;
+  heightMm: number;
+  panels: number;
+  lineTitle?: string;
+  windowWidthMm?: number;
+  windowHeightMm?: number;
+  quotationItemId?: string;
+};
+type MeshCutAcc = {
+  widthMm: number;
+  heightMm: number;
+  panels: number;
+  lineTitle?: string;
+  windowWidthMm?: number;
+  windowHeightMm?: number;
+  quotationItemId?: string;
+};
 
 function mergeGlassCutMap(into: Map<string, GlassCutAcc>, from: Map<string, GlassCutAcc>) {
   for (const [k, v] of from) {
@@ -86,11 +105,18 @@ function getGlassDescription(config: WindowConfig): string {
     return desc;
 }
 
+export interface CalculateUsageOptions {
+    /** When true, mesh top/bottom/handle go under `shutterBottom` and mesh
+     *  interlock goes under `shutterMeeting` — bin-packed separately from glass.
+     *  When false (default), everything shares shutterTop + shutterInterlock. */
+    separateMeshShutterSections?: boolean;
+}
+
 /**
  * Calculates profile, glass, mesh, and Georgian bar usage for a single window configuration.
  * This function recursively calls itself for corner window sides.
  */
-function calculateUsage(config: WindowConfig): { 
+function calculateUsage(config: WindowConfig, options?: CalculateUsageOptions): {
     profiles: Map<keyof ProfileDimensions, number[]>, 
     glass: Map<string, number>, 
     mesh: number;
@@ -112,6 +138,21 @@ function calculateUsage(config: WindowConfig): {
         if (validLengths.length === 0) return;
         if (!profileUsage.has(key)) profileUsage.set(key, []);
         profileUsage.get(key)!.push(...validLengths);
+    };
+
+    /** Route pieces to the PRIMARY profile key (track2T / track3T / jamb)
+     *  regardless of whether that dimension has been set on the series — as
+     *  long as at least one key in the fallback chain has a real value. This
+     *  makes the BOM list 2-track vs 3-track stock requirements as distinct
+     *  rows even when the underlying series only defines the generic
+     *  `outerFrame`. Weights / stock lengths are resolved via
+     *  {@link resolveSeriesNumeric} at render time. */
+    const addProfilePrimary = (primaryKey: keyof ProfileDimensions, ...lengths: number[]) => {
+        if (!hasResolvedSeriesValue(dims, primaryKey)) return;
+        const validLengths = lengths.filter((l) => l > 0);
+        if (validLengths.length === 0) return;
+        if (!profileUsage.has(primaryKey)) profileUsage.set(primaryKey, []);
+        profileUsage.get(primaryKey)!.push(...validLengths);
     };
 
     const addGlass = (panelId: string, width: number, height: number) => {
@@ -176,8 +217,8 @@ function calculateUsage(config: WindowConfig): {
         const leftConfig: WindowConfig = { ...config, ...config.leftConfig, width: config.leftWidth ?? 0, height: config.height ?? 0, windowType: config.leftConfig.windowType, fixedPanels: [] };
         const rightConfig: WindowConfig = { ...config, ...config.rightConfig, width: config.rightWidth ?? 0, height: config.height ?? 0, windowType: config.rightConfig.windowType, fixedPanels: [] };
         
-        const leftUsage = calculateUsage(leftConfig);
-        const rightUsage = calculateUsage(rightConfig);
+        const leftUsage = calculateUsage(leftConfig, options);
+        const rightUsage = calculateUsage(rightConfig, options);
         
         const mergedUsage = { profiles: leftUsage.profiles, glass: leftUsage.glass, mesh: leftUsage.mesh };
 
@@ -225,7 +266,18 @@ function calculateUsage(config: WindowConfig): {
     const innerH = Math.max(0, holeY2 - holeY1);
 
     if (isFramed) {
-        if (verticalFrame !== frame) {
+        if (config.windowType === WindowType.SLIDING) {
+            // Outer: 2T vs 3T never mix. Unified series (25–29mm): same section on
+            // H+V — both map to `track2T`/`track3T` for costing/BOM. Split series
+            // (e.g. 35mm): horizontal = track, vertical = jamb* keys.
+            const trackKey: keyof ProfileDimensions =
+                Number(config.trackType) === 3 ? 'track3T' : 'track2T';
+            const jambKey: keyof ProfileDimensions =
+                Number(config.trackType) === 3 ? 'jamb3T' : 'jamb2T';
+            const unifiedOuter = isSlidingSeriesUnifiedOuter(config.series);
+            addProfilePrimary(trackKey, w, w);
+            addProfilePrimary(unifiedOuter ? trackKey : jambKey, h, h);
+        } else if (verticalFrame !== frame) {
             addProfile('outerFrame', w, w);
             addProfile('outerFrameVertical', h, h);
         } else {
@@ -245,50 +297,59 @@ function calculateUsage(config: WindowConfig): {
     
     switch (config.windowType) {
         case WindowType.SLIDING: {
-            const { shutterConfig } = config;
-            const interlock = Number(dims.shutterInterlock) || 0;
-            let fixedBoundaryCount = 0;
+            // Drive every sliding cut (profile lengths + glass/mesh panel sizes) from the
+            // canonical fabrication formula so the BOM matches the cutting plan 1:1.
+            // Top + bottom + handle-side vertical all share the same stock profile in every
+            // series, so we pool them under `shutterTop` for bin packing. All interlocks
+            // (slim + reinforcement) pool under `shutterInterlock`. When the quotation
+            // setting enables separate mesh sections, mesh pieces are routed to
+            // `shutterBottom` / `shutterMeeting` so their stock bars stay separate.
+            const interlockThicknessMm = Number(dims.shutterInterlock) || 0;
+            const separateMeshSections = !!options?.separateMeshShutterSections;
+            const layout = computeSlidingCutLayout({
+                apertureWidthMm: innerW,
+                apertureHeightMm: innerH,
+                shutterConfig: config.shutterConfig,
+                trackType: config.trackType,
+                interlockThicknessMm,
+                separateMeshSections,
+                unifiedOuterPerimeter: isSlidingSeriesUnifiedOuter(config.series),
+            });
+            const fixedBoundaryCount = Math.max(0, layout.counts.total - 1);
 
-            if (shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
-                fixedBoundaryCount = 5;
-                const shutterW = (innerW + 3 * interlock) / 4;
-                for (let i = 0; i < 6; i++) {
-                    addProfile('shutterTop', shutterW);
-                    addProfile('shutterBottom', shutterW);
-                    const isMesh = i === 2 || i === 3;
-                    const glassW = shutterW - (i === 0 || i === 2 ? Number(dims.shutterHandle) : interlock) - (i === 3 || i === 5 ? Number(dims.shutterHandle) : interlock);
-                    const glassH = innerH - Number(dims.shutterTop) - Number(dims.shutterBottom);
-                    if (isMesh) addMesh(`sliding-${i}`, glassW, glassH);
-                    else addGlass(`sliding-${i}`, glassW, glassH);
+            for (const piece of layout.pieces) {
+                if (piece.pieces <= 0 || piece.lengthMm <= 0) continue;
+                const lengths = Array<number>(piece.pieces).fill(piece.lengthMm);
+                switch (piece.pool) {
+                    case 'outerPerimeter2T':
+                    case 'outerPerimeter3T':
+                    case 'outerTrack2T':
+                    case 'outerTrack3T':
+                    case 'outerJamb2T':
+                    case 'outerJamb3T':
+                    case 'trackClip':
+                        // Outer (unified or split) + track clip: primaries above. Track
+                        // clip is costed in materialCosting.
+                        break;
+                    case 'shutterFrame':
+                        addProfile('shutterTop', ...lengths);
+                        break;
+                    case 'shutterInterlock':
+                        addProfile('shutterInterlock', ...lengths);
+                        break;
+                    case 'meshShutterFrame':
+                        addProfile('shutterBottom', ...lengths);
+                        break;
+                    case 'meshShutterInterlock':
+                        addProfile('shutterMeeting', ...lengths);
+                        break;
                 }
-                addProfile('shutterHandle', innerH, innerH, innerH, innerH); // 4 handles
-                addProfile('shutterInterlock', innerH, innerH, innerH, innerH, innerH, innerH, innerH, innerH); // 8 interlocks
-            } else if (shutterConfig === ShutterConfigType.FOUR_GLASS) {
-                fixedBoundaryCount = 3;
-                const meeting = Number(dims.shutterMeeting) || 0;
-                const shutterW = (innerW + (2 * interlock) + meeting) / 4;
-                 const profiles = [ { l: Number(dims.shutterHandle), r: interlock }, { l: interlock, r: meeting }, { l: meeting, r: interlock }, { l: interlock, r: Number(dims.shutterHandle) } ];
-                for (let i = 0; i < 4; i++) {
-                    addProfile('shutterTop', shutterW); addProfile('shutterBottom', shutterW);
-                    addGlass(`sliding-${i}`, shutterW - profiles[i].l - profiles[i].r, innerH - Number(dims.shutterTop) - Number(dims.shutterBottom));
-                }
-                addProfile('shutterHandle', innerH, innerH); addProfile('shutterInterlock', innerH, innerH, innerH, innerH); addProfile('shutterMeeting', innerH, innerH);
-            } else {
-                const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
-                const numShutters = shutterConfig === ShutterConfigType.TWO_GLASS ? 2 : 3;
-                fixedBoundaryCount = Math.max(0, numShutters - 1);
-                const shutterDivider = hasMesh ? 2 : numShutters;
-                const shutterW = (innerW + (shutterDivider - 1) * interlock) / shutterDivider;
-                for (let i = 0; i < numShutters; i++) {
-                    addProfile('shutterTop', shutterW); addProfile('shutterBottom', shutterW);
-                    const isMesh = hasMesh && i === 2;
-                    const glassW = shutterW - (i === 0 ? Number(dims.shutterHandle) : interlock) - (i === numShutters-1 ? Number(dims.shutterHandle) : interlock);
-                    const glassH = innerH - Number(dims.shutterTop) - Number(dims.shutterBottom);
-                    if (isMesh) addMesh(`sliding-${i}`, glassW, glassH);
-                    else addGlass(`sliding-${i}`, glassW, glassH);
-                }
-                addProfile('shutterHandle', innerH, innerH);
-                addProfile('shutterInterlock', ...Array((numShutters - 1) * 2).fill(innerH));
+            }
+
+            for (let i = 0; i < layout.counts.total; i++) {
+                const isMesh = i >= layout.counts.glass;
+                if (isMesh) addMesh(`sliding-${i}`, layout.glassWidthMm, layout.glassHeightMm);
+                else addGlass(`sliding-${i}`, layout.glassWidthMm, layout.glassHeightMm);
             }
 
             // When top/bottom fixed panel exists in sliding, align mullions with shutter interlock boundaries.
@@ -406,21 +467,24 @@ function calculateUsage(config: WindowConfig): {
     return { profiles: profileUsage, glass: glassUsage, mesh: meshArea, glassCutsMap, meshCutsMap };
 }
 
-export function calculateUsageForConfig(config: WindowConfig): {
+export function calculateUsageForConfig(
+    config: WindowConfig,
+    options?: CalculateUsageOptions
+): {
     profiles: Map<keyof ProfileDimensions, number[]>,
     glass: Map<string, number>,
     mesh: number,
     glassCutsMap: Map<string, GlassCutAcc>,
     meshCutsMap: Map<string, MeshCutAcc>,
 } {
-    return calculateUsage(config);
+    return calculateUsage(config, options);
 }
 
 
 /**
  * Generates a complete Bill of Materials from a list of quotation items.
  */
-export function generateBillOfMaterials(items: QuotationItem[]): BOM {
+export function generateBillOfMaterials(items: QuotationItem[], options?: CalculateUsageOptions): BOM {
     const seriesMap = new Map<string, { 
         name: string; 
         profiles: Map<keyof ProfileDimensions, number[]>; 
@@ -452,7 +516,7 @@ export function generateBillOfMaterials(items: QuotationItem[]): BOM {
         const seriesData = seriesMap.get(series.id)!;
 
         // Calculate usage for one item
-        const singleUsage = calculateUsage(config);
+        const singleUsage = calculateUsage(config, options);
         
         // Add usage for all quantities of the item
         for (let i = 0; i < qty; i++) {
@@ -467,18 +531,34 @@ export function generateBillOfMaterials(items: QuotationItem[]): BOM {
         }
 
         for (const cut of singleUsage.glassCutsMap.values()) {
-            const ck = `${cut.description}|${cut.widthMm}|${cut.heightMm}`;
+            const ck = `${item.id}|${cut.description}|${cut.widthMm}|${cut.heightMm}`;
             const addPanels = cut.panels * qty;
             const prev = seriesData.glassCutTotals.get(ck);
             if (prev) prev.panels += addPanels;
-            else seriesData.glassCutTotals.set(ck, { ...cut, panels: addPanels });
+            else
+              seriesData.glassCutTotals.set(ck, {
+                ...cut,
+                panels: addPanels,
+                lineTitle: item.title,
+                windowWidthMm: Number(item.config.width) || 0,
+                windowHeightMm: Number(item.config.height) || 0,
+                quotationItemId: item.id,
+              });
         }
         for (const cut of singleUsage.meshCutsMap.values()) {
-            const mk = `${cut.widthMm}|${cut.heightMm}`;
+            const mk = `${item.id}|${cut.widthMm}|${cut.heightMm}`;
             const addPanels = cut.panels * qty;
             const prev = seriesData.meshCutTotals.get(mk);
             if (prev) prev.panels += addPanels;
-            else seriesData.meshCutTotals.set(mk, { ...cut, panels: addPanels });
+            else
+              seriesData.meshCutTotals.set(mk, {
+                ...cut,
+                panels: addPanels,
+                lineTitle: item.title,
+                windowWidthMm: Number(item.config.width) || 0,
+                windowHeightMm: Number(item.config.height) || 0,
+                quotationItemId: item.id,
+              });
         }
         
         // Calculate and add hardware for all quantities
@@ -525,12 +605,17 @@ export function generateBillOfMaterials(items: QuotationItem[]): BOM {
         };
 
         for (const [profileKey, pieces] of data.profiles.entries()) {
-            const stdLengthKey = profileKey as keyof ProfileDimensions;
-            const standardLength = Number(data.series.lengths?.[stdLengthKey]) || DEFAULT_STANDARD_LENGTH_MM;
+            // For modern keys like `track2T` / `track3T` / `outerFrameVertical`
+            // that weren't explicitly defined in the series, `resolveSeriesNumeric`
+            // transparently returns the `outerFrame` fallback so legacy series
+            // still compute correct bars / weight — while the BOM still lists
+            // the specific key as its own row.
+            const resolvedLength = resolveSeriesNumeric(data.series.lengths, profileKey);
+            const standardLength = resolvedLength > 0 ? resolvedLength : DEFAULT_STANDARD_LENGTH_MM;
             const requiredBars = packPieces(pieces, standardLength);
             const totalLength = pieces.reduce((sum, p) => sum + p, 0);
-            const weightPerMeter = Number(data.series.weights?.[stdLengthKey]) || 0;
-            
+            const weightPerMeter = resolveSeriesNumeric(data.series.weights, profileKey);
+
             const bomProfile: BOMProfile = {
                 profileKey: profileKey as keyof ProfileDimensions,
                 totalLength, standardLength, weightPerMeter, pieces, requiredBars,
@@ -557,6 +642,10 @@ export function generateBillOfMaterials(items: QuotationItem[]): BOM {
             heightMm: v.heightMm,
             totalPanels: v.panels,
             areaSqFt: (v.widthMm * v.heightMm * v.panels) / SQFT_TO_SQMM,
+            lineTitle: v.lineTitle,
+            windowWidthMm: v.windowWidthMm,
+            windowHeightMm: v.windowHeightMm,
+            quotationItemId: v.quotationItemId,
         }));
         if (glassCutsFlat.length > 0) {
             bomSeries.glassCutsFlat = glassCutsFlat.sort((a, b) => b.areaSqFt - a.areaSqFt);
@@ -574,6 +663,10 @@ export function generateBillOfMaterials(items: QuotationItem[]): BOM {
             heightMm: v.heightMm,
             totalPanels: v.panels,
             areaSqFt: (v.widthMm * v.heightMm * v.panels) / SQFT_TO_SQMM,
+            lineTitle: v.lineTitle,
+            windowWidthMm: v.windowWidthMm,
+            windowHeightMm: v.windowHeightMm,
+            quotationItemId: v.quotationItemId,
         }));
         if (meshCutsFlat.length > 0) {
             bomSeries.meshCutsFlat = meshCutsFlat.sort((a, b) => b.areaSqFt - a.areaSqFt);

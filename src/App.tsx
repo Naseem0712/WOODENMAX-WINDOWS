@@ -364,11 +364,12 @@ const PREDEFINED_SLIDING_SERIES: ProfileSeries[] = [
         weights: { outerFrame: 1.943, shutterHandle: 0.942, shutterTop: 0.942, shutterBottom: 0.942, shutterInterlock: 0.990 },
         ...ALL_PROFILES_16_FEET, hardwareItems: DEFAULT_SLIDING_HARDWARE, glassOptions: DEFAULT_GLASS_OPTIONS,
     },
-    // 35mm Opulence Series
+    // 35mm Opulence Series — different track vs jamb extrusion; no H↔V off-cut sharing
     {
         id: 'series-sliding-35mm-opulence-2t-slim-default',
         name: '35mm Opulence (2-Track, Slim Interlock)',
         type: WindowType.SLIDING,
+        slidingOuterUnifiedPerimeter: false,
         dimensions: { ...BASE_DIMENSIONS, outerFrame: 97, outerFrameVertical: 100, fixedFrame: 31, shutterHandle: 59, shutterTop: 58, shutterBottom: 58, shutterInterlock: 27 },
         weights: { outerFrame: 1.680, outerFrameVertical: 1.200, fixedFrame: 0.300, shutterHandle: 0.920, shutterTop: 0.910, shutterBottom: 0.910, shutterInterlock: 0.720 },
         ...ALL_PROFILES_16_FEET,
@@ -379,6 +380,7 @@ const PREDEFINED_SLIDING_SERIES: ProfileSeries[] = [
         id: 'series-sliding-35mm-opulence-2t-reinf-default',
         name: '35mm Opulence (2-Track, Reinf. Interlock)',
         type: WindowType.SLIDING,
+        slidingOuterUnifiedPerimeter: false,
         dimensions: { ...BASE_DIMENSIONS, outerFrame: 97, outerFrameVertical: 100, fixedFrame: 31, shutterHandle: 59, shutterTop: 58, shutterBottom: 58, shutterInterlock: 27 },
         weights: { outerFrame: 1.680, outerFrameVertical: 1.200, fixedFrame: 0.300, shutterHandle: 0.920, shutterTop: 0.910, shutterBottom: 0.910, shutterInterlock: 1.200 },
         ...ALL_PROFILES_16_FEET,
@@ -389,6 +391,7 @@ const PREDEFINED_SLIDING_SERIES: ProfileSeries[] = [
         id: 'series-sliding-35mm-opulence-3t-slim-default',
         name: '35mm Opulence (3-Track, Slim Interlock)',
         type: WindowType.SLIDING,
+        slidingOuterUnifiedPerimeter: false,
         dimensions: { ...BASE_DIMENSIONS, outerFrame: 145, outerFrameVertical: 150, fixedFrame: 31, shutterHandle: 59, shutterTop: 58, shutterBottom: 58, shutterInterlock: 27 },
         weights: { outerFrame: 2.120, outerFrameVertical: 1.720, fixedFrame: 0.300, shutterHandle: 0.920, shutterTop: 0.910, shutterBottom: 0.910, shutterInterlock: 0.720 },
         ...ALL_PROFILES_16_FEET,
@@ -399,6 +402,7 @@ const PREDEFINED_SLIDING_SERIES: ProfileSeries[] = [
         id: 'series-sliding-35mm-opulence-3t-reinf-default',
         name: '35mm Opulence (3-Track, Reinf. Interlock)',
         type: WindowType.SLIDING,
+        slidingOuterUnifiedPerimeter: false,
         dimensions: { ...BASE_DIMENSIONS, outerFrame: 145, outerFrameVertical: 150, fixedFrame: 31, shutterHandle: 59, shutterTop: 58, shutterBottom: 58, shutterInterlock: 27 },
         weights: { outerFrame: 2.120, outerFrameVertical: 1.720, fixedFrame: 0.300, shutterHandle: 0.920, shutterTop: 0.910, shutterBottom: 0.910, shutterInterlock: 1.200 },
         ...ALL_PROFILES_16_FEET,
@@ -1249,9 +1253,12 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
       {!isEmbedded && (
       <header className="no-print z-40 flex shrink-0 flex-col gap-1 border-b border-slate-200/90 bg-gradient-to-b from-white to-slate-100 px-2.5 py-1.5 shadow-sm sm:flex-row sm:items-center sm:gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
-              <h1 className="sr-only">
-                WoodenMax Window Designer — free aluminium &amp; uPVC window &amp; door design with PDF quotations and BOM
-              </h1>
+              {/* Long SEO headings: Tailwind `sr-only` = visually hidden (not shown on screen). Visible line is the <p> tagline below. */}
+              <div className="sr-only">
+                <h1>WoodenMax Window Designer — system window calculators, aluminium &amp; uPVC online design, instant window quotations, profile optimizers, PDF &amp; BOM</h1>
+                <h2>Window design &amp; costing: sliding 2/3 track, casement, ventilators, glass partitions, louvers, L-corner, mirrors</h2>
+                <h3>Window quotation generator, cutting list &amp; material packing for fabricators, architects &amp; project teams</h3>
+              </div>
               <div className="shrink-0 rounded-md bg-white px-1.5 py-1 shadow-sm ring-1 ring-slate-200/90">
                 <Logo className="h-7 w-auto max-h-7 max-w-[min(100%,180px)] object-contain sm:h-8 sm:max-h-8" alt="WoodenMax logo" />
               </div>

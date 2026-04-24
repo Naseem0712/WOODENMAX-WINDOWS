@@ -402,7 +402,9 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
       }
       // Same tick as App `isPreviewing` so the designer shell does not sit above print/BOM for one frame.
       onTogglePreview(true);
-      const calculatedBom = generateBillOfMaterials(items);
+      const calculatedBom = generateBillOfMaterials(items, {
+          separateMeshShutterSections: !!settings.materialRates?.meshShutterOptions?.separateSections,
+      });
       setBom(calculatedBom);
       setIsMaterialSummaryOpen(true);
   };
@@ -417,7 +419,9 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
       alert("Please add items before exporting stock need.");
       return;
     }
-    const bomData = generateBillOfMaterials(items);
+    const bomData = generateBillOfMaterials(items, {
+        separateMeshShutterSections: !!settings.materialRates?.meshShutterOptions?.separateSections,
+    });
     const csvRows: string[][] = [];
     csvRows.push(['Party Name', settings.customer.name || '']);
     csvRows.push(['Quotation Title', settings.title || '']);

@@ -1,6 +1,8 @@
 import type { MaterialRateSettings, ProfileDimensions, QuotationItem } from '../types';
 import { ShutterConfigType, WindowType } from '../types';
 import { calculateUsageForConfig, packPieces } from './materialCalculator';
+import { SLIDING_CUT_CONSTANTS } from './slidingCutFormula';
+import { resolveSeriesNumeric } from './profileDimensionKeys';
 
 const SQFT_TO_SQMM = 92903.04;
 const MM_TO_FT = 0.00328084;
@@ -74,6 +76,45 @@ const getSeriesFamilyKey = (seriesId: string): string => {
 const poolLengthKey = (mm: number) => Math.round(mm * 100) / 100;
 const poolWeightKey = (kgPerM: number) => Math.round(kgPerM * 1e6) / 1e6;
 
+/**
+ * Build the bin-packing pool key for a piece.
+ *
+ * For sliding windows we deliberately DROP the series id from the pool key so
+ * pieces that are physically the same extrusion (same profile type, same stock
+ * length, same kg/m) share one cut list — even when they come from different
+ * series variants in the quotation.
+ *
+ * This makes the two real-world scenarios the user described work correctly
+ * without the operator having to merge series by hand:
+ *
+ *   Case A — same series, only track-type differs (e.g. 29mm 2-track + 29mm
+ *     3-track). Shutter top / bottom / handle / interlock are the same
+ *     extrusion → same weight/length → one shared pool → single stock req
+ *     and optimal bin-packing. The horizontal TRACK rail is a different
+ *     extrusion for 2T vs 3T (different kg/m via track2T / track3T, or
+ *     different weights on outerFrame across the two legacy series rows) so
+ *     it lands in its own pool automatically.
+ *
+ *   Case B — different series (e.g. 29mm 2T + 25mm 3T). Shutter extrusions
+ *     differ → different kg/m → different pool keys → shutters, tracks (and
+ *     glass, which is priced per-item on its own thickness) are all costed
+ *     separately.
+ *
+ * For non-sliding window types we keep the series-scoped key (status quo) so
+ * BOM pooling behaves exactly as before.
+ */
+const buildPoolKey = (
+  item: QuotationItem,
+  profileType: PoolProfileType,
+  standardLengthMm: number,
+  weightPerMeter: number
+): string => {
+  const profileSig = `${profileType}|${poolLengthKey(standardLengthMm)}|${poolWeightKey(weightPerMeter)}`;
+  if (item.config.windowType === WindowType.SLIDING) return profileSig;
+  const familyKey = getSeriesFamilyKey(item.config.series.id);
+  return `${familyKey}|${profileSig}`;
+};
+
 const isReinforcementSeries = (item: QuotationItem): boolean => {
   return /reinf|reinforcement/i.test(`${item.config.series.name} ${item.config.series.id}`);
 };
@@ -100,7 +141,15 @@ const getGlassRatePerSqFt = (item: QuotationItem, rates: MaterialRateSettings): 
 };
 
 const resolveSlidingPowderRate = (item: QuotationItem, profileType: PoolProfileType, rates: MaterialRateSettings): number => {
-  if (profileType === 'outerFrame' || profileType === 'outerFrameVertical') {
+  // Track rail (2T / 3T) and outer jamb (2T / 3T split) use the "track" powder rate.
+  if (
+    profileType === 'outerFrame' ||
+    profileType === 'outerFrameVertical' ||
+    profileType === 'track2T' ||
+    profileType === 'track3T' ||
+    profileType === 'jamb2T' ||
+    profileType === 'jamb3T'
+  ) {
     return rates.powderCoatingPerRft.track;
   }
   if (profileType === 'shutterInterlock_reinf') {
@@ -205,14 +254,17 @@ export function calculateMaterialCostSummary(
     const qty = Number(item.quantity) || 0;
     if (qty <= 0) continue;
 
-    const usageSingle = calculateUsageForConfig(item.config);
-    const familyKey = item.config.windowType === WindowType.SLIDING ? getSeriesFamilyKey(item.config.series.id) : item.config.series.id;
+    const usageSingle = calculateUsageForConfig(item.config, {
+      separateMeshShutterSections: !!rates.meshShutterOptions?.separateSections,
+    });
 
     // Glass cost + making cost per item (area based)
     const totalGlassAreaSqFt = Array.from(usageSingle.glass.values()).reduce((sum, areaMm2) => sum + areaMm2 / SQFT_TO_SQMM, 0) * qty;
     target.glassCost += totalGlassAreaSqFt * getGlassRatePerSqFt(item, rates);
     target.makingCost += target.areaSqFt * makingChargePerSqFt;
-    target.wastageCartageCost += target.areaSqFt * (Number(rates.wastageCartagePerSqFt) || 0);
+    // `wastageCartage` is set after pools are built — scaled by *actual* bar-end waste
+    // (purchased rft vs used rft) so bin-packing / cross-line reuse does not add a
+    // full per-sqft fee when there is little leftover stock (see block after pools).
 
     // Sliding hardware cost from existing hardware item list
     if (item.config.windowType === WindowType.SLIDING) {
@@ -255,18 +307,28 @@ export function calculateMaterialCostSummary(
       }
     }
 
-    // Bottom track clips only: 2-track → 2 pcs, 3-track → 3 pcs of width each; dedicated clip powder rate (not main track).
+    // Bottom track clips only: 2-track → 2 pcs, 3-track → 3 pcs. Clip length
+    // follows the canonical formula (W − TRACK_CLIP_REDUCTION) so this cost
+    // matches the cutting plan 1:1. Dedicated clip powder rate (not main track).
     if (item.config.windowType === WindowType.SLIDING) {
-      const widthFt = (Number(item.config.width) || 0) * MM_TO_FT;
+      const windowWidthMm = Number(item.config.width) || 0;
+      const clipLengthMm = Math.max(0, windowWidthMm - SLIDING_CUT_CONSTANTS.TRACK_CLIP_REDUCTION);
+      const clipLengthFt = clipLengthMm * MM_TO_FT;
       const trackCount = Number(item.config.trackType) || 2;
       const clipPowderPerRft = Number(rates.powderCoatingPerRft.trackClip);
       const clipRate = Number.isFinite(clipPowderPerRft) && clipPowderPerRft >= 0 ? clipPowderPerRft : 90;
-      target.powderCoatingCost += widthFt * trackCount * qty * clipRate;
+      target.powderCoatingCost += clipLengthFt * trackCount * qty * clipRate;
     }
 
     for (const [profileKey, pieces] of usageSingle.profiles.entries()) {
-      const standardLengthMm = Number(item.config.series.lengths?.[profileKey]) || (16 * 304.8);
-      const weightPerMeter = Number(item.config.series.weights?.[profileKey]) || 0;
+      // Modern keys (track2T / track3T / jamb2T / jamb3T / outerFrameVertical / shutterMeeting
+      // when mesh is pooled with glass) may not have their own weight/length
+      // defined on legacy series; resolveSeriesNumeric walks the fallback
+      // chain to `outerFrame` / `shutterInterlock`. Without this the pool
+      // signature would degenerate to 0 kg/m → free aluminium.
+      const resolvedLen = resolveSeriesNumeric(item.config.series.lengths, profileKey);
+      const standardLengthMm = resolvedLen > 0 ? resolvedLen : (16 * 304.8);
+      const weightPerMeter = resolveSeriesNumeric(item.config.series.weights, profileKey);
       const repeatedPieces = Array.from({ length: qty }).flatMap(() => pieces);
       const usedLengthMm = repeatedPieces.reduce((sum, len) => sum + len, 0);
 
@@ -275,7 +337,7 @@ export function calculateMaterialCostSummary(
         profileType = isReinforcementSeries(item) ? 'shutterInterlock_reinf' : 'shutterInterlock_slim';
       }
 
-      const poolKey = `${familyKey}|${profileType}|${poolLengthKey(standardLengthMm)}|${poolWeightKey(weightPerMeter)}`;
+      const poolKey = buildPoolKey(item, profileType, standardLengthMm, weightPerMeter);
       const powderRatePerRft =
         item.config.windowType === WindowType.SLIDING
           ? resolveSlidingPowderRate(item, profileType, rates)
@@ -300,25 +362,7 @@ export function calculateMaterialCostSummary(
     }
   }
 
-  // Aluminium + profile powder cost with wastage reuse through pooled bin-packing
-  for (const pool of pools.values()) {
-    const requiredBars = packPieces(pool.pieces, pool.standardLengthMm);
-    const usedLengthMm = pool.usedLengthMm;
-    const purchasedLengthMm = requiredBars * pool.standardLengthMm;
-    const usedLengthFt = usedLengthMm * MM_TO_FT;
-    const purchasedLengthFt = purchasedLengthMm * MM_TO_FT;
-    const purchasedWeightKg = (purchasedLengthMm / 1000) * pool.weightPerMeter;
-    const purchasedCost = purchasedWeightKg * rates.aluminiumProfilePerKg;
-    const purchasedPowderCost = purchasedLengthFt * pool.powderRatePerRft;
-
-    for (const contribution of pool.contributions) {
-      const ratio = pool.usedLengthMm > 0 ? contribution.usedLengthMm / pool.usedLengthMm : 0;
-      byItemId[contribution.itemId].aluminiumCost += purchasedCost * ratio;
-      byItemId[contribution.itemId].powderCoatingCost += purchasedPowderCost * ratio;
-    }
-  }
-
-  const totals = {
+  const totals: MaterialCostSummary['totals'] = {
     areaSqFt: 0,
     aluminiumCost: 0,
     powderCoatingCost: 0,
@@ -339,6 +383,47 @@ export function calculateMaterialCostSummary(
     totalCost: 0,
     basicRatePerSqFt: 0,
   };
+
+  // Aluminium + profile powder: one pass per pool (pack, item split, and stock rft
+  // for wastage / cartage scaling + diagnostic totals for UI).
+  let poolPurchRft = 0;
+  let poolUsedRft = 0;
+  for (const pool of pools.values()) {
+    const requiredBars = packPieces(pool.pieces, pool.standardLengthMm);
+    const usedLengthMm = pool.usedLengthMm;
+    const purchasedLengthMm = requiredBars * pool.standardLengthMm;
+    const usedLengthFt = usedLengthMm * MM_TO_FT;
+    const purchasedLengthFt = purchasedLengthMm * MM_TO_FT;
+    const purchasedWeightKg = (purchasedLengthMm / 1000) * pool.weightPerMeter;
+    const purchasedCost = purchasedWeightKg * rates.aluminiumProfilePerKg;
+    const purchasedPowderCost = purchasedLengthFt * pool.powderRatePerRft;
+    const usedWeightKg = (usedLengthMm / 1000) * pool.weightPerMeter;
+    const wastageLengthFt = Math.max(0, (purchasedLengthMm - usedLengthMm) * MM_TO_FT);
+
+    poolPurchRft += purchasedLengthFt;
+    poolUsedRft += usedLengthFt;
+    totals.usedLengthFt += usedLengthFt;
+    totals.purchasedLengthFt += purchasedLengthFt;
+    totals.usedWeightKg += usedWeightKg;
+    totals.purchasedWeightKg += purchasedWeightKg;
+    totals.wastageAluminiumCost += Math.max(0, purchasedWeightKg - usedWeightKg) * rates.aluminiumProfilePerKg;
+    totals.wastagePowderCost += wastageLengthFt * pool.powderRatePerRft;
+
+    for (const contribution of pool.contributions) {
+      const ratio = pool.usedLengthMm > 0 ? contribution.usedLengthMm / pool.usedLengthMm : 0;
+      byItemId[contribution.itemId].aluminiumCost += purchasedCost * ratio;
+      byItemId[contribution.itemId].powderCoatingCost += purchasedPowderCost * ratio;
+    }
+  }
+
+  // Wastage / cartage: scale the configured per-sqft fee by (purchased rft − used rft) /
+  // purchased rft across all aluminium pools. Tight bin-packing lowers this; no profiles
+  // (poolPurchRft ≈ 0) keeps full per-sqft (glass-only lines still get the line fee if set).
+  const wcsConfig = Number(rates.wastageCartagePerSqFt) || 0;
+  const profileWastageRftRatio = poolPurchRft > 1e-6 ? Math.max(0, (poolPurchRft - poolUsedRft) / poolPurchRft) : 1;
+  for (const id of Object.keys(byItemId)) {
+    byItemId[id].wastageCartageCost = byItemId[id].areaSqFt * wcsConfig * profileWastageRftRatio;
+  }
 
   for (const itemId of Object.keys(byItemId)) {
     const row = byItemId[itemId];
@@ -369,20 +454,6 @@ export function calculateMaterialCostSummary(
     totals.totalCost += row.totalCost;
   }
 
-  for (const pool of pools.values()) {
-    const requiredBars = packPieces(pool.pieces, pool.standardLengthMm);
-    const purchasedLengthMm = requiredBars * pool.standardLengthMm;
-    const usedLengthMm = pool.usedLengthMm;
-    const usedWeightKg = (usedLengthMm / 1000) * pool.weightPerMeter;
-    const purchasedWeightKg = (purchasedLengthMm / 1000) * pool.weightPerMeter;
-    const wastageLengthFt = Math.max(0, (purchasedLengthMm - usedLengthMm) * MM_TO_FT);
-    totals.usedLengthFt += usedLengthMm * MM_TO_FT;
-    totals.purchasedLengthFt += purchasedLengthMm * MM_TO_FT;
-    totals.usedWeightKg += usedWeightKg;
-    totals.purchasedWeightKg += purchasedWeightKg;
-    totals.wastageAluminiumCost += Math.max(0, purchasedWeightKg - usedWeightKg) * rates.aluminiumProfilePerKg;
-    totals.wastagePowderCost += wastageLengthFt * pool.powderRatePerRft;
-  }
   totals.wastageLengthFt = Math.max(0, totals.purchasedLengthFt - totals.usedLengthFt);
   totals.wastageWeightKg = Math.max(0, totals.purchasedWeightKg - totals.usedWeightKg);
 

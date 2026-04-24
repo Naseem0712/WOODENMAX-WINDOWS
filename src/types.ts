@@ -59,6 +59,16 @@ export interface ProfileDimensions {
   shutterTop: number | '';
   shutterBottom: number | '';
   shutterMeeting: number | '';
+  /** Sliding 2-track outer frame (top + bottom horizontals). Falls back to
+   *  `outerFrame` if not set. Physical extrusion differs from 3-track. */
+  track2T?: number | '';
+  /** Sliding 3-track outer frame (top + bottom horizontals). Falls back to
+   *  `outerFrame` if not set. Usually wider / heavier than 2-track. */
+  track3T?: number | '';
+  /** 2-track windows only: vertical L+R jamb. Same section as 3T in shop but stock/wastage must not mix with 3T outer. */
+  jamb2T?: number | '';
+  /** 3-track windows only: vertical L+R jamb. Falls back to outerFrameVertical. */
+  jamb3T?: number | '';
   
   // Casement / Ventilator / Partition (hinged)
   casementShutter: number | '';
@@ -86,6 +96,13 @@ export interface ProfileSeries {
   name: string;
   type: WindowType;
   dimensions: ProfileDimensions;
+  /**
+   * Sliding only. When not `false` (default): outer top, bottom, and L/R vertical
+   * are the same extrusion (typical 25/27/28/29 mm) — one stock pool per 2T/3T and
+   * vertical off-cuts can serve horizontal cuts. Set `false` when track rail and
+   * jamb are different sections (e.g. 35mm heavy outer).
+   */
+  slidingOuterUnifiedPerimeter?: boolean;
   /** Extra profile dimension fields shown in Configure (beyond defaults for `type`). */
   extraDimensionKeys?: (keyof ProfileDimensions)[];
   weights?: ProfileDetails;
@@ -416,6 +433,11 @@ export interface BOMGlassCutRow {
   heightMm: number;
   totalPanels: number;
   areaSqFt: number;
+  /** Quotation line this row applies to (per-line BOM keys include item id). */
+  lineTitle?: string;
+  windowWidthMm?: number;
+  windowHeightMm?: number;
+  quotationItemId?: string;
 }
 
 export interface BOMMesh {
@@ -428,6 +450,10 @@ export interface BOMMeshCutRow {
   heightMm: number;
   totalPanels: number;
   areaSqFt: number;
+  lineTitle?: string;
+  windowWidthMm?: number;
+  windowHeightMm?: number;
+  quotationItemId?: string;
 }
 
 export interface BOMSeries {

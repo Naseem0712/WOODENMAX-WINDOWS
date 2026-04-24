@@ -4,13 +4,13 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  /** Smaller JS; avoid shipping license banners in every chunk (root option, not `build.esbuild` in Vite 5). */
+  esbuild: {
+    legalComments: 'none',
+  },
   build: {
     target: 'es2020',
     cssMinify: true,
-    /** Smaller JS; avoid shipping license banners in every chunk. */
-    esbuild: {
-      legalComments: 'none',
-    },
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -52,7 +52,7 @@ export default defineConfig({
       manifest: {
         name: 'WoodenMax Window Designer',
         short_name: 'WoodenMax',
-        description: 'Design aluminium & uPVC windows, doors, partitions & more. Instant quotes, PDF & BOM — WoodenMax Window Designer.',
+        description: 'System window calculators, design & window quotations. Profile optimizers, PDF & BOM — WoodenMax Window Designer.',
         theme_color: '#1e293b',
         background_color: '#0f172a',
         display: 'standalone',
