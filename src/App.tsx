@@ -1526,10 +1526,13 @@ const App: React.FC = () => {
     let changed = false;
     const mapped = items.map((item) => {
       if (item.config.windowType !== WindowType.SLIDING) return item;
+      // Preserve user-entered/imported quotation pricing. Only backfill rows
+      // that have no stored sale price at all.
+      if (Number(item.rate) > 0 || Number(item.hardwareCost) > 0) return item;
       const base = summary.byItemId[item.id];
       if (!base) return item;
       const safeRate = Number(base.basicRatePerSqFt) || 0;
-      if (item.rate !== safeRate || item.hardwareCost !== 0) {
+      if (safeRate > 0 && item.rate !== safeRate) {
         changed = true;
         return { ...item, rate: safeRate, hardwareCost: 0 };
       }
