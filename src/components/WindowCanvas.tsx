@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect, useMemo, useId } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useId } from 'react';
 // FIX: Corrected import path for types from './types' to '../types'.
 import type { WindowConfig, HandleConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType, MirrorShape } from '../types';
@@ -27,6 +27,7 @@ import {
 import { effectiveFourGlassMeetingMm } from '../utils/slidingGeometry';
 import { getFixedPanelVerticalDivisionsMm } from '../utils/fixedPanelDivisions';
 import { resolveFoldFrameEdges } from '../utils/foldDoorFrame';
+import { getWindowPanelSizeRows } from '../utils/windowPanelSizeList';
 import { FoldDoorOpeningGraphic } from './FoldDoorOpeningVisual';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
@@ -38,6 +39,8 @@ interface WindowCanvasProps {
   onRemoveVerticalDivider: (index: number) => void;
   onRemoveHorizontalDivider: (index: number) => void;
   onToggleElevationDoor: (row: number, col: number) => void;
+  /** Visible scrollport (e.g. designer middle column). If omitted, scale uses this component’s box, which grows with content and over-zooms. */
+  fitViewportRef?: React.RefObject<HTMLElement | null>;
 }
 
 /** Convert mm at current canvas scale to CSS px; rounded so frame borders and glass insets stay aligned. */
@@ -1185,7 +1188,7 @@ const RenderedWindow: React.FC<{
 };
 
 export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
-  const { config, onRemoveHorizontalDivider, onRemoveVerticalDivider, onToggleElevationDoor } = props;
+  const { config, onRemoveHorizontalDivider, onRemoveVerticalDivider, onToggleElevationDoor, fitViewportRef } = props;
   const { width, height, series, profileColor, windowType } = config;
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1193,7 +1196,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   const [zoom, setZoom] = useState(1);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
   const [isExporting, setIsExporting] = useState(false);
-  
+
   const numWidth = windowType === WindowType.CORNER 
     ? (Number(config.leftWidth) || 0) + (Number(config.rightWidth) || 0) + (Number(config.cornerPostWidth) || 0)
     : Number(width) || 0;
@@ -1203,6 +1206,35 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   const dims = useMemo(() => ({
     outerFrame: Number(series.dimensions.outerFrame) || 0, outerFrameVertical: Number(series.dimensions.outerFrameVertical) || 0, fixedFrame: Number(series.dimensions.fixedFrame) || 0, shutterHandle: Number(series.dimensions.shutterHandle) || 0, shutterInterlock: Number(series.dimensions.shutterInterlock) || 0, shutterTop: Number(series.dimensions.shutterTop) || 0, shutterBottom: Number(series.dimensions.shutterBottom) || 0, shutterMeeting: Number(series.dimensions.shutterMeeting) || 0, casementShutter: Number(series.dimensions.casementShutter) || 0, mullion: Number(series.dimensions.mullion) || 0, louverBlade: Number(series.dimensions.louverBlade) || 0, topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0
   }), [series.dimensions]);
+
+  const panelSizeRows = useMemo(
+    () => getWindowPanelSizeRows(config, series.dimensions),
+    [config, series.dimensions]
+  );
+
+  useLayoutEffect(() => {
+    const pickTarget = () => fitViewportRef?.current ?? containerRef.current;
+    const measure = () => {
+      const el = pickTarget();
+      if (!el) return;
+      setContainerSize({ w: el.clientWidth, h: el.clientHeight });
+    };
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    const attach = () => {
+      const el = pickTarget();
+      if (el) ro?.observe(el);
+      measure();
+    };
+    attach();
+    const raf = requestAnimationFrame(attach);
+    window.addEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [fitViewportRef]);
 
   useEffect(() => {
     setZoom(1);
@@ -1237,25 +1269,26 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
 
   const scale = useMemo(() => {
     if (numWidth <= 0 || numHeight <= 0) return 1;
+    const vpH = window.visualViewport?.height ?? window.innerHeight;
     const cw = Math.max(
-      1,
-      containerSize.w || containerRef.current?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 800)
+      160,
+      containerSize.w ||
+        fitViewportRef?.current?.clientWidth ||
+        containerRef.current?.clientWidth ||
+        Math.min(window.innerWidth, 1400) * 0.45
     );
-    const ch = Math.max(
-      1,
-      containerSize.h || containerRef.current?.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 600)
-    );
-    const fitScale = Math.min((cw * CANVAS_MARGIN_X) / numWidth, (ch * CANVAS_MARGIN_Y) / numHeight, MAX_PX_PER_MM);
-    let nextScale = fitScale * clamp(zoom, ZOOM_MIN, ZOOM_MAX);
-    const rw = numWidth * nextScale;
-    const rh = numHeight * nextScale;
-    const maxW = cw * CANVAS_MARGIN_X;
-    const maxH = ch * CANVAS_MARGIN_Y;
-    if (rw > maxW || rh > maxH) {
-      nextScale *= Math.min(maxW / rw, maxH / rh);
-    }
-    return nextScale;
-  }, [numWidth, numHeight, zoom, containerSize.w, containerSize.h]);
+    const vhObserved =
+      containerSize.h > 80
+        ? containerSize.h
+        : Math.max(240, fitViewportRef?.current?.clientHeight || vpH * 0.52);
+    /** Room for dimension labels + panel size list + padding so drawing + list fit in one viewport band. */
+    const listReservePx =
+      panelSizeRows.length > 0 ? Math.min(280, 72 + panelSizeRows.length * 20) : 72;
+    /** Quotation bar is outside the scrollport on desktop; fitViewportRef height is already canvas-only. */
+    const chDraw = Math.max(140, vhObserved * 0.94 - listReservePx);
+    const fitScale = Math.min((cw * 0.88) / numWidth, (chDraw * 0.86) / numHeight, 10);
+    return fitScale * zoom;
+  }, [numWidth, numHeight, zoom, containerSize.w, containerSize.h, panelSizeRows.length, fitViewportRef]);
 
   const canvasCallbacks = useMemo(() => ({
     onRemoveHorizontalDivider,
@@ -1267,19 +1300,16 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
         const element = renderedWindowRef.current;
         if (!element || isExporting) return;
 
-        const windowElement = element.children[0] as HTMLElement;
-        if (!windowElement) return;
-
         setIsExporting(true);
 
-        const bounds = windowElement.getBoundingClientRect();
+        const bounds = element.getBoundingClientRect();
         const baseW = Math.max(1, Math.round(bounds.width));
         const baseH = Math.max(1, Math.round(bounds.height));
         const longest = Math.max(baseW, baseH);
         const captureScale = clamp(2400 / longest, 2, 5);
 
         import('html2canvas').then(({ default: html2canvas }) => {
-            html2canvas(windowElement, {
+            html2canvas(element, {
                 scale: captureScale,
                 backgroundColor: '#ffffff',
                 logging: false,
@@ -1336,13 +1366,20 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     };
 
   if (numWidth <= 0 || numHeight <= 0) {
-    return ( <div className="w-full h-full flex items-center justify-center bg-transparent"> <p className="text-slate-500">Please enter valid dimensions to begin.</p> </div> );
+    return (
+      <div className="flex min-h-[200px] w-full items-center justify-center bg-transparent py-10">
+        <p className="text-slate-500">Please enter valid dimensions to begin.</p>
+      </div>
+    );
   }
 
   return (
-    <div ref={containerRef} className="absolute inset-0 p-4 sm:p-6 flex items-center justify-center bg-transparent overflow-auto">
+    <div
+      ref={containerRef}
+      className="relative flex min-w-0 w-full flex-col items-center justify-center overflow-x-auto overflow-y-visible bg-transparent px-4 py-6"
+    >
       <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none"> WoodenMax </div>
-       <div ref={renderedWindowRef} style={{ margin: 'auto' }}>
+       <div ref={renderedWindowRef} className="flex flex-col items-center" style={{ margin: 'auto' }}>
             {windowType === WindowType.CORNER && config.leftConfig && config.rightConfig ? (
                 (() => {
                     const leftW = Number(config.leftWidth) || 0;
@@ -1376,6 +1413,23 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
                 })()
             ) : (
                 <RenderedWindow config={config} elements={createWindowElements(config, scale, dims, canvasCallbacks)} scale={scale} />
+            )}
+            {panelSizeRows.length > 0 && (
+              <div className="mt-5 w-full max-w-2xl border-t border-slate-500/50 pt-3 px-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">
+                  Panel sizes (clear glass / opening, mm)
+                </p>
+                <ul className="space-y-1.5 text-xs text-slate-200 font-mono leading-snug">
+                  {panelSizeRows.map((row, i) => (
+                    <li key={i} className="flex justify-between gap-4 border-b border-slate-700/40 pb-1 last:border-b-0">
+                      <span className="text-slate-300 min-w-0 flex-1">{row.label}</span>
+                      <span className="text-slate-100 shrink-0 tabular-nums">
+                        {row.widthMm > 0 || row.heightMm > 0 ? `${row.widthMm} × ${row.heightMm}` : '—'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
         </div>
       

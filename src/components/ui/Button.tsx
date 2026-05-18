@@ -16,9 +16,9 @@ export const Button: React.FC<ButtonProps> = ({ children, variant = 'primary', c
 
   return (
     <button
-      type="button"
       className={`${baseClasses} ${variantClasses[variant]} ${className}`}
       {...props}
+      type="button"
     >
       {children}
     </button>

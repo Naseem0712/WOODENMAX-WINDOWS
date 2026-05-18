@@ -8,7 +8,7 @@ import { ChevronDownIcon } from './icons/ChevronDownIcon';
 export const WoodenMaxCatalogMenu: React.FC<{ className?: string }> = ({ className = '' }) => (
   <details className={`relative ${className}`}>
     <summary
-      className="flex cursor-pointer list-none items-center gap-1 rounded-lg border border-slate-300/95 bg-white px-2.5 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 [&::-webkit-details-marker]:hidden"
+      className="flex cursor-pointer list-none items-center gap-1 rounded-md border border-slate-300/95 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 sm:text-xs [&::-webkit-details-marker]:hidden"
       aria-label="WoodenMax.in product and catalogue links"
     >
       <span className="hidden sm:inline">WoodenMax.in — products</span>

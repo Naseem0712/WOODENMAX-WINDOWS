@@ -14,7 +14,6 @@ import { XMarkIcon } from './icons/XMarkIcon';
 import { CollapsibleCard } from './ui/CollapsibleCard';
 import { SearchableSelect } from './ui/SearchableSelect';
 import { UploadIcon } from './icons/UploadIcon';
-import { useRubberBandScroll } from '../hooks/useRubberBandScroll';
 import {
   getOrderedProfileDimensionKeys,
   getAddableProfileDimensionKeys,
@@ -23,7 +22,7 @@ import {
 import { DOOR_WINDOW_COMBO_PRESETS } from '../utils/doorWindowComboPresets';
 import { clampFoldLeafCount } from '../utils/partitionPanelGeometry';
 import { SLIDING_LAYOUT_PRESETS, type SlidingLayoutPreset } from '../utils/slidingLayoutPresets';
-
+import { scrollNearestVerticalOverflowAncestor } from '../utils/scrollParentWheel';
 const PROFILE_QUICK_PRESETS: { name: string; value: string }[] = [
   { name: 'Grey', value: '#6b7280' },
   { name: 'Black', value: '#2f3238' },
@@ -82,12 +81,33 @@ interface ControlsPanelProps {
   idPrefix?: string;
 }
 
-const Slider: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string, unit?: string }> = ({ id, label, unit, ...props }) => (
+const Slider: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string, unit?: string }> = ({ id, label, unit, onWheel, ...props }) => {
+  const rangeRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const el = rangeRef.current;
+    if (!el) return;
+    const onWheelNative = (e: WheelEvent) => {
+      e.preventDefault();
+      scrollNearestVerticalOverflowAncestor(el, e);
+    };
+    el.addEventListener('wheel', onWheelNative, { passive: false });
+    return () => el.removeEventListener('wheel', onWheelNative);
+  }, []);
+  return (
     <div className='flex-1'>
         <label htmlFor={id} className="block text-xs font-medium text-slate-300 mb-1">{label} <span className='text-slate-400'>{props.value}{unit}</span></label>
-        <input type="range" id={id} name={id} className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-indigo-500" {...props} />
+        <input
+          ref={rangeRef}
+          type="range"
+          id={id}
+          name={id}
+          className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+          onWheel={onWheel}
+          {...props}
+        />
     </div>
-);
+  );
+};
 
 export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefix = '', ...props }) => {
   const { 
@@ -113,9 +133,6 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
   const glassTextureUploadRef = useRef<HTMLInputElement>(null);
   const profileTextureUploadRef = useRef<HTMLInputElement>(null);
   const profileOverlayUploadRef = useRef<HTMLInputElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  useRubberBandScroll(scrollContainerRef);
-  
   const isCorner = windowType === WindowType.CORNER;
 
   // Georgian Bars Logic
@@ -347,7 +364,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
   ];
 
   return (
-    <div ref={scrollContainerRef} className="w-full p-4 space-y-4 overflow-y-auto bg-slate-800 h-full custom-scrollbar">
+    <div className="custom-scrollbar flex h-full min-h-0 w-full min-w-0 basis-0 flex-1 flex-col space-y-4 overflow-x-hidden overflow-y-auto overscroll-y-contain bg-slate-800 p-4">
       <div className="flex justify-between items-center pb-2 border-b border-slate-700">
         <h2 className="text-2xl font-bold text-white">Configuration</h2>
         <div className="flex items-center gap-2">
@@ -558,7 +575,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
               <div className="mt-4">
                   <label className="block text-sm font-medium text-slate-300 mb-2">Panel Configuration (Click to toggle)</label>
                   <p className="text-xs text-slate-400 mb-2">You can also click grid lines on the canvas to merge panels.</p>
-                  <div className="bg-slate-900 p-2 rounded-md max-h-64 overflow-auto custom-scrollbar">
+                  <div className="max-h-64 overflow-y-auto custom-scrollbar touch-pan-y bg-slate-900 p-2 rounded-md">
                     <div className="grid gap-1" style={{gridTemplateRows: `repeat(${gridRows}, 1fr)`, gridTemplateColumns: `repeat(${gridCols}, 1fr)`}}>
                         {Array.from({length: gridRows * gridCols}).map((_, index) => {
                             const row = Math.floor(index / gridCols);

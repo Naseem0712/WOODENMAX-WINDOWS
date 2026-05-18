@@ -1,6 +1,9 @@
 import { RefObject, useEffect, useRef } from 'react';
 
-export function useRubberBandScroll(targetRef: RefObject<HTMLElement>) {
+/** Ease-out-back style curve — slight overshoot then settle (springy snap). */
+const SPRING_TRANSITION = 'transform 0.55s cubic-bezier(0.175, 0.885, 0.32, 1.12)';
+
+export function useRubberBandScroll(targetRef: RefObject<HTMLElement | null>) {
     const startY = useRef(0);
     const isOverscrolling = useRef(false);
 
@@ -8,13 +11,17 @@ export function useRubberBandScroll(targetRef: RefObject<HTMLElement>) {
         const element = targetRef.current;
         if (!element) return;
 
-        // Base protection for modern browsers that prevents scroll chaining
         element.style.overscrollBehavior = 'contain';
+
+        const clearTransitionAfterSnap = (ev: TransitionEvent) => {
+            if (ev.propertyName !== 'transform') return;
+            element.style.transition = '';
+            element.removeEventListener('transitionend', clearTransitionAfterSnap);
+        };
 
         const handleTouchStart = (e: TouchEvent) => {
             if (e.touches.length === 1) {
                 startY.current = e.touches[0].clientY;
-                // Remove any existing transition to allow for direct manipulation via transform
                 element.style.transition = 'transform 0s';
             }
         };
@@ -25,43 +32,36 @@ export function useRubberBandScroll(targetRef: RefObject<HTMLElement>) {
             const currentY = e.touches[0].clientY;
             const deltaY = currentY - startY.current;
 
-            const isAtTop = element.scrollTop === 0;
-            // Use a small buffer to account for fractional pixel values
-            const isAtBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 1;
-            
-            // If at the top and pulling down, OR at the bottom and pulling up
+            const isAtTop = element.scrollTop <= 0;
+            const isAtBottom = element.scrollHeight - element.scrollTop - element.clientHeight <= 1;
+
             if ((isAtTop && deltaY > 0) || (isAtBottom && deltaY < 0)) {
-                // Prevent native scroll (and thus scroll chaining)
                 e.preventDefault();
                 isOverscrolling.current = true;
-                
-                // Apply resistance. The exponent makes the pull feel less linear and more natural.
-                const resistedDelta = Math.sign(deltaY) * Math.pow(Math.abs(deltaY), 0.8);
+
+                const resistedDelta = Math.sign(deltaY) * Math.pow(Math.abs(deltaY), 0.72);
                 element.style.transform = `translateY(${resistedDelta}px)`;
             } else {
-                // If we were overscrolling, stop immediately to allow normal scrolling.
-                // This causes a snap but is the simplest way to hand control back to the native scroll.
                 isOverscrolling.current = false;
                 element.style.transform = 'translateY(0px)';
             }
         };
 
         const handleTouchEnd = () => {
-            if (isOverscrolling.current) {
-                // If we were overscrolling, bounce back smoothly
-                element.style.transition = 'transform 0.3s ease-out';
-                element.style.transform = 'translateY(0px)';
-                isOverscrolling.current = false;
-            }
+            if (!isOverscrolling.current) return;
+            element.style.transition = SPRING_TRANSITION;
+            element.style.transform = 'translateY(0px)';
+            element.addEventListener('transitionend', clearTransitionAfterSnap);
+            isOverscrolling.current = false;
         };
 
-        // We need passive: false on touchmove to be able to call preventDefault
         element.addEventListener('touchstart', handleTouchStart, { passive: true });
         element.addEventListener('touchmove', handleTouchMove, { passive: false });
         element.addEventListener('touchend', handleTouchEnd);
         element.addEventListener('touchcancel', handleTouchEnd);
 
         return () => {
+            element.removeEventListener('transitionend', clearTransitionAfterSnap);
             element.removeEventListener('touchstart', handleTouchStart);
             element.removeEventListener('touchmove', handleTouchMove);
             element.removeEventListener('touchend', handleTouchEnd);

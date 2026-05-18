@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { scrollNearestVerticalOverflowAncestor } from '../../utils/scrollParentWheel';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
   unit?: string;
 }
 
-export const Input: React.FC<InputProps> = ({ label, id, unit, className, value, onChange, onFocus, onBlur, ...props }) => {
+export const Input: React.FC<InputProps> = ({ label, id, unit, className, value, onChange, onFocus, onBlur, type = 'text', onWheel, ...props }) => {
   const [internalValue, setInternalValue] = useState(String(value ?? ''));
   const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Sync with prop value when not focused. This allows the component to be updated from the outside,
   // but prevents the parent's state from overwriting what the user is currently typing.
@@ -16,6 +18,20 @@ export const Input: React.FC<InputProps> = ({ label, id, unit, className, value,
       setInternalValue(String(value ?? ''));
     }
   }, [value, isFocused]);
+
+  // React's onWheel is passive in many cases, so preventDefault does not stop touchpad/mouse wheel
+  // from changing number inputs. Native non-passive listener routes scroll to the panel instead.
+  useEffect(() => {
+    if (type !== 'number') return;
+    const el = inputRef.current;
+    if (!el) return;
+    const onWheelNative = (e: WheelEvent) => {
+      e.preventDefault();
+      scrollNearestVerticalOverflowAncestor(el, e);
+    };
+    el.addEventListener('wheel', onWheelNative, { passive: false });
+    return () => el.removeEventListener('wheel', onWheelNative);
+  }, [type]);
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     setIsFocused(true);
@@ -30,6 +46,10 @@ export const Input: React.FC<InputProps> = ({ label, id, unit, className, value,
     setInternalValue(e.target.value);
   };
   
+  const handleWheel: React.WheelEventHandler<HTMLInputElement> = (e) => {
+    onWheel?.(e);
+  };
+
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     setIsFocused(false);
     
@@ -64,12 +84,15 @@ export const Input: React.FC<InputProps> = ({ label, id, unit, className, value,
       </label>}
       <div className="relative">
         <input
+          ref={inputRef}
           id={id}
+          type={type}
           className={`${baseClasses} ${className || ''}`}
           value={internalValue} // The input is always controlled by its internal state.
           onChange={handleChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
+          onWheel={handleWheel}
           autoComplete="off"
           {...props}
         />

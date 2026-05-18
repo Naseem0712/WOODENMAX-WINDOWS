@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Input } from './Input';
+import { scrollNearestVerticalOverflowAncestor } from '../../utils/scrollParentWheel';
 
 export type Unit = 'mm' | 'cm' | 'in' | 'ft-in';
 
@@ -65,6 +66,19 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
   
   const [internalValue, setInternalValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const unitSelectRef = useRef<HTMLSelectElement>(null);
+
+  useEffect(() => {
+    if (controlledUnit) return;
+    const el = unitSelectRef.current;
+    if (!el) return;
+    const onWheelNative = (e: WheelEvent) => {
+      e.preventDefault();
+      scrollNearestVerticalOverflowAncestor(el, e);
+    };
+    el.addEventListener('wheel', onWheelNative, { passive: false });
+    return () => el.removeEventListener('wheel', onWheelNative);
+  }, [controlledUnit]);
 
   // Sync internalValue with the prop value, but only if the input is not focused.
   useEffect(() => {
@@ -124,6 +138,7 @@ export const DimensionInput: React.FC<DimensionInputProps> = ({ label, id, value
           <div className="absolute inset-y-0 right-0 flex items-center">
               <label htmlFor={`${id}-unit-select`} className="sr-only">Units</label>
               <select
+                  ref={unitSelectRef}
                   id={`${id}-unit-select`}
                   name={`${id}-unit`}
                   value={unit}

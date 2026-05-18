@@ -20,6 +20,7 @@ export const DEFAULT_MATERIAL_RATES: MaterialRateSettings = {
     track: 55,
     shutterSections: 45,
     slimInterlock: 35,
+    trackClip: 90,
   },
   glassPerSqFt: {
     clear: {

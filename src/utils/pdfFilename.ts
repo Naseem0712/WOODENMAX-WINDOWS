@@ -1,6 +1,6 @@
 /** Safe file name segments for PDF / print (Windows, macOS, Linux). */
-export function sanitizeFilenameSegment(input: string, fallback: string): string {
-  const raw = input.trim() || fallback;
+export function sanitizeFilenameSegment(input: string | null | undefined, fallback: string): string {
+  const raw = String(input ?? '').trim() || fallback;
   const cleaned = raw
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
     .replace(/\s+/g, '-')

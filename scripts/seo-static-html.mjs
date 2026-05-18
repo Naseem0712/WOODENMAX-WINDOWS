@@ -16,7 +16,7 @@ const DESIGN = [
     seg: 'sliding',
     title: 'Sliding Window & Door Designer | 2-Track, 3-Track Systems | WoodenMax',
     description:
-      'Design 2-track & 3-track aluminium or uPVC sliding windows and doors online. Configure shutters, mesh, glass & hardware; quotations & BOM — WoodenMax Window Designer.',
+      'Design 2-track & 3-track aluminium or uPVC sliding windows online — WinOptimiser-style stock logic, window design tools, quotation app PDF & BOM — WoodenMax Window Designer.',
   },
   {
     seg: 'casement',
@@ -61,7 +61,7 @@ const GUIDES = [
     slug: 'index',
     title: 'Features & Guides | WoodenMax Window Designer',
     description:
-      'WoodenMax Window Designer — free PWA for aluminium & uPVC sliding & casement windows, glass partitions, louvers, ventilators, corner glazing & mirrors. Sizes, PDF quotations & BOM for uPVC window projects. Works online & offline at window.woodenmax.in. Read the full guide to features, audiences & export options.',
+      'WoodenMax Window Designer (WinOptimiser) — free quotation app & window design tools for aluminium & uPVC sliding & casement windows, glass partitions, louvers, ventilators, corner glazing & mirrors. PDF quotations & BOM. Works online & offline at window.woodenmax.in.',
   },
   {
     slug: 'sliding',

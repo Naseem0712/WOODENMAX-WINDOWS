@@ -10,6 +10,7 @@ import { Input } from './ui/Input';
 import { TrashIcon } from './icons/TrashIcon';
 import { PlusIcon } from './icons/PlusIcon';
 import { Select } from './ui/Select';
+import { SpringScrollArea } from './ui/SpringScrollArea';
 
 type Unit = 'mm' | 'cm' | 'in' | 'ft-in';
 
@@ -89,7 +90,7 @@ export const BatchAddModal: React.FC<BatchAddModalProps> = ({ isOpen, onClose, b
           </Button>
         </div>
 
-        <div className="flex-grow overflow-y-auto p-4 custom-scrollbar">
+        <SpringScrollArea className="min-h-0 flex-grow overflow-y-auto overscroll-y-contain p-4 touch-pan-y custom-scrollbar">
             <div className='flex justify-end mb-4'>
                 <div className='w-48'>
                     <Select id="batch-unit-selector" name="batch-unit-selector" label="Dimension Unit" value={unit} onChange={e => setUnit(e.target.value as Unit)}>
@@ -144,7 +145,7 @@ export const BatchAddModal: React.FC<BatchAddModalProps> = ({ isOpen, onClose, b
                     <PlusIcon className="w-4 h-4 mr-2"/> Add Another Size
                 </Button>
             </div>
-        </div>
+        </SpringScrollArea>
         
         <div className="flex-shrink-0 p-4 border-t border-slate-700 flex justify-end gap-2">
             <Button variant="secondary" onClick={onClose}>Cancel</Button>

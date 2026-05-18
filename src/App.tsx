@@ -11,11 +11,11 @@ import { ChevronLeftIcon } from './components/icons/ChevronLeftIcon';
 import { WoodenMaxCatalogMenu } from './components/WoodenMaxCatalogMenu';
 import { Logo } from './components/icons/Logo';
 import { Button } from './components/ui/Button';
+import { SpringScrollArea } from './components/ui/SpringScrollArea';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import { AdjustmentsIcon } from './components/icons/AdjustmentsIcon';
 import { ListBulletIcon } from './components/icons/ListBulletIcon';
 import { DocumentTextIcon } from './components/icons/DocumentTextIcon';
-import { QuotationListModal } from './components/QuotationListModal';
 import {
   saveSnapshotForType,
   getSnapshotForType,
@@ -31,6 +31,9 @@ import { calculateMaterialCostSummary } from './utils/materialCosting';
 
 const BatchAddModal = lazy(() => import('./components/BatchAddModal').then(module => ({ default: module.BatchAddModal })));
 const GuidesViewer = lazy(() => import('./components/GuidesViewer').then(module => ({ default: module.GuidesViewer })));
+const QuotationListModal = lazy(() =>
+  import('./components/QuotationListModal').then((m) => ({ default: m.QuotationListModal }))
+);
 
 interface BeforeInstallPromptEvent extends Event {
     readonly platforms: Array<string>;
@@ -362,11 +365,12 @@ const PREDEFINED_SLIDING_SERIES: ProfileSeries[] = [
         weights: { outerFrame: 1.943, shutterHandle: 0.942, shutterTop: 0.942, shutterBottom: 0.942, shutterInterlock: 0.990 },
         ...ALL_PROFILES_16_FEET, hardwareItems: DEFAULT_SLIDING_HARDWARE, glassOptions: DEFAULT_GLASS_OPTIONS,
     },
-    // 35mm Opulence Series
+    // 35mm Opulence Series — different track vs jamb extrusion; no H↔V off-cut sharing
     {
         id: 'series-sliding-35mm-opulence-2t-slim-default',
         name: '35mm Opulence (2-Track, Slim Interlock)',
         type: WindowType.SLIDING,
+        slidingOuterUnifiedPerimeter: false,
         dimensions: { ...BASE_DIMENSIONS, outerFrame: 97, outerFrameVertical: 100, fixedFrame: 31, shutterHandle: 59, shutterTop: 58, shutterBottom: 58, shutterInterlock: 27 },
         weights: { outerFrame: 1.680, outerFrameVertical: 1.200, fixedFrame: 0.300, shutterHandle: 0.920, shutterTop: 0.910, shutterBottom: 0.910, shutterInterlock: 0.720 },
         ...ALL_PROFILES_16_FEET,
@@ -377,6 +381,7 @@ const PREDEFINED_SLIDING_SERIES: ProfileSeries[] = [
         id: 'series-sliding-35mm-opulence-2t-reinf-default',
         name: '35mm Opulence (2-Track, Reinf. Interlock)',
         type: WindowType.SLIDING,
+        slidingOuterUnifiedPerimeter: false,
         dimensions: { ...BASE_DIMENSIONS, outerFrame: 97, outerFrameVertical: 100, fixedFrame: 31, shutterHandle: 59, shutterTop: 58, shutterBottom: 58, shutterInterlock: 27 },
         weights: { outerFrame: 1.680, outerFrameVertical: 1.200, fixedFrame: 0.300, shutterHandle: 0.920, shutterTop: 0.910, shutterBottom: 0.910, shutterInterlock: 1.200 },
         ...ALL_PROFILES_16_FEET,
@@ -387,6 +392,7 @@ const PREDEFINED_SLIDING_SERIES: ProfileSeries[] = [
         id: 'series-sliding-35mm-opulence-3t-slim-default',
         name: '35mm Opulence (3-Track, Slim Interlock)',
         type: WindowType.SLIDING,
+        slidingOuterUnifiedPerimeter: false,
         dimensions: { ...BASE_DIMENSIONS, outerFrame: 145, outerFrameVertical: 150, fixedFrame: 31, shutterHandle: 59, shutterTop: 58, shutterBottom: 58, shutterInterlock: 27 },
         weights: { outerFrame: 2.120, outerFrameVertical: 1.720, fixedFrame: 0.300, shutterHandle: 0.920, shutterTop: 0.910, shutterBottom: 0.910, shutterInterlock: 0.720 },
         ...ALL_PROFILES_16_FEET,
@@ -397,6 +403,7 @@ const PREDEFINED_SLIDING_SERIES: ProfileSeries[] = [
         id: 'series-sliding-35mm-opulence-3t-reinf-default',
         name: '35mm Opulence (3-Track, Reinf. Interlock)',
         type: WindowType.SLIDING,
+        slidingOuterUnifiedPerimeter: false,
         dimensions: { ...BASE_DIMENSIONS, outerFrame: 145, outerFrameVertical: 150, fixedFrame: 31, shutterHandle: 59, shutterTop: 58, shutterBottom: 58, shutterInterlock: 27 },
         weights: { outerFrame: 2.120, outerFrameVertical: 1.720, fixedFrame: 0.300, shutterHandle: 0.920, shutterTop: 0.910, shutterBottom: 0.910, shutterInterlock: 1.200 },
         ...ALL_PROFILES_16_FEET,
@@ -1226,6 +1233,7 @@ interface DesignerViewProps {
 }
 
 const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
+  const canvasViewportRef = useRef<HTMLDivElement>(null);
   const {
     onOpenGuides,
     installPrompt, handleInstallClick, panelRef, isDesktopPanelOpen, setIsDesktopPanelOpen,
@@ -1240,39 +1248,44 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
   } = props;
 
   return (
-    <>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {/* One flex child for app shell; keeps fixed mobile layers from breaking flex-1 on this scroller. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden">
       {!isEmbedded && (
-      <header className="no-print z-40 flex flex-col gap-2 border-b border-slate-200/90 bg-gradient-to-b from-white to-slate-100 px-3 py-2.5 shadow-sm sm:flex-row sm:items-center sm:gap-3">
-            <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
-              <h1 className="sr-only">
-                WoodenMax Window Designer — free aluminium &amp; uPVC window &amp; door design with PDF quotations and BOM
-              </h1>
-              <div className="shrink-0 rounded-lg bg-white px-2 py-1.5 shadow-sm ring-1 ring-slate-200/90">
-                <Logo className="h-9 w-auto max-h-9 max-w-[min(100%,200px)] object-contain sm:h-10 sm:max-h-10" alt="WoodenMax logo" />
+      <header className="no-print z-40 flex shrink-0 flex-col gap-1 border-b border-slate-200/90 bg-gradient-to-b from-white to-slate-100 px-2.5 py-1.5 shadow-sm sm:flex-row sm:items-center sm:gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
+              {/* Long SEO headings: Tailwind `sr-only` = visually hidden (not shown on screen). Visible line is the <p> tagline below. */}
+              <div className="sr-only">
+                <h1>WoodenMax Window Designer — system window calculators, aluminium &amp; uPVC online design, instant window quotations, profile optimizers, PDF &amp; BOM</h1>
+                <h2>Window design &amp; costing: sliding 2/3 track, casement, ventilators, glass partitions, louvers, L-corner, mirrors</h2>
+                <h3>Window quotation generator, cutting list &amp; material packing for fabricators, architects &amp; project teams</h3>
               </div>
-              <p className="min-w-0 flex-1 text-xs font-medium leading-snug text-slate-700 sm:text-sm">
+              <div className="shrink-0 rounded-md bg-white px-1.5 py-1 shadow-sm ring-1 ring-slate-200/90">
+                <Logo className="h-7 w-auto max-h-7 max-w-[min(100%,180px)] object-contain sm:h-8 sm:max-h-8" alt="WoodenMax logo" />
+              </div>
+              <p className="min-w-0 flex-1 text-[11px] font-medium leading-tight text-slate-700 sm:text-xs">
                 Reshaping spaces — free window &amp; door design with instant quotations.
               </p>
             </div>
-            <div className="flex shrink-0 items-center justify-end gap-2 sm:ml-auto">
+            <div className="flex min-h-9 shrink-0 items-center justify-end gap-1.5 sm:ml-auto sm:min-h-0">
               <WoodenMaxCatalogMenu />
-              <Button onClick={onOpenGuides} variant="secondary" className="hidden sm:inline-flex">
-                <DocumentTextIcon className="mr-2 h-5 w-5" /> Features &amp; Guides
+              <Button onClick={onOpenGuides} variant="secondary" className="hidden px-2.5 py-1 text-xs sm:inline-flex">
+                <DocumentTextIcon className="mr-1.5 h-4 w-4" /> Features &amp; Guides
               </Button>
-              <Button onClick={onOpenShortcuts} variant="secondary" className="hidden sm:inline-flex">
+              <Button onClick={onOpenShortcuts} variant="secondary" className="hidden px-2.5 py-1 text-xs sm:inline-flex">
                 Keyboard
               </Button>
               <Button
                 onClick={onOpenGuides}
                 variant="secondary"
-                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-0 sm:hidden"
+                className="inline-flex min-h-10 min-w-10 items-center justify-center p-0 sm:hidden"
                 aria-label="Features and guides"
               >
-                <DocumentTextIcon className="h-6 w-6" />
+                <DocumentTextIcon className="h-5 w-5" />
               </Button>
               {installPrompt && (
-                <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse whitespace-nowrap text-xs sm:text-sm">
-                  <DownloadIcon className="mr-1.5 h-4 w-4 sm:mr-2 sm:h-5 sm:w-5" />
+                <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse whitespace-nowrap px-2 py-1 text-[11px] sm:text-xs">
+                  <DownloadIcon className="mr-1 h-3.5 w-3.5 sm:mr-1.5 sm:h-4 sm:w-4" />
                   <span className="hidden sm:inline">Add to Home Screen</span>
                   <span className="sm:hidden">Install app</span>
                 </Button>
@@ -1280,23 +1293,55 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
             </div>
         </header>
       )}
-        <main className="flex flex-row flex-grow min-h-0">
-            <div ref={panelRef} className={`hidden lg:block flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
-                <div className={`h-full overflow-hidden ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
+        <main className="flex min-h-0 w-full min-w-0 flex-1 flex-row items-stretch overflow-hidden">
+            <div ref={panelRef} className={`hidden min-h-0 shrink-0 flex-col bg-slate-800 no-print transition-[width] duration-300 ease-in-out lg:flex z-30 ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
+                <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                     <ErrorBoundary title="Controls panel crashed">
                       <ControlsPanel {...commonControlProps} idPrefix="desktop-" onClose={() => setIsDesktopPanelOpen(false)} />
                     </ErrorBoundary>
                 </div>
             </div>
-            <div className="relative flex-1 flex flex-col min-w-0">
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 {!isDesktopPanelOpen && ( <button onClick={() => setIsDesktopPanelOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex" aria-label="Expand panel"> <ChevronLeftIcon className="w-5 h-5 rotate-180" /> </button> )}
-              <div className="flex-grow relative">
+              <SpringScrollArea
+                ref={canvasViewportRef}
+                className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain custom-scrollbar touch-pan-y"
+              >
                  <ErrorBoundary title="Canvas crashed">
-                   <WindowCanvas key={canvasKey} config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} onToggleElevationDoor={() => {}} />
+                   <WindowCanvas
+                     key={canvasKey}
+                     fitViewportRef={canvasViewportRef}
+                     config={windowConfig}
+                     onRemoveVerticalDivider={handleRemoveVerticalDivider}
+                     onRemoveHorizontalDivider={handleRemoveHorizontalDivider}
+                     onToggleElevationDoor={() => {}}
+                   />
                  </ErrorBoundary>
-              </div>
-              <div className="flex-shrink-0 no-print hidden lg:block">
-                  <QuotationPanel idPrefix="desktop-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} bulkCorrectionLineCount={bulkCorrectionLineCount} onApplyBulkCorrection={onApplyBulkCorrection} />
+              </SpringScrollArea>
+              <div className="no-print relative z-20 hidden shrink-0 lg:block lg:shadow-[0_-10px_40px_rgba(0,0,0,0.35)]">
+                <QuotationPanel
+                  idPrefix="desktop-"
+                  width={Number(windowConfig.width) || 0}
+                  height={Number(windowConfig.height) || 0}
+                  quantity={quantity}
+                  setQuantity={setQuantity}
+                  areaType={areaType}
+                  setAreaType={setAreaType}
+                  rate={rate}
+                  setRate={setRate}
+                  onSave={onSave}
+                  onUpdate={onUpdate}
+                  onCancelEdit={onCancelEdit}
+                  editingItemId={editingItemId}
+                  onBatchAdd={onBatchAdd}
+                  windowTitle={windowTitle}
+                  setWindowTitle={setWindowTitle}
+                  hardwareCostPerWindow={hardwareCostPerWindow}
+                  quotationItemCount={quotationItemCount}
+                  onViewQuotation={onViewQuotation}
+                  bulkCorrectionLineCount={bulkCorrectionLineCount}
+                  onApplyBulkCorrection={onApplyBulkCorrection}
+                />
               </div>
               <div className="no-print grid grid-cols-2 gap-3 border-t-2 border-slate-700 bg-slate-800 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
                   <Button onClick={handleOpenConfigure} variant="secondary" className="min-h-[48px] justify-center text-sm font-semibold">
@@ -1308,13 +1353,14 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
               </div>
             </div>
         </main>
+      </div>
         {/* Mobile Configure Panel */}
         <div className={`lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${activeMobilePanel === 'configure' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={handleCloseMobilePanels}></div>
         <div className={`no-print fixed bottom-0 left-0 right-0 z-50 flex max-h-[90vh] h-[min(90vh,100dvh)] flex-col rounded-t-xl bg-slate-800 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_30px_rgba(0,0,0,0.35)] transition-transform duration-300 ease-in-out lg:hidden ${activeMobilePanel === 'configure' ? 'translate-y-0' : 'translate-y-full'}`}>
            <div className="flex shrink-0 justify-center py-2" aria-hidden="true">
              <div className="h-1.5 w-12 rounded-full bg-slate-600" />
            </div>
-           <div className="min-h-0 flex-1 overflow-hidden">
+           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
              <ErrorBoundary title="Controls panel crashed">
                <ControlsPanel {...commonControlProps} idPrefix="mobile-" onClose={handleCloseMobilePanels} />
              </ErrorBoundary>
@@ -1327,11 +1373,11 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
             <div className="flex shrink-0 justify-center py-2" aria-hidden="true">
               <div className="h-1.5 w-12 rounded-full bg-slate-600" />
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <SpringScrollArea className="min-h-0 flex-1 overflow-y-auto custom-scrollbar touch-pan-y">
               <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} onClose={handleCloseMobilePanels} bulkCorrectionLineCount={bulkCorrectionLineCount} onApplyBulkCorrection={onApplyBulkCorrection} />
-            </div>
+            </SpringScrollArea>
         </div>
-    </>
+    </div>
   );
 });
 
@@ -2082,9 +2128,6 @@ const App: React.FC = () => {
       navigate(`/design/${value}`);
     }
     else {
-      if (field === 'profileColor' || field === 'profileTexture' || field === 'glassTexture') {
-        setCanvasKey(uuidv4());
-      }
       dispatch({ type: 'SET_FIELD', field: field as keyof ConfigState, payload: value });
     }
   }, [navigate]);
@@ -2105,6 +2148,7 @@ const App: React.FC = () => {
         setAreaType(itemToEdit.areaType);
         setEditingItemId(id);
         setQuotationBulkTargetIds([]);
+        setIsPreviewing(false);
         setIsQuotationModalOpen(false);
         setActiveMobilePanel('none');
         navigate(`/design/${itemToEdit.config.windowType}`);
@@ -2169,6 +2213,7 @@ const App: React.FC = () => {
     setAreaType(first.areaType);
     setEditingItemId(null);
     setCanvasKey(uuidv4());
+    setIsPreviewing(false);
     setIsQuotationModalOpen(false);
     setActiveMobilePanel('none');
     navigate(`/design/${wt}`);
@@ -2255,6 +2300,12 @@ const App: React.FC = () => {
     setActiveMobilePanel('none');
   }, []);
 
+  /** Must clear preview flag whenever the quotation modal closes; otherwise the designer stays `hidden`. */
+  const handleCloseQuotationModal = useCallback(() => {
+    setIsPreviewing(false);
+    setIsQuotationModalOpen(false);
+  }, []);
+
   const handleBatchAdd = useCallback(() => {
     setIsBatchAddModalOpen(true);
     setActiveMobilePanel('none');
@@ -2282,6 +2333,7 @@ const App: React.FC = () => {
           return;
         }
         if (isQuotationModalOpen) {
+          setIsPreviewing(false);
           setIsQuotationModalOpen(false);
           return;
         }
@@ -2362,15 +2414,28 @@ const App: React.FC = () => {
     navigate,
   ]);
   
-  const loadingFallback = <div className="fixed inset-0 bg-slate-900 bg-opacity-80 flex items-center justify-center z-[100] no-print"><div className="text-white">Loading...</div></div>;
-
   return (
     <>
       {isQuotationModalOpen && (
-          <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => { setIsPreviewing(false); setIsQuotationModalOpen(false); }} items={quotationItems} setItems={(items) => setQuotationItems(applySlidingBasicRateProtection(items))} onRemove={handleRemoveQuotationItem} onEdit={handleEditItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} selectedLineIds={quotationBulkTargetIds} onSelectedLineIdsChange={setQuotationBulkTargetIds} onEditCorrection={handleEditCorrectionFromSelection} />
+        <Suspense fallback={null}>
+          <QuotationListModal
+            isOpen={isQuotationModalOpen}
+            onClose={handleCloseQuotationModal}
+            items={quotationItems}
+            setItems={(items) => setQuotationItems(applySlidingBasicRateProtection(items))}
+            onRemove={handleRemoveQuotationItem}
+            onEdit={handleEditItem}
+            settings={quotationSettings}
+            setSettings={setQuotationSettings}
+            onTogglePreview={setIsPreviewing}
+            selectedLineIds={quotationBulkTargetIds}
+            onSelectedLineIdsChange={setQuotationBulkTargetIds}
+            onEditCorrection={handleEditCorrectionFromSelection}
+          />
+        </Suspense>
       )}
       {isBatchAddModalOpen && (
-          <Suspense fallback={loadingFallback}>
+          <Suspense fallback={null}>
               <BatchAddModal isOpen={isBatchAddModalOpen} onClose={() => setIsBatchAddModalOpen(false)} baseConfig={windowConfig} baseRate={rate} onSave={handleBatchSave} />
           </Suspense>
       )}
@@ -2399,8 +2464,12 @@ const App: React.FC = () => {
         </div>
       )}
       
-      <div className="flex flex-col h-screen font-sans bg-slate-900 overflow-hidden">
-        <Suspense fallback={loadingFallback}>
+      <div
+        className={`flex min-h-0 flex-1 flex-col overflow-x-hidden overscroll-y-contain font-sans bg-slate-900 ${
+          appView === 'designer' ? 'overflow-y-hidden' : 'overflow-y-auto'
+        } ${isPreviewing ? 'hidden' : ''}`}
+      >
+        <Suspense fallback={null}>
             {appView === 'designer' ? (
                 <DesignerView
                     onOpenGuides={() => navigate('/guides/index')}

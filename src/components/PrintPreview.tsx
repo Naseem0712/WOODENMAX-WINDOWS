@@ -1312,6 +1312,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
 
   const printContainerRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [isArchitecturalMode, setIsArchitecturalMode] = useState(false);
   const isLikelyMobile = useMemo(() => {
     try {
@@ -1355,7 +1356,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
     () => calculateMaterialCostSummary(items, resolvedMaterialRates, makingChargePerSqFt),
     [items, resolvedMaterialRates, makingChargePerSqFt]
   );
-  
+
   const subTotal = items.reduce((total, item) => {
     const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
     const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
@@ -1382,112 +1383,123 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
 
   const handleExportPdf = () => {
     const element = printContainerRef.current?.querySelector<HTMLElement>('.a4-page');
-    if (!element || isExporting) return;
+    if (!element || isExporting || isPrinting) return;
 
-    try {
-      setIsExporting(true);
-      element.classList.add('pdf-export-mode');
-      const renderScale = isLikelyMobile ? 1 : 1.25;
-      const opt = {
-          margin: [8, 8, 8, 8] as [number, number, number, number],
-          filename: quotationPdfFilename(customer.name, pdfDateStamp),
-          image: { type: 'jpeg' as const, quality: 0.9 },
-          html2canvas: {
-              scale: renderScale,
-              logging: false,
-              useCORS: true,
-              backgroundColor: '#ffffff',
-              scrollX: 0,
-              scrollY: 0,
-          },
-          jsPDF: {
-              unit: 'mm',
-              format: 'a4',
-              orientation: 'portrait' as const,
-              compress: true,
-          },
-          pagebreak: { mode: ['css', 'legacy'] as ('css' | 'legacy' | 'avoid-all')[] },
-      };
+    const captureW = element.scrollWidth || element.offsetWidth || 800;
+    const captureH = element.scrollHeight || element.offsetHeight || 1100;
+    const canvasScale = isLikelyMobile ? 1.5 : 2;
 
-      setTimeout(() => {
-        import('html2pdf.js').then(({ default: html2pdf }) => {
-            const worker = html2pdf().from(element).set(opt);
-            worker
-                .toPdf()
-                .get('pdf')
-                .then((pdf: any) => {
-                    // CSS counter(pages) doesn't work with html2canvas-based exports
-                    // (always shows "of 0"). Stamp real page numbers via jsPDF.
-                    try {
-                        const totalPages = pdf.internal.getNumberOfPages();
-                        const pageW = pdf.internal.pageSize.getWidth();
-                        const pageH = pdf.internal.pageSize.getHeight();
-                        pdf.setFont('helvetica', 'normal');
-                        pdf.setFontSize(8);
-                        pdf.setTextColor(110);
-                        for (let i = 1; i <= totalPages; i++) {
-                            pdf.setPage(i);
-                            // Cover the leftover "Page 1 of 0" badge stamped by the
-                            // HTML footer (small white rectangle at bottom-right).
-                            pdf.setFillColor(255, 255, 255);
-                            pdf.rect(pageW - 40, pageH - 12, 35, 8, 'F');
-                            pdf.setTextColor(110);
-                            pdf.text(`Page ${i} of ${totalPages}`, pageW - 8, pageH - 6, { align: 'right' });
-                        }
-                    } catch (stampErr) {
-                        console.warn('Page-number stamp skipped:', stampErr);
-                    }
-                })
-                .save()
-                .then(() => {
-                    setIsExporting(false);
-                    element.classList.remove('pdf-export-mode');
-                })
-                .catch((err: any) => {
-                    console.error("PDF export failed", err);
-                    setIsExporting(false);
-                    element.classList.remove('pdf-export-mode');
-                    alert("Sorry, there was an error exporting the PDF.");
-                });
-        }).catch((err: any) => {
-          console.error('Failed to load html2pdf:', err);
-          setIsExporting(false);
-          element.classList.remove('pdf-export-mode');
-          alert('Sorry, there was an error exporting the PDF.');
-        });
-      }, 20);
-    } catch (err: any) {
-      console.error('Unexpected PDF export error:', err);
-      setIsExporting(false);
-      element.classList.remove('pdf-export-mode');
-      alert('Sorry, there was an error exporting the PDF.');
-    }
+    setIsExporting(true);
+    element.classList.add('pdf-export-mode');
+
+    const opt = {
+      margin: [8, 8, 8, 8] as [number, number, number, number],
+      filename: quotationPdfFilename(customer.name, pdfDateStamp),
+      image: { type: 'jpeg' as const, quality: 0.95 },
+      html2canvas: {
+        scale: canvasScale,
+        logging: false,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: captureW,
+        windowHeight: captureH,
+      },
+      jsPDF: {
+        unit: 'mm',
+        format: 'a4',
+        orientation: 'portrait' as const,
+        compress: true,
+      },
+      pagebreak: { mode: ['css', 'legacy'] as ('css' | 'legacy')[] },
+    };
+
+    import('html2pdf.js')
+      .then((mod: { default?: unknown }) => {
+        const html2pdf = (typeof mod.default === 'function' ? mod.default : mod) as (...args: unknown[]) => any;
+        if (typeof html2pdf !== 'function') throw new Error('html2pdf module did not load correctly');
+
+        return html2pdf()
+          .from(element)
+          .set(opt)
+          .toPdf()
+          .get('pdf')
+          .then((pdf: any) => {
+            try {
+              const totalPages = pdf.internal.getNumberOfPages();
+              const pageW = pdf.internal.pageSize.getWidth();
+              const pageH = pdf.internal.pageSize.getHeight();
+              pdf.setFont('helvetica', 'normal');
+              pdf.setFontSize(8);
+              pdf.setTextColor(110);
+              for (let i = 1; i <= totalPages; i++) {
+                pdf.setPage(i);
+                pdf.setFillColor(255, 255, 255);
+                pdf.rect(pageW - 42, pageH - 12, 38, 8, 'F');
+                pdf.setTextColor(110);
+                pdf.text(`Page ${i} of ${totalPages}`, pageW - 8, pageH - 6, { align: 'right' });
+              }
+            } catch (stampErr) {
+              console.warn('Page-number stamp skipped:', stampErr);
+            }
+          })
+          .save()
+          .then(() => {
+            setIsExporting(false);
+            element.classList.remove('pdf-export-mode');
+          })
+          .catch((err: unknown) => {
+            console.error('PDF export failed', err);
+            setIsExporting(false);
+            element.classList.remove('pdf-export-mode');
+            alert('Sorry, there was an error exporting the PDF.');
+          });
+      })
+      .catch((err: unknown) => {
+        console.error('Failed to load PDF exporter', err);
+        setIsExporting(false);
+        element.classList.remove('pdf-export-mode');
+        alert('Sorry, PDF tool could not be loaded. Please try again.');
+      });
   };
-  
+
   const handlePrint = () => {
+    if (isExporting || isPrinting) return;
     if (isLikelyMobile || typeof window.print !== 'function') {
       handleExportPdf();
       return;
     }
     const prevTitle = document.title;
     document.title = printDocumentTitleForQuotation(customer.name);
+    setIsPrinting(true);
     let finished = false;
     const finish = () => {
       if (finished) return;
       finished = true;
+      setIsPrinting(false);
       document.title = prevTitle;
       window.removeEventListener('afterprint', finish);
       window.clearTimeout(fallbackTimer);
     };
     const fallbackTimer = window.setTimeout(finish, 12000);
     window.addEventListener('afterprint', finish);
-    window.print();
+    window.requestAnimationFrame(() => {
+      try {
+        window.print();
+      } catch (err) {
+        console.error('Print dialog failed', err);
+        finish();
+        alert('Print dialog open nahi ho paaya. Please use Export PDF.');
+      }
+    });
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900 z-50 flex flex-col print-preview-modal">
+    <div className="fixed inset-0 bg-slate-900 z-[70] flex flex-col print-preview-modal">
         {isExporting && (
           <div className="absolute inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-[100] no-print">
             <svg className="animate-spin h-10 w-10 text-white mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -1504,10 +1516,12 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                 <p className="text-xs text-slate-400">Review your quotation below before printing or exporting.</p>
             </div>
             <div className="flex gap-2">
-                <Button onClick={handleExportPdf} variant="secondary" disabled={isExporting}>
+                <Button onClick={handleExportPdf} variant="secondary" disabled={isExporting || isPrinting}>
                     {isExporting ? 'Exporting...' : <><DownloadIcon className="w-5 h-5 mr-2"/> Export PDF</>}
                 </Button>
-                <Button onClick={handlePrint}><PrinterIcon className="w-5 h-5 mr-2"/>{isLikelyMobile ? 'Download/Print PDF' : 'Print'}</Button>
+                <Button onClick={handlePrint} disabled={isExporting || isPrinting}>
+                  <PrinterIcon className="w-5 h-5 mr-2"/> {isPrinting ? 'Printing...' : isLikelyMobile ? 'Download/Print PDF' : 'Print'}
+                </Button>
                 <Button onClick={onClose} variant="secondary"><XMarkIcon className="w-5 h-5 mr-2"/> Close</Button>
             </div>
         </div>

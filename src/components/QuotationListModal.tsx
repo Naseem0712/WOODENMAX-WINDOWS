@@ -16,9 +16,11 @@ import { calculateMaterialCostSummary } from '../utils/materialCosting';
 import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
 import { PencilIcon } from './icons/PencilIcon';
 import { TrashIcon } from './icons/TrashIcon';
+import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { sanitizeFilenameSegment } from '../utils/pdfFilename';
 import { autoContinueTermsSerial } from '../utils/quotationText';
 import { getMinimumMakingChargeForItems, getProfitSafetyInfo, getRawDiscountAmount } from '../utils/pricingSafety';
+import { SpringScrollArea } from './ui/SpringScrollArea';
 interface QuotationListModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -79,7 +81,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
   const importQuotationInputRef = useRef<HTMLInputElement>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isMaterialSummaryOpen, setIsMaterialSummaryOpen] = useState(false);
-  const [isTopPanelMinimized, setIsTopPanelMinimized] = useState(false);
+  const [isActionPanelOpen, setIsActionPanelOpen] = useState(false);
   const [bom, setBom] = useState<BOM | null>(null);
   const [typeFilter, setTypeFilter] = useState<WindowType | 'all'>('all');
   const visibleItems = useMemo(() => {
@@ -172,8 +174,6 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
     };
   }, [isPreviewOpen]);
 
-  // Auto-cap user discount to 50% of profit. MUST be declared before any early
-  // return so hooks order stays stable across renders.
   useEffect(() => {
     const computedSubTotal = items.reduce((total, item) => {
       const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
@@ -203,6 +203,63 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
       });
     }
   }, [items, settings, setSettings, materialCostSummary]);
+
+  const subTotal = items.reduce((total, item) => {
+    const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
+    const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
+    const totalArea = singleArea * item.quantity;
+    const baseCost = totalArea * item.rate;
+    const totalHardwareCost = item.hardwareCost * item.quantity;
+    return total + baseCost + totalHardwareCost;
+  }, 0);
+
+  const fin = settings.financials;
+  const discountAmount = fin?.discountType === 'percentage'
+    ? subTotal * (Number(fin?.discount ?? 0) / 100)
+    : Number(fin?.discount ?? 0);
+  const profitBeforeDiscount = materialCostSummary.totals.profitCost;
+  const maxDiscountAmount = Math.max(0, profitBeforeDiscount * 0.5);
+  const safeDiscountAmount = Math.min(Math.max(discountAmount, 0), maxDiscountAmount);
+  const profitAfterDiscount = profitBeforeDiscount - safeDiscountAmount;
+  const discountWasCapped = Math.abs((discountAmount || 0) - safeDiscountAmount) > 0.01;
+  const baseCostBeforeProfit = Math.max(0, materialCostSummary.totals.totalCost - profitBeforeDiscount);
+  const effectiveProfitPercent = baseCostBeforeProfit > 0 ? (profitAfterDiscount / baseCostBeforeProfit) * 100 : 0;
+  const profitHealth =
+    effectiveProfitPercent >= 15
+      ? { label: 'Safe', toneClass: 'text-emerald-300', badgeClass: 'bg-emerald-600/20 border border-emerald-500/40' }
+      : effectiveProfitPercent >= 12
+        ? { label: 'Risky', toneClass: 'text-amber-300', badgeClass: 'bg-amber-500/20 border border-amber-400/40' }
+        : effectiveProfitPercent >= 10
+          ? { label: 'Danger', toneClass: 'text-orange-300', badgeClass: 'bg-orange-500/20 border border-orange-400/40' }
+          : { label: 'Critical', toneClass: 'text-red-300', badgeClass: 'bg-red-600/20 border border-red-500/40' };
+
+  const profitSafety = getProfitSafetyInfo(effectiveProfitPercent, profitAfterDiscount);
+
+  const makingChargeMin = getMinimumMakingChargeForItems(items);
+  const makingChargeCurrent = Number(settings.materialRates?.makingChargePerSqFt) || 0;
+  const makingChargeBelowMin = makingChargeMin > 0 && makingChargeCurrent < makingChargeMin;
+
+  const totalAfterDiscount = subTotal - safeDiscountAmount;
+  const gstAmount = totalAfterDiscount * (Number(fin?.gstPercentage ?? 0) / 100);
+  const grandTotal = totalAfterDiscount + gstAmount;
+
+  const clampDiscountForType = useCallback(
+    (rawDiscount: number | '', discountType: 'percentage' | 'fixed'): number | '' => {
+      if (rawDiscount === '') return '';
+      const normalized = Math.max(0, Number(rawDiscount) || 0);
+      if (discountType === 'percentage') {
+        const maxPercent = subTotal > 0 ? (maxDiscountAmount / subTotal) * 100 : 0;
+        return Math.min(normalized, Math.max(0, maxPercent));
+      }
+      return Math.min(normalized, maxDiscountAmount);
+    },
+    [maxDiscountAmount, subTotal]
+  );
+
+  const openPrintPreview = () => {
+    onTogglePreview(true);
+    setIsPreviewOpen(true);
+  };
 
   if (!isOpen) return null;
 
@@ -362,6 +419,11 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                     powderCoatingPerRft: {
                       ...settings.materialRates.powderCoatingPerRft,
                       ...data.settings.materialRates?.powderCoatingPerRft,
+                      trackClip: Number(
+                        data.settings.materialRates?.powderCoatingPerRft?.trackClip ??
+                          settings.materialRates.powderCoatingPerRft.trackClip ??
+                          90
+                      ),
                     },
                     glassPerSqFt: {
                       ...settings.materialRates.glassPerSqFt,
@@ -401,22 +463,27 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
           alert("Please add items to the quotation before generating a material summary.");
           return;
       }
+      onTogglePreview(true);
       try {
-        const calculatedBom = generateBillOfMaterials(items);
+        const calculatedBom = generateBillOfMaterials(items, {
+          separateMeshShutterSections: !!settings.materialRates?.meshShutterOptions?.separateSections,
+        });
         setBom(calculatedBom);
         setIsMaterialSummaryOpen(true);
       } catch (err) {
         console.error('Failed to generate BOM:', err);
         alert("BOM generate karne me dikkat aayi. Quotation me kisi item ka data adhoora hai, please check kijiye.");
       }
-  }
+  };
 
   const handleExportStockNeed = () => {
     if (items.length === 0) {
       alert("Please add items before exporting stock need.");
       return;
     }
-    const bomData = generateBillOfMaterials(items);
+    const bomData = generateBillOfMaterials(items, {
+        separateMeshShutterSections: !!settings.materialRates?.meshShutterOptions?.separateSections,
+    });
     const csvRows: string[][] = [];
     csvRows.push(['Party Name', settings.customer.name || '']);
     csvRows.push(['Quotation Title', settings.title || '']);
@@ -537,32 +604,6 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const subTotal = items.reduce((total, item) => {
-    const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
-    const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
-    const totalArea = singleArea * item.quantity;
-    const baseCost = totalArea * item.rate;
-    const totalHardwareCost = item.hardwareCost * item.quantity;
-    return total + baseCost + totalHardwareCost;
-  }, 0);
-
-  const rawDiscountAmount = getRawDiscountAmount(subTotal, settings);
-  const profitBeforeDiscount = materialCostSummary.totals.profitCost;
-  const maxDiscountAllowed = Math.max(0, profitBeforeDiscount * 0.5);
-  const discountAmount = Math.min(rawDiscountAmount, maxDiscountAllowed);
-  const discountWasCapped = rawDiscountAmount > maxDiscountAllowed + 0.01;
-  const profitAfterDiscount = profitBeforeDiscount - discountAmount;
-  const preProfitTotal = Math.max(materialCostSummary.totals.totalCost - profitBeforeDiscount, 0);
-  const effectiveProfitPct = preProfitTotal > 0 ? (profitAfterDiscount / preProfitTotal) * 100 : 0;
-  const profitSafety = getProfitSafetyInfo(effectiveProfitPct, profitAfterDiscount);
-  const makingChargeMin = getMinimumMakingChargeForItems(items);
-  const makingChargeCurrent = Number(settings.materialRates.makingChargePerSqFt) || 0;
-  const makingChargeBelowMin = makingChargeMin > 0 && makingChargeCurrent < makingChargeMin;
-  
-  const totalAfterDiscount = subTotal - discountAmount;
-  const gstAmount = totalAfterDiscount * (Number(settings.financials?.gstPercentage ?? 0) / 100);
-  const grandTotal = totalAfterDiscount + gstAmount;
-
   return (
     <div 
         className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"
@@ -571,43 +612,45 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
         role="dialog"
     >
       <div 
-        className="bg-slate-800 rounded-lg shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col"
+        className="flex max-h-[90vh] min-h-0 w-full max-w-7xl flex-col overflow-hidden rounded-lg bg-slate-800 shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex flex-col p-4 border-b border-slate-700 no-print gap-3">
-          <div className="flex items-center justify-between gap-3">
+        <div className="p-4 border-b border-slate-700 no-print">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-2xl font-bold text-white">Quotation Generator</h2>
             <div className="flex items-center gap-2">
               <Button
-                onClick={() => setIsTopPanelMinimized((prev) => !prev)}
+                onClick={() => setIsActionPanelOpen((prev) => !prev)}
                 variant="secondary"
-                className="h-10"
+                className="min-w-[148px] justify-center"
               >
-                {isTopPanelMinimized ? 'Expand Panel' : 'Minimize Panel'}
+                <ChevronDownIcon className={`w-5 h-5 mr-2 transition-transform ${isActionPanelOpen ? 'rotate-180' : ''}`} />
+                {isActionPanelOpen ? 'Minimize Tools' : 'Show Tools'}
               </Button>
               <Button onClick={onClose} variant="secondary" className="p-2 rounded-full h-10 w-10">
-                <XMarkIcon className="w-6 h-6" />
+                  <XMarkIcon className="w-6 h-6" />
               </Button>
             </div>
           </div>
-          {!isTopPanelMinimized && (
-            <div className="flex items-center gap-2 flex-wrap justify-end">
+          {isActionPanelOpen && (
+            <div className="mt-3 flex items-center gap-2 flex-wrap justify-start sm:justify-end">
               <Button onClick={handleGenerateBom} variant="secondary"><ClipboardDocumentListIcon className="w-5 h-5 mr-2"/> Export Materials (BOM)</Button>
               <Button onClick={handleExportStockNeed} variant="secondary"><ClipboardDocumentListIcon className="w-5 h-5 mr-2"/> Export Stock Need</Button>
               <Button onClick={handleExport} variant="secondary"><DownloadIcon className="w-5 h-5 mr-2"/> Export JSON</Button>
               <Button onClick={() => importQuotationInputRef.current?.click()} variant="secondary"><UploadIcon className="w-5 h-5 mr-2"/> Import JSON</Button>
               <input type="file" ref={importQuotationInputRef} onChange={handleImport} className="hidden" accept="application/json" />
-              <Button onClick={() => setIsPreviewOpen(true)}><PrinterIcon className="w-5 h-5 mr-2"/> Print Preview</Button>
+              <Button onClick={openPrintPreview}><PrinterIcon className="w-5 h-5 mr-2"/> Print Preview</Button>
             </div>
           )}
         </div>
 
-        <div className="flex-grow overflow-y-auto p-6 custom-scrollbar">
+        <SpringScrollArea className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-6 touch-pan-y custom-scrollbar">
             <div className="space-y-4">
               <div className="mb-4">
                   <label htmlFor="modal-quotation-title" className="sr-only">Quotation Title</label>
                   <input id="modal-quotation-title" name="modal-quotation-title" value={settings.title} onChange={e => setSettings({...settings, title: e.target.value})} className="w-full text-2xl font-bold bg-transparent border-0 border-b-2 border-slate-700 hover:border-slate-500 focus:ring-0 focus:border-indigo-500 p-1 text-white transition-colors" />
               </div>
+              {isActionPanelOpen && (
               <div className="grid md:grid-cols-2 gap-4">
                   <Section title="Your Company Details">
                       <div className="flex gap-4 items-center">
@@ -648,6 +691,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                       />
                   </Section>
               </div>
+              )}
               
               <Section title="Quotation Items">
                   {items.length === 0 ? (
@@ -698,6 +742,9 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                               const materialCost = materialCostSummary.byItemId[item.id];
                               const globalIndex = items.findIndex((i) => i.id === item.id) + 1;
                               const wt = item.config.windowType;
+                              /** Sliding: hardware is rolled into sq ft rate (see applySlidingBasicRateProtection); avoid showing two hardware figures. */
+                              const hardwareBundledInRate =
+                                wt === WindowType.SLIDING && (Number(item.hardwareCost) || 0) === 0;
 
                               return (
                                   <div key={item.id} className="bg-slate-900/50 p-3 rounded-lg flex flex-col md:flex-row md:items-center gap-4">
@@ -720,16 +767,27 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                                           </p>
                                           {materialCost && (
                                             <p className="text-xs text-amber-300 mt-1">
-                                              Basic rate (material calc): ₹{Math.round(materialCost.basicRatePerSqFt).toLocaleString('en-IN')}/sq ft
-                                              {' · '}Hardware: ₹{Math.round(materialCost.hardwareCost).toLocaleString('en-IN')}
-                                              {' · '}Total: ₹{Math.round(materialCost.totalCost).toLocaleString('en-IN')}
+                                              Material estimate: ₹{Math.round(materialCost.basicRatePerSqFt).toLocaleString('en-IN')}/sq ft
+                                              {hardwareBundledInRate ? (
+                                                <> (all-in incl. hardware and profit)</>
+                                              ) : materialCost.hardwareCost > 0 ? (
+                                                <>
+                                                  {' · '}
+                                                  Hardware in estimate: ₹{Math.round(materialCost.hardwareCost).toLocaleString('en-IN')}
+                                                </>
+                                              ) : null}
+                                              {' · '}Line total: ₹{Math.round(materialCost.totalCost).toLocaleString('en-IN')}
                                             </p>
                                           )}
                                       </div>
                                       <div className="flex items-center gap-4 text-xs whitespace-nowrap">
                                           <div className="text-right">
                                               <p className="text-slate-400">Hardware</p>
-                                              <p className="font-semibold text-slate-200">₹{Math.round(totalHardwareCost).toLocaleString('en-IN')}</p>
+                                              <p className="font-semibold text-slate-200">
+                                                {hardwareBundledInRate
+                                                  ? 'In base rate'
+                                                  : `₹${Math.round(totalHardwareCost).toLocaleString('en-IN')}`}
+                                              </p>
                                           </div>
                                           <div className="text-right">
                                               <p className="text-slate-400">Base Cost</p>
@@ -844,6 +902,17 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                     }
                     unit={settings.materialRates.profit.mode === 'percentage' ? '%' : '₹ / sq ft'}
                   />
+                  <div className="rounded-md bg-slate-900/70 border border-slate-600 px-3 py-2">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-400">Profit Health</p>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <span className={`px-2 py-1 rounded text-xs font-semibold ${profitHealth.badgeClass} ${profitHealth.toneClass}`}>
+                        {profitHealth.label}
+                      </span>
+                      <span className={`text-sm font-semibold ${profitHealth.toneClass}`}>
+                        {effectiveProfitPercent.toFixed(2)}%
+                      </span>
+                    </div>
+                  </div>
                   <Input
                     id="modal-rate-wastage-cartage"
                     name="modal-rate-wastage-cartage"
@@ -886,6 +955,20 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                       value={settings.materialRates.powderCoatingPerRft.track}
                       onChange={(e) =>
                         handleMaterialRateChange('powderCoatingPerRft', 'track', e.target.value === '' ? 0 : Number(e.target.value))
+                      }
+                      unit="₹ / rft"
+                    />
+                  )}
+                  {rateUsage.usesSliding && (
+                    <Input
+                      id="modal-rate-powder-track-clip"
+                      name="modal-rate-powder-track-clip"
+                      label="Powder — bottom track clips (2T→2 pc, 3T→3 pc × width)"
+                      type="number"
+                      inputMode="decimal"
+                      value={Number(settings.materialRates.powderCoatingPerRft.trackClip ?? 90)}
+                      onChange={(e) =>
+                        handleMaterialRateChange('powderCoatingPerRft', 'trackClip', e.target.value === '' ? 0 : Number(e.target.value))
                       }
                       unit="₹ / rft"
                     />
@@ -1036,7 +1119,9 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
             
             <div className="mt-6 p-4 bg-slate-900 border-t border-slate-700 flex flex-wrap justify-end items-center gap-4 rounded-b-lg -mx-6 -mb-6">
                 <div className="text-right text-sm">
-                    <span className="text-amber-300">Material Total (incl. making @ ₹{makingChargePerSqFt}/sq ft):</span>
+                    <span className="text-amber-300">
+                      Material estimate (profiles, glass, mesh, making @ ₹{makingChargePerSqFt}/sq ft, hardware where counted, profit):
+                    </span>
                     <span className="font-semibold text-amber-200 ml-2">₹{Math.round(materialCostSummary.totals.totalCost).toLocaleString('en-IN')}</span>
                 </div>
                 <div className="text-right text-sm">
@@ -1078,12 +1163,55 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                     <span className="font-semibold text-white ml-2">₹{Math.round(subTotal).toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex gap-2 items-end">
-                    <div className="w-32"><Input id="modal-discount-amount" name="modal-discount-amount" label="Discount" type="number" inputMode="decimal" value={settings.financials.discount} onChange={e => handleSettingsChange('financials', 'discount', e.target.value === '' ? '' : Number(e.target.value))}/></div>
-                    <Select id="modal-discount-type" name="modal-discount-type" label="" aria-label="Discount Type" value={settings.financials.discountType} onChange={e => handleSettingsChange('financials', 'discountType', e.target.value as 'percentage' | 'fixed')}>
+                    <div className="w-36">
+                      <Input
+                        id="modal-discount-amount"
+                        name="modal-discount-amount"
+                        label="Discount"
+                        type="number"
+                        inputMode="decimal"
+                        value={settings.financials.discount}
+                        onChange={e =>
+                          handleSettingsChange(
+                            'financials',
+                            'discount',
+                            clampDiscountForType(
+                              e.target.value === '' ? '' : Number(e.target.value),
+                              settings.financials.discountType
+                            )
+                          )
+                        }
+                      />
+                    </div>
+                    <Select
+                      id="modal-discount-type"
+                      name="modal-discount-type"
+                      label=""
+                      aria-label="Discount Type"
+                      value={settings.financials.discountType}
+                      onChange={e => {
+                        const nextType = e.target.value as 'percentage' | 'fixed';
+                        setSettings({
+                          ...settings,
+                          financials: {
+                            ...settings.financials,
+                            discountType: nextType,
+                            discount: clampDiscountForType(settings.financials.discount, nextType),
+                          },
+                        });
+                      }}
+                    >
                         <option value="percentage">%</option>
                         <option value="fixed">₹</option>
                     </Select>
-                    <span className="text-red-400 text-sm pb-2">(-₹{Math.round(discountAmount).toLocaleString('en-IN')})</span>
+                    <span className="text-red-400 text-sm pb-2">(-₹{Math.round(safeDiscountAmount).toLocaleString('en-IN')})</span>
+                </div>
+                <div className="text-right text-xs">
+                  <span className="text-slate-400">Max allowed discount (50% of profit): </span>
+                  <span className="text-amber-300 font-semibold">₹{Math.round(maxDiscountAmount).toLocaleString('en-IN')}</span>
+                  {discountWasCapped && (
+                    <span className="text-amber-300 ml-2">(auto-capped)</span>
+                  )}
                 </div>
                 {discountWasCapped && (
                   <div className="text-right text-xs text-amber-300">
@@ -1101,7 +1229,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                     </span>
                 </div>
             </div>
-        </div>
+        </SpringScrollArea>
       </div>
     </div>
   );
