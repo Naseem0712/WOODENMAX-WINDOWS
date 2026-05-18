@@ -298,7 +298,7 @@ export function calculateMaterialCostSummary(
       }, 0);
       target.hardwareCost += perWindowCost * qty;
 
-      if (rates.meshShutterOptions.separateSections && meshShutterCount > 0) {
+      if (rates.meshShutterOptions?.separateSections && meshShutterCount > 0) {
         const clipPieces = meshShutterCount * (Number(rates.meshShutterOptions.meshClipPerMeshShutter) || 0) * qty;
         const clipWeightKg = clipPieces * (Number(rates.meshShutterOptions.meshClipWeightKgPerPc) || 0);
         const clipLengthFt = clipPieces * (Number(rates.meshShutterOptions.meshClipLengthFt) || 0);
