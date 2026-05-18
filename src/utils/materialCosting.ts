@@ -1,6 +1,7 @@
 import type { MaterialRateSettings, ProfileDimensions, QuotationItem } from '../types';
 import { ShutterConfigType, WindowType } from '../types';
 import { calculateUsageForConfig, packPieces } from './materialCalculator';
+import { computeHardwareCostForQuotation } from './quotationHardwareCost';
 
 const SQFT_TO_SQMM = 92903.04;
 const MM_TO_FT = 0.00328084;
@@ -76,37 +77,41 @@ const isReinforcementSeries = (item: QuotationItem): boolean => {
 
 const getGlassRatePerSqFt = (item: QuotationItem, rates: MaterialRateSettings): number => {
   const config = item.config;
+  const g = rates.glassPerSqFt;
   if (config.glassSpecialType === 'laminated') {
     const c = config.laminatedGlassConfig;
     const combo = `${Number(c?.glass1Thickness) || 0}+${Number(c?.glass2Thickness) || 0}`;
-    if (combo === '5+5') return rates.glassPerSqFt.laminated['5+5'];
-    if (combo === '6+6') return rates.glassPerSqFt.laminated['6+6'];
+    const lam = g?.laminated;
+    if (combo === '5+5') return lam?.['5+5'] ?? 0;
+    if (combo === '6+6') return lam?.['6+6'] ?? 0;
     return 0;
   }
   if (config.glassSpecialType === 'dgu') {
     const c = config.dguGlassConfig;
     const combo = `${Number(c?.glass1Thickness) || 0}+${Number(c?.airGap) || 0}+${Number(c?.glass2Thickness) || 0}`;
-    if (combo === '6+12+6') return rates.glassPerSqFt.dgu['6+12+6'];
-    if (combo === '5+12+5') return rates.glassPerSqFt.dgu['5+12+5'];
+    const dgu = g?.dgu;
+    if (combo === '6+12+6') return dgu?.['6+12+6'] ?? 0;
+    if (combo === '5+12+5') return dgu?.['5+12+5'] ?? 0;
     return 0;
   }
 
   const thickness = String(Number(config.glassThickness) || 0) as '5' | '6' | '8' | '10' | '12';
-  return rates.glassPerSqFt.clear[thickness] || 0;
+  return g?.clear?.[thickness] ?? 0;
 };
 
-const resolveSlidingPowderRate = (item: QuotationItem, profileType: PoolProfileType, rates: MaterialRateSettings): number => {
+const resolveSlidingPowderRate = (_item: QuotationItem, profileType: PoolProfileType, rates: MaterialRateSettings): number => {
+  const p = rates.powderCoatingPerRft;
   if (profileType === 'outerFrame' || profileType === 'outerFrameVertical') {
-    return rates.powderCoatingPerRft.track;
+    return Number(p?.track) || 0;
   }
   if (profileType === 'shutterInterlock_reinf') {
-    return rates.powderCoatingPerRft.shutterSections;
+    return Number(p?.shutterSections) || 0;
   }
   if (profileType === 'shutterInterlock_slim') {
-    return rates.powderCoatingPerRft.slimInterlock;
+    return Number(p?.slimInterlock) || 0;
   }
   if (profileType === 'shutterHandle' || profileType === 'shutterTop' || profileType === 'shutterBottom' || profileType === 'shutterMeeting') {
-    return rates.powderCoatingPerRft.shutterSections;
+    return Number(p?.shutterSections) || 0;
   }
   return 0;
 };
@@ -197,12 +202,14 @@ export function calculateMaterialCostSummary(
   const pools = new Map<string, AluminiumPool>();
 
   for (const item of items) {
-    const target = ensureItem(byItemId, item);
-    const qty = Number(item.quantity) || 0;
-    if (qty <= 0) continue;
+    try {
+      if (!item?.config?.series) continue;
+      const target = ensureItem(byItemId, item);
+      const qty = Number(item.quantity) || 0;
+      if (qty <= 0) continue;
 
-    const usageSingle = calculateUsageForConfig(item.config);
-    const familyKey = item.config.windowType === WindowType.SLIDING ? getSeriesFamilyKey(item.config.series.id) : item.config.series.id;
+      const usageSingle = calculateUsageForConfig(item.config);
+      const familyKey = item.config.windowType === WindowType.SLIDING ? getSeriesFamilyKey(item.config.series.id) : item.config.series.id;
 
     // Glass cost + making cost per item (area based)
     const totalGlassAreaSqFt = Array.from(usageSingle.glass.values()).reduce((sum, areaMm2) => sum + areaMm2 / SQFT_TO_SQMM, 0) * qty;
@@ -210,51 +217,31 @@ export function calculateMaterialCostSummary(
     target.makingCost += target.areaSqFt * makingChargePerSqFt;
     target.wastageCartageCost += target.areaSqFt * (Number(rates.wastageCartagePerSqFt) || 0);
 
-    // Sliding hardware cost from existing hardware item list
+    // Sliding mesh area + hardware (hardware matches quotation / PDF line logic)
     if (item.config.windowType === WindowType.SLIDING) {
-      const { shutterCount, meshShutterCount, operableGlassCount, operableMeshCount, operableTotalCount } = getSlidingShutterDetails(item);
+      const { meshShutterCount } = getSlidingShutterDetails(item);
       const meshAreaSqFtPerShutter = (((Number(item.config.width) || 0) / 2) * (Number(item.config.height) || 0)) / SQFT_TO_SQMM;
       target.meshCost += meshShutterCount * meshAreaSqFtPerShutter * (Number(rates.meshPerSqFt) || 0) * qty;
-      const hasMeshHandleItem = item.hardwareItems.some((hw) => {
-        const n = (hw.name || '').toLowerCase();
-        return n.includes('mesh') && n.includes('handle');
-      });
-      const perWindowCost = item.hardwareItems.reduce((sum, hw) => {
-        const itemQty = Number(hw.qtyPerShutter) || 0;
-        const itemRate = Number(hw.rate) || 0;
-        const name = (hw.name || '').toLowerCase();
-        let units = 0;
-        if (hw.unit === 'per_window') {
-          units = 1;
-        } else if (name.includes('mesh lock')) {
-          units = operableMeshCount;
-        } else if (name.includes('mesh') && name.includes('handle')) {
-          units = operableMeshCount;
-        } else if (name.includes('handle')) {
-          units = hasMeshHandleItem ? operableGlassCount : operableTotalCount;
-        } else if (name.includes('bearing')) {
-          units = operableTotalCount;
-        } else {
-          units = shutterCount;
-        }
-        return sum + (itemQty * itemRate * units);
-      }, 0);
-      target.hardwareCost += perWindowCost * qty;
 
-      if (rates.meshShutterOptions.separateSections && meshShutterCount > 0) {
-        const clipPieces = meshShutterCount * (Number(rates.meshShutterOptions.meshClipPerMeshShutter) || 0) * qty;
-        const clipWeightKg = clipPieces * (Number(rates.meshShutterOptions.meshClipWeightKgPerPc) || 0);
-        const clipLengthFt = clipPieces * (Number(rates.meshShutterOptions.meshClipLengthFt) || 0);
+      const meshOpts = rates.meshShutterOptions;
+      if (meshOpts?.separateSections && meshShutterCount > 0) {
+        const clipPieces = meshShutterCount * (Number(meshOpts.meshClipPerMeshShutter) || 0) * qty;
+        const clipWeightKg = clipPieces * (Number(meshOpts.meshClipWeightKgPerPc) || 0);
+        const clipLengthFt = clipPieces * (Number(meshOpts.meshClipLengthFt) || 0);
         target.aluminiumCost += clipWeightKg * rates.aluminiumProfilePerKg;
-        target.powderCoatingCost += clipLengthFt * (Number(rates.meshShutterOptions.meshClipPowderRatePerRft) || 0);
+        target.powderCoatingCost += clipLengthFt * (Number(meshOpts.meshClipPowderRatePerRft) || 0);
       }
+    }
+
+    if (item.config.windowType === WindowType.SLIDING || item.config.windowType === WindowType.CORNER) {
+      target.hardwareCost += computeHardwareCostForQuotation(item.config, item.hardwareItems ?? []) * qty;
     }
 
     // Powder coating track clips as pure length item (outside pooled bars)
     if (item.config.windowType === WindowType.SLIDING) {
       const widthFt = (Number(item.config.width) || 0) * MM_TO_FT;
       const trackCount = Number(item.config.trackType) || 2;
-      target.powderCoatingCost += widthFt * trackCount * qty * rates.powderCoatingPerRft.track;
+      target.powderCoatingCost += widthFt * trackCount * qty * (Number(rates.powderCoatingPerRft?.track) || 0);
     }
 
     for (const [profileKey, pieces] of usageSingle.profiles.entries()) {
@@ -291,14 +278,15 @@ export function calculateMaterialCostSummary(
       pool.contributions.push({ itemId: item.id, usedLengthMm });
 
     }
+    } catch (err) {
+      console.error('Costing: skipped quotation line due to error', { id: item?.id, err });
+    }
   }
 
   // Aluminium + profile powder cost with wastage reuse through pooled bin-packing
   for (const pool of pools.values()) {
     const requiredBars = packPieces(pool.pieces, pool.standardLengthMm);
-    const usedLengthMm = pool.usedLengthMm;
     const purchasedLengthMm = requiredBars * pool.standardLengthMm;
-    const usedLengthFt = usedLengthMm * MM_TO_FT;
     const purchasedLengthFt = purchasedLengthMm * MM_TO_FT;
     const purchasedWeightKg = (purchasedLengthMm / 1000) * pool.weightPerMeter;
     const purchasedCost = purchasedWeightKg * rates.aluminiumProfilePerKg;

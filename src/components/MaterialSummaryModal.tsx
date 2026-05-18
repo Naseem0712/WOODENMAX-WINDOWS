@@ -7,6 +7,8 @@ import { getSlidingCuttingPlanPerWindow } from '../utils/slidingCuttingPlan';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { PrinterIcon } from './icons/PrinterIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
+import { calculateMaterialCostSummary } from '../utils/materialCosting';
+import { getMinimumMakingChargeForItems, getProfitSafetyInfo, getRawDiscountAmount } from '../utils/pricingSafety';
 
 interface MaterialSummaryModalProps {
   isOpen: boolean;
@@ -25,72 +27,115 @@ const profileKeyToName = (key: string) => {
 export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOpen, onClose, bom, items, settings }) => {
     const printContainerRef = useRef<HTMLDivElement>(null);
     const [isExporting, setIsExporting] = useState(false);
+    const customer = settings.customer ?? {
+        name: '',
+        address: '',
+        contactPerson: '',
+        email: '',
+        website: '',
+        gstNumber: '',
+        architectName: '',
+    };
+    const isLikelyMobile = (() => {
+        try {
+            const ua = typeof navigator !== 'undefined' ? (navigator.userAgent || '') : '';
+            const coarsePointer =
+                typeof window !== 'undefined' &&
+                typeof window.matchMedia === 'function' &&
+                window.matchMedia('(pointer: coarse)').matches;
+            return /android|iphone|ipad|ipod|mobile/i.test(ua) || coarsePointer;
+        } catch {
+            return false;
+        }
+    })();
 
     if (!isOpen) return null;
 
     const quoteDate = new Date().toLocaleDateString('en-GB');
     const quoteNumber = `WM-BOM-${Date.now().toString().slice(-6)}`;
     const pdfDateStamp = new Date().toISOString().slice(0, 10);
+    const makingChargePerSqFt = Number(settings.materialRates.makingChargePerSqFt) || 120;
+    const materialCostSummary = calculateMaterialCostSummary(items, settings.materialRates, makingChargePerSqFt);
+    const subTotal = items.reduce((total, item) => {
+        const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
+        const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
+        const totalArea = singleArea * item.quantity;
+        const baseCost = totalArea * item.rate;
+        return total + baseCost + (item.hardwareCost * item.quantity);
+    }, 0);
+    const rawDiscountAmount = getRawDiscountAmount(subTotal, settings);
+    const profitBeforeDiscount = materialCostSummary.totals.profitCost;
+    const maxDiscountAllowed = Math.max(0, profitBeforeDiscount * 0.5);
+    const discountAmount = Math.min(rawDiscountAmount, maxDiscountAllowed);
+    const profitAfterDiscount = profitBeforeDiscount - discountAmount;
+    const preProfitTotal = Math.max(materialCostSummary.totals.totalCost - profitBeforeDiscount, 0);
+    const effectiveProfitPct = preProfitTotal > 0 ? (profitAfterDiscount / preProfitTotal) * 100 : 0;
+    const profitSafety = getProfitSafetyInfo(effectiveProfitPct, profitAfterDiscount);
+    const makingChargeMin = getMinimumMakingChargeForItems(items);
+    const makingChargeBelowMin = makingChargeMin > 0 && makingChargePerSqFt < makingChargeMin;
 
     const handleExportPdf = () => {
         const element = printContainerRef.current?.querySelector<HTMLElement>('.a4-page');
         if (!element || isExporting) return;
 
-        setIsExporting(true);
-        element.classList.add('pdf-export-mode');
-
-        const opt = {
-            margin: [8, 8, 8, 8] as [number, number, number, number],
-            filename: bomPdfFilename(settings.customer.name, pdfDateStamp),
-            image: { type: 'jpeg' as const, quality: 0.95 },
-            html2canvas: {
-                scale: 2,
-                logging: false,
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: '#ffffff',
-                letterRendering: true,
-                scrollX: 0,
-                scrollY: 0,
-            },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const, compress: true },
-            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] as ('css' | 'legacy' | 'avoid-all')[] },
-        };
-        
-        import('html2pdf.js').then(({ default: html2pdf }) => {
-            html2pdf()
-                .from(element)
-                .set(opt)
-                .toPdf()
-                .get('pdf')
-                .then((pdf: any) => {
-                    const totalPages = pdf.internal.getNumberOfPages();
-                    const pageWidth = pdf.internal.pageSize.getWidth();
-                    const pageHeight = pdf.internal.pageSize.getHeight();
-                    pdf.setFontSize(8);
-                    pdf.setTextColor(100);
-                    for (let i = 1; i <= totalPages; i++) {
-                        pdf.setPage(i);
-                        pdf.text(`Page ${i} of ${totalPages}`, pageWidth - 10, pageHeight - 6, { align: 'right' });
-                    }
-                })
-                .save()
-                .then(() => {
-                    setIsExporting(false);
-                    element.classList.remove('pdf-export-mode');
-                })
-                .catch((err: any) => {
-                    console.error("PDF export failed", err);
+        try {
+            setIsExporting(true);
+            element.classList.add('pdf-export-mode');
+            const renderScale = isLikelyMobile ? 1 : 1.2;
+            const opt = {
+                margin: [8, 8, 8, 8] as [number, number, number, number],
+                filename: bomPdfFilename(customer.name, pdfDateStamp),
+                image: { type: 'jpeg' as const, quality: 0.9 },
+                html2canvas: {
+                    scale: renderScale,
+                    logging: false,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    scrollX: 0,
+                    scrollY: 0,
+                },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const, compress: true },
+                pagebreak: { mode: ['css', 'legacy'] as ('css' | 'legacy' | 'avoid-all')[] },
+            };
+            
+            setTimeout(() => {
+                import('html2pdf.js').then(({ default: html2pdf }) => {
+                    html2pdf()
+                        .from(element)
+                        .set(opt)
+                        .save()
+                        .then(() => {
+                            setIsExporting(false);
+                            element.classList.remove('pdf-export-mode');
+                        })
+                        .catch((err: any) => {
+                            console.error("PDF export failed", err);
+                            setIsExporting(false);
+                            element.classList.remove('pdf-export-mode');
+                            alert("Sorry, there was an error exporting the PDF.");
+                        });
+                }).catch((err: any) => {
+                    console.error("Failed to load html2pdf", err);
                     setIsExporting(false);
                     element.classList.remove('pdf-export-mode');
                     alert("Sorry, there was an error exporting the PDF.");
                 });
-        });
+            }, 20);
+        } catch (err: any) {
+            console.error("Unexpected PDF export error", err);
+            setIsExporting(false);
+            element.classList.remove('pdf-export-mode');
+            alert("Sorry, there was an error exporting the PDF.");
+        }
     };
 
     const handlePrint = () => {
+        if (isLikelyMobile || typeof window.print !== 'function') {
+            handleExportPdf();
+            return;
+        }
         const prevTitle = document.title;
-        document.title = printDocumentTitleForBom(settings.customer.name);
+        document.title = printDocumentTitleForBom(customer.name);
         let finished = false;
         const finish = () => {
             if (finished) return;
@@ -121,7 +166,7 @@ export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOp
                     <Button onClick={handleExportPdf} variant="secondary" disabled={isExporting}>
                         {isExporting ? 'Exporting...' : <><DownloadIcon className="w-5 h-5 mr-2"/> Export PDF</>}
                     </Button>
-                    <Button onClick={handlePrint}><PrinterIcon className="w-5 h-5 mr-2"/> Print</Button>
+                    <Button onClick={handlePrint}><PrinterIcon className="w-5 h-5 mr-2"/>{isLikelyMobile ? 'Download/Print PDF' : 'Print'}</Button>
                     <Button onClick={onClose} variant="secondary"><XMarkIcon className="w-5 h-5 mr-2"/> Close</Button>
                 </div>
             </div>
@@ -132,7 +177,7 @@ export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOp
                              <div>
                                 <h2 className="text-2xl font-bold text-black">Material Summary</h2>
                                 <p className="text-xs">For Quotation: {settings.title}</p>
-                                <p className="text-xs">Customer: {settings.customer.name}</p>
+                                <p className="text-xs">Customer: {customer.name}</p>
                              </div>
                              <div className="text-right text-xs">
                                 <p><strong>Date:</strong> {quoteDate}</p>
@@ -142,6 +187,17 @@ export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOp
                     </div>
 
                     <div className="print-content" style={{display: 'block'}}>
+                        <div className={`text-[8pt] p-2 border rounded mb-3 ${profitSafety.colorClass}`}>
+                            <strong className={profitSafety.textClass}>Profit Safety: {profitSafety.label.toUpperCase()}</strong>
+                            <span className="ml-2">({effectiveProfitPct.toFixed(2)}% after discount)</span>
+                            <span className="ml-2">Discount cap ₹{Math.round(maxDiscountAllowed).toLocaleString('en-IN')}</span>
+                        </div>
+                        {makingChargeMin > 0 && (
+                          <div className={`text-[8pt] p-2 border rounded mb-3 ${makingChargeBelowMin ? 'bg-red-100 border-red-300 text-red-700' : 'bg-emerald-100 border-emerald-300 text-emerald-700'}`}>
+                            Making charge minimum: ₹{makingChargeMin}/sq ft
+                            {makingChargeBelowMin ? ` (current ₹${makingChargePerSqFt}/sq ft)` : ' (ok)'}
+                          </div>
+                        )}
                         <div className="w-full text-xs mt-4 space-y-6">
                             {bom.map(seriesData => (
                                 <div key={seriesData.seriesId} className="print-item">

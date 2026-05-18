@@ -11,12 +11,14 @@ import { PrintPreview } from './PrintPreview';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { generateBillOfMaterials } from '../utils/materialCalculator';
 import { MaterialSummaryModal } from './MaterialSummaryModal';
+import { ErrorBoundary } from './ErrorBoundary';
 import { calculateMaterialCostSummary } from '../utils/materialCosting';
 import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
 import { PencilIcon } from './icons/PencilIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { sanitizeFilenameSegment } from '../utils/pdfFilename';
 import { autoContinueTermsSerial } from '../utils/quotationText';
+import { getMinimumMakingChargeForItems, getProfitSafetyInfo, getRawDiscountAmount } from '../utils/pricingSafety';
 interface QuotationListModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -77,6 +79,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
   const importQuotationInputRef = useRef<HTMLInputElement>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isMaterialSummaryOpen, setIsMaterialSummaryOpen] = useState(false);
+  const [isTopPanelMinimized, setIsTopPanelMinimized] = useState(false);
   const [bom, setBom] = useState<BOM | null>(null);
   const [typeFilter, setTypeFilter] = useState<WindowType | 'all'>('all');
   const visibleItems = useMemo(() => {
@@ -151,8 +154,12 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
+    if (!isOpen) {
+      onTogglePreview(false);
+      return;
+    }
     onTogglePreview(isPreviewOpen || isMaterialSummaryOpen);
-  }, [isPreviewOpen, isMaterialSummaryOpen, onTogglePreview]);
+  }, [isOpen, isPreviewOpen, isMaterialSummaryOpen, onTogglePreview]);
   
   useEffect(() => {
     if (isPreviewOpen) {
@@ -165,26 +172,72 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
     };
   }, [isPreviewOpen]);
 
+  // Auto-cap user discount to 50% of profit. MUST be declared before any early
+  // return so hooks order stays stable across renders.
+  useEffect(() => {
+    const computedSubTotal = items.reduce((total, item) => {
+      const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
+      const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
+      const totalArea = singleArea * item.quantity;
+      const baseCost = totalArea * item.rate;
+      const totalHardwareCost = item.hardwareCost * item.quantity;
+      return total + baseCost + totalHardwareCost;
+    }, 0);
+    const rawDiscount = getRawDiscountAmount(computedSubTotal, settings);
+    const profitBefore = materialCostSummary.totals.profitCost;
+    const maxDiscount = Math.max(0, profitBefore * 0.5);
+    if (rawDiscount <= maxDiscount + 0.01) return;
+
+    const nextDiscount = settings.financials?.discountType === 'percentage'
+      ? (computedSubTotal > 0 ? (maxDiscount / computedSubTotal) * 100 : 0)
+      : maxDiscount;
+    const nextRounded = Number(nextDiscount.toFixed(2));
+    const current = Number(settings.financials?.discount) || 0;
+    if (Math.abs(current - nextRounded) > 0.01) {
+      setSettings({
+        ...settings,
+        financials: {
+          ...settings.financials,
+          discount: nextRounded,
+        },
+      });
+    }
+  }, [items, settings, setSettings, materialCostSummary]);
+
   if (!isOpen) return null;
 
   if (isPreviewOpen) {
-    return <PrintPreview 
-        isOpen={isPreviewOpen}
+    return (
+      <ErrorBoundary
+        title="Print Preview crash"
         onClose={() => setIsPreviewOpen(false)}
-        items={items}
-        settings={settings}
-        setSettings={setSettings}
-    />;
+      >
+        <PrintPreview
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          items={items}
+          settings={settings}
+          setSettings={setSettings}
+        />
+      </ErrorBoundary>
+    );
   }
 
   if (isMaterialSummaryOpen && bom) {
-      return <MaterialSummaryModal 
-        isOpen={isMaterialSummaryOpen} 
-        onClose={() => setIsMaterialSummaryOpen(false)}
-        bom={bom}
-        items={items}
-        settings={settings}
-      />
+      return (
+        <ErrorBoundary
+          title="BOM crash"
+          onClose={() => setIsMaterialSummaryOpen(false)}
+        >
+          <MaterialSummaryModal
+            isOpen={isMaterialSummaryOpen}
+            onClose={() => setIsMaterialSummaryOpen(false)}
+            bom={bom}
+            items={items}
+            settings={settings}
+          />
+        </ErrorBoundary>
+      );
   }
 
   const handleSettingsChange = <
@@ -348,9 +401,14 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
           alert("Please add items to the quotation before generating a material summary.");
           return;
       }
-      const calculatedBom = generateBillOfMaterials(items);
-      setBom(calculatedBom);
-      setIsMaterialSummaryOpen(true);
+      try {
+        const calculatedBom = generateBillOfMaterials(items);
+        setBom(calculatedBom);
+        setIsMaterialSummaryOpen(true);
+      } catch (err) {
+        console.error('Failed to generate BOM:', err);
+        alert("BOM generate karne me dikkat aayi. Quotation me kisi item ka data adhoora hai, please check kijiye.");
+      }
   }
 
   const handleExportStockNeed = () => {
@@ -488,14 +546,21 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
     return total + baseCost + totalHardwareCost;
   }, 0);
 
-  const discountAmount = settings.financials.discountType === 'percentage' 
-    ? subTotal * (Number(settings.financials.discount) / 100) 
-    : Number(settings.financials.discount);
+  const rawDiscountAmount = getRawDiscountAmount(subTotal, settings);
   const profitBeforeDiscount = materialCostSummary.totals.profitCost;
+  const maxDiscountAllowed = Math.max(0, profitBeforeDiscount * 0.5);
+  const discountAmount = Math.min(rawDiscountAmount, maxDiscountAllowed);
+  const discountWasCapped = rawDiscountAmount > maxDiscountAllowed + 0.01;
   const profitAfterDiscount = profitBeforeDiscount - discountAmount;
+  const preProfitTotal = Math.max(materialCostSummary.totals.totalCost - profitBeforeDiscount, 0);
+  const effectiveProfitPct = preProfitTotal > 0 ? (profitAfterDiscount / preProfitTotal) * 100 : 0;
+  const profitSafety = getProfitSafetyInfo(effectiveProfitPct, profitAfterDiscount);
+  const makingChargeMin = getMinimumMakingChargeForItems(items);
+  const makingChargeCurrent = Number(settings.materialRates.makingChargePerSqFt) || 0;
+  const makingChargeBelowMin = makingChargeMin > 0 && makingChargeCurrent < makingChargeMin;
   
   const totalAfterDiscount = subTotal - discountAmount;
-  const gstAmount = totalAfterDiscount * (Number(settings.financials.gstPercentage) / 100);
+  const gstAmount = totalAfterDiscount * (Number(settings.financials?.gstPercentage ?? 0) / 100);
   const grandTotal = totalAfterDiscount + gstAmount;
 
   return (
@@ -509,19 +574,32 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
         className="bg-slate-800 rounded-lg shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-4 border-b border-slate-700 no-print gap-4 sm:gap-0">
-          <h2 className="text-2xl font-bold text-white">Quotation Generator</h2>
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            <Button onClick={handleGenerateBom} variant="secondary"><ClipboardDocumentListIcon className="w-5 h-5 mr-2"/> Export Materials (BOM)</Button>
-            <Button onClick={handleExportStockNeed} variant="secondary"><ClipboardDocumentListIcon className="w-5 h-5 mr-2"/> Export Stock Need</Button>
-            <Button onClick={handleExport} variant="secondary"><DownloadIcon className="w-5 h-5 mr-2"/> Export JSON</Button>
-            <Button onClick={() => importQuotationInputRef.current?.click()} variant="secondary"><UploadIcon className="w-5 h-5 mr-2"/> Import JSON</Button>
-            <input type="file" ref={importQuotationInputRef} onChange={handleImport} className="hidden" accept="application/json" />
-            <Button onClick={() => setIsPreviewOpen(true)}><PrinterIcon className="w-5 h-5 mr-2"/> Print Preview</Button>
-            <Button onClick={onClose} variant="secondary" className="p-2 rounded-full h-10 w-10">
+        <div className="flex flex-col p-4 border-b border-slate-700 no-print gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-2xl font-bold text-white">Quotation Generator</h2>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setIsTopPanelMinimized((prev) => !prev)}
+                variant="secondary"
+                className="h-10"
+              >
+                {isTopPanelMinimized ? 'Expand Panel' : 'Minimize Panel'}
+              </Button>
+              <Button onClick={onClose} variant="secondary" className="p-2 rounded-full h-10 w-10">
                 <XMarkIcon className="w-6 h-6" />
-            </Button>
+              </Button>
+            </div>
           </div>
+          {!isTopPanelMinimized && (
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <Button onClick={handleGenerateBom} variant="secondary"><ClipboardDocumentListIcon className="w-5 h-5 mr-2"/> Export Materials (BOM)</Button>
+              <Button onClick={handleExportStockNeed} variant="secondary"><ClipboardDocumentListIcon className="w-5 h-5 mr-2"/> Export Stock Need</Button>
+              <Button onClick={handleExport} variant="secondary"><DownloadIcon className="w-5 h-5 mr-2"/> Export JSON</Button>
+              <Button onClick={() => importQuotationInputRef.current?.click()} variant="secondary"><UploadIcon className="w-5 h-5 mr-2"/> Import JSON</Button>
+              <input type="file" ref={importQuotationInputRef} onChange={handleImport} className="hidden" accept="application/json" />
+              <Button onClick={() => setIsPreviewOpen(true)}><PrinterIcon className="w-5 h-5 mr-2"/> Print Preview</Button>
+            </div>
+          )}
         </div>
 
         <div className="flex-grow overflow-y-auto p-6 custom-scrollbar">
@@ -706,6 +784,18 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
               </div>
 
               <Section title="Material Rates (Editable Anytime)">
+                <div className={`rounded-md border p-2 text-xs ${profitSafety.colorClass}`}>
+                  <span className={`font-semibold uppercase ${profitSafety.textClass}`}>Profit safety: {profitSafety.label}</span>
+                  <span className="text-slate-200 ml-2">
+                    ({effectiveProfitPct.toFixed(2)}% after discount)
+                  </span>
+                </div>
+                {makingChargeMin > 0 && (
+                  <div className={`rounded-md border p-2 text-xs ${makingChargeBelowMin ? 'bg-red-900/30 border-red-500 text-red-200' : 'bg-emerald-900/20 border-emerald-500 text-emerald-200'}`}>
+                    Making charge recommended minimum for current windows: ₹{makingChargeMin}/sq ft
+                    {makingChargeBelowMin ? ' (currently below minimum)' : ' (ok)'}
+                  </div>
+                )}
                 <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
                   <Input
                     id="modal-rate-making-charge"
@@ -995,6 +1085,11 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                     </Select>
                     <span className="text-red-400 text-sm pb-2">(-₹{Math.round(discountAmount).toLocaleString('en-IN')})</span>
                 </div>
+                {discountWasCapped && (
+                  <div className="text-right text-xs text-amber-300">
+                    Discount capped to 50% of profit: max ₹{Math.round(maxDiscountAllowed).toLocaleString('en-IN')}
+                  </div>
+                )}
                 <div className="flex gap-2 items-end">
                     <div className="w-24"><Input id="modal-gst-percentage" name="modal-gst-percentage" label="GST" type="number" inputMode="decimal" value={settings.financials.gstPercentage} onChange={e => handleSettingsChange('financials', 'gstPercentage', e.target.value === '' ? '' : Number(e.target.value))} unit="%"/></div>
                     <span className="text-green-400 text-sm pb-2">(+₹{Math.round(gstAmount).toLocaleString('en-IN')})</span>

@@ -4,6 +4,7 @@ import type { ProfileSeries, WindowConfig, HardwareItem, QuotationItem, Ventilat
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType, MirrorShape } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { QuotationPanel } from './components/QuotationPanel';
 import { v4 as uuidv4 } from 'uuid';
 import { ChevronLeftIcon } from './components/icons/ChevronLeftIcon';
@@ -411,7 +412,7 @@ const DEFAULT_SLIDING_SERIES: ProfileSeries = {
     dimensions: {
         ...BASE_DIMENSIONS,
         outerFrame: 60, fixedFrame: 25, shutterHandle: 45, shutterInterlock: 25,
-        shutterTop: 55, shutterBottom: 55, shutterMeeting: 50,
+        shutterTop: 55, shutterBottom: 55, shutterMeeting: 25,
     },
     hardwareItems: DEFAULT_SLIDING_HARDWARE,
     glassOptions: DEFAULT_GLASS_OPTIONS,
@@ -1282,13 +1283,17 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
         <main className="flex flex-row flex-grow min-h-0">
             <div ref={panelRef} className={`hidden lg:block flex-shrink-0 h-full transition-all duration-300 ease-in-out z-30 bg-slate-800 no-print ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
                 <div className={`h-full overflow-hidden ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
-                    <ControlsPanel {...commonControlProps} idPrefix="desktop-" onClose={() => setIsDesktopPanelOpen(false)} />
+                    <ErrorBoundary title="Controls panel crashed">
+                      <ControlsPanel {...commonControlProps} idPrefix="desktop-" onClose={() => setIsDesktopPanelOpen(false)} />
+                    </ErrorBoundary>
                 </div>
             </div>
             <div className="relative flex-1 flex flex-col min-w-0">
                 {!isDesktopPanelOpen && ( <button onClick={() => setIsDesktopPanelOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-0 bg-slate-700 hover:bg-indigo-600 text-white w-6 h-24 rounded-r-lg z-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 items-center justify-center transition-all duration-300 no-print hidden lg:flex" aria-label="Expand panel"> <ChevronLeftIcon className="w-5 h-5 rotate-180" /> </button> )}
               <div className="flex-grow relative">
-                 <WindowCanvas key={canvasKey} config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} onToggleElevationDoor={() => {}} />
+                 <ErrorBoundary title="Canvas crashed">
+                   <WindowCanvas key={canvasKey} config={windowConfig} onRemoveVerticalDivider={handleRemoveVerticalDivider} onRemoveHorizontalDivider={handleRemoveHorizontalDivider} onToggleElevationDoor={() => {}} />
+                 </ErrorBoundary>
               </div>
               <div className="flex-shrink-0 no-print hidden lg:block">
                   <QuotationPanel idPrefix="desktop-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} bulkCorrectionLineCount={bulkCorrectionLineCount} onApplyBulkCorrection={onApplyBulkCorrection} />
@@ -1310,7 +1315,9 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
              <div className="h-1.5 w-12 rounded-full bg-slate-600" />
            </div>
            <div className="min-h-0 flex-1 overflow-hidden">
-             <ControlsPanel {...commonControlProps} idPrefix="mobile-" onClose={handleCloseMobilePanels} />
+             <ErrorBoundary title="Controls panel crashed">
+               <ControlsPanel {...commonControlProps} idPrefix="mobile-" onClose={handleCloseMobilePanels} />
+             </ErrorBoundary>
            </div>
         </div>
         
@@ -1743,6 +1750,12 @@ const App: React.FC = () => {
       document.body.style.overflow = '';
     };
   }, [activeMobilePanel, isQuotationModalOpen, isBatchAddModalOpen]);
+
+  useEffect(() => {
+    if (!isQuotationModalOpen && isPreviewing) {
+      setIsPreviewing(false);
+    }
+  }, [isQuotationModalOpen, isPreviewing]);
 
   const SERIES_MAP_MEMO = useMemo(() => SERIES_MAP, []);
 
@@ -2354,7 +2367,7 @@ const App: React.FC = () => {
   return (
     <>
       {isQuotationModalOpen && (
-          <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => setIsQuotationModalOpen(false)} items={quotationItems} setItems={(items) => setQuotationItems(applySlidingBasicRateProtection(items))} onRemove={handleRemoveQuotationItem} onEdit={handleEditItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} selectedLineIds={quotationBulkTargetIds} onSelectedLineIdsChange={setQuotationBulkTargetIds} onEditCorrection={handleEditCorrectionFromSelection} />
+          <QuotationListModal isOpen={isQuotationModalOpen} onClose={() => { setIsPreviewing(false); setIsQuotationModalOpen(false); }} items={quotationItems} setItems={(items) => setQuotationItems(applySlidingBasicRateProtection(items))} onRemove={handleRemoveQuotationItem} onEdit={handleEditItem} settings={quotationSettings} setSettings={setQuotationSettings} onTogglePreview={setIsPreviewing} selectedLineIds={quotationBulkTargetIds} onSelectedLineIdsChange={setQuotationBulkTargetIds} onEditCorrection={handleEditCorrectionFromSelection} />
       )}
       {isBatchAddModalOpen && (
           <Suspense fallback={loadingFallback}>
@@ -2386,7 +2399,7 @@ const App: React.FC = () => {
         </div>
       )}
       
-      <div className={`flex flex-col h-screen font-sans bg-slate-900 overflow-hidden ${isPreviewing ? 'hidden' : ''}`}>
+      <div className="flex flex-col h-screen font-sans bg-slate-900 overflow-hidden">
         <Suspense fallback={loadingFallback}>
             {appView === 'designer' ? (
                 <DesignerView

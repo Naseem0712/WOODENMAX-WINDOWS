@@ -22,6 +22,7 @@ import {
 } from '../utils/profileDimensionKeys';
 import { DOOR_WINDOW_COMBO_PRESETS } from '../utils/doorWindowComboPresets';
 import { clampFoldLeafCount } from '../utils/partitionPanelGeometry';
+import { SLIDING_LAYOUT_PRESETS, type SlidingLayoutPreset } from '../utils/slidingLayoutPresets';
 
 const PROFILE_QUICK_PRESETS: { name: string; value: string }[] = [
   { name: 'Grey', value: '#6b7280' },
@@ -220,16 +221,26 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
     const panels: { id: string; label: string }[] = [];
     switch (activeWindowType) {
         case WindowType.SLIDING:
-            displayConfig.slidingHandles.forEach((_, i) => { panels.push({ id: `sliding-${i}`, label: `Shutter ${i + 1}` }); });
+            (displayConfig.slidingHandles ?? []).forEach((_, i) => {
+              panels.push({ id: `sliding-${i}`, label: `Shutter ${i + 1}` });
+            });
             break;
         case WindowType.CASEMENT:
-            displayConfig.doorPositions.forEach(p => { panels.push({ id: `casement-${p.row}-${p.col}`, label: `Door (R${p.row + 1}, C${p.col + 1})` }); });
+            (displayConfig.doorPositions ?? []).forEach((p) => {
+              panels.push({ id: `casement-${p.row}-${p.col}`, label: `Door (R${p.row + 1}, C${p.col + 1})` });
+            });
             break;
         case WindowType.VENTILATOR:
-            displayConfig.ventilatorGrid.forEach((row, r) => { row.forEach((cell, c) => { if (cell.type === 'door') { panels.push({ id: `ventilator-${r}-${c}`, label: `Door (R${r + 1}, C${c + 1})` }); } }); });
+            (displayConfig.ventilatorGrid ?? []).forEach((row, r) => {
+              row.forEach((cell, c) => {
+                if (cell.type === 'door') {
+                  panels.push({ id: `ventilator-${r}-${c}`, label: `Door (R${r + 1}, C${c + 1})` });
+                }
+              });
+            });
             break;
         case WindowType.GLASS_PARTITION:
-            config.partitionPanels.types.forEach((p, i) => {
+            (config.partitionPanels?.types ?? []).forEach((p, i) => {
                 if (p.type !== 'fixed') {
                     const pl = p.type === 'fold' ? 'Bi-fold' : p.type;
                     panels.push({ id: `partition-${i}`, label: `Panel ${i + 1} (${pl})` });
@@ -237,13 +248,16 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
             });
             break;
     }
-    if (selectedPanelId && !panels.some(p => p.id === selectedPanelId)) {
-        setSelectedPanelId(panels[0]?.id || '');
-    } else if (!selectedPanelId && panels.length > 0) {
-        setSelectedPanelId(panels[0].id);
-    }
     return panels;
-  }, [displayConfig, config, selectedPanelId, activeWindowType]);
+  }, [displayConfig, config.partitionPanels?.types, activeWindowType]);
+
+  useEffect(() => {
+    if (selectedPanelId && !operablePanels.some((p) => p.id === selectedPanelId)) {
+      setSelectedPanelId(operablePanels[0]?.id ?? '');
+    } else if (!selectedPanelId && operablePanels.length > 0) {
+      setSelectedPanelId(operablePanels[0].id);
+    }
+  }, [operablePanels, selectedPanelId]);
 
   const currentHandle = useMemo((): HandleConfig | null => {
     if (!selectedPanelId) return null;
@@ -254,7 +268,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         case 'sliding': return displayConfig.slidingHandles[parseInt(parts[1], 10)] || null;
         case 'casement': return displayConfig.doorPositions.find(p => p.row === parseInt(parts[1], 10) && p.col === parseInt(parts[2], 10))?.handle || null;
         case 'ventilator': return displayConfig.ventilatorGrid[parseInt(parts[1], 10)]?.[parseInt(parts[2], 10)]?.handle || null;
-        case 'partition': return config.partitionPanels.types[parseInt(parts[1], 10)]?.handle || null;
+        case 'partition': return config.partitionPanels?.types?.[parseInt(parts[1], 10)]?.handle || null;
         default: return null;
     }
   }, [selectedPanelId, displayConfig, config]);
@@ -482,6 +496,35 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
 
       {activeWindowType === WindowType.SLIDING && (
         <CollapsibleCard title="Track & Shutter Setup" isOpen={openCard === 'Track & Shutter Setup'} onToggle={() => handleToggleCard('Track & Shutter Setup')}>
+            {!isCorner && (
+              <div className="mb-4 pb-4 border-b border-slate-600/80">
+                <p className="text-xs text-slate-400 mb-2 leading-snug">
+                  Quick layouts — sets track, shutters, and optional fixed lite (adjust lite size under Overall Dimensions). Size stays yours.
+                </p>
+                <div className="flex flex-col gap-2 max-h-52 overflow-y-auto custom-scrollbar pr-1">
+                  {SLIDING_LAYOUT_PRESETS.map((preset: SlidingLayoutPreset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => {
+                        setConfig('trackType', preset.trackType);
+                        setConfig('shutterConfig', preset.shutterConfig);
+                        for (const p of [...fixedPanels]) {
+                          if (!preset.fixedPositions.includes(p.position)) removeFixedPanel(p.id);
+                        }
+                        for (const pos of preset.fixedPositions) {
+                          if (!fixedPanels.some((fp) => fp.position === pos)) addFixedPanel(pos);
+                        }
+                      }}
+                      className="text-left rounded-md border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 transition hover:border-indigo-500 hover:bg-slate-800"
+                    >
+                      <span className="font-semibold text-indigo-200 block">{preset.label}</span>
+                      <span className="text-xs text-slate-400 font-normal">{preset.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <Select id={`${idPrefix}track-type`} name="track-type" label="Track Type" value={displayConfig.trackType} onChange={(e) => isCorner ? setSideConfig({trackType: parseInt(e.target.value)}) : setConfig('trackType', parseInt(e.target.value) as TrackType)}>
                 <option value={TrackType.TWO_TRACK}>2-Track</option>
                 <option value={TrackType.THREE_TRACK}>3-Track</option>
@@ -837,9 +880,10 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
                               <Slider id={`${idPrefix}handle-pos-x`} name="handle-pos-x" label={`Horizontal — ${currentHandle.x}% (left ↔ right of panel)`} value={currentHandle.x} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, x: parseInt(e.target.value)})}/>
                               <Slider id={`${idPrefix}handle-pos-y`} name="handle-pos-y" label={`Vertical — ${currentHandle.y}% (crosshair / centre height)`} value={currentHandle.y} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, y: parseInt(e.target.value)})}/>
                               <Slider id={`${idPrefix}handle-length`} name="handle-length" label={`Overall size — ${currentHandle.length || 158} mm (height; balanced above & below crosshair)`} value={currentHandle.length || 158} min={100} max={420} step={5} onChange={e => onUpdateHandle(selectedPanelId, {...currentHandle, length: parseInt(e.target.value)})}/>
-                               <div className="grid grid-cols-2 gap-2">
-                                <Button variant={currentHandle.orientation === 'vertical' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, { ...currentHandle, orientation: 'vertical', variant: 'casement' })}>Vertical (lever)</Button>
-                                <Button variant={currentHandle.orientation === 'horizontal' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, { ...currentHandle, orientation: 'horizontal', variant: 'sliding' })}>Horizontal (pull bar)</Button>
+                               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                <Button variant={currentHandle.orientation === 'vertical' && currentHandle.variant !== 'mesh_touch' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, { ...currentHandle, orientation: 'vertical', variant: 'casement' })}>Lever + lock</Button>
+                                <Button variant={currentHandle.variant === 'mesh_touch' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, { ...currentHandle, orientation: 'vertical', variant: 'mesh_touch', length: currentHandle.length && currentHandle.length > 115 ? 72 : currentHandle.length })}>Touch lock (mesh)</Button>
+                                <Button variant={currentHandle.orientation === 'horizontal' ? 'primary' : 'secondary'} onClick={() => onUpdateHandle(selectedPanelId, { ...currentHandle, orientation: 'horizontal', variant: 'sliding' })}>Flush pull</Button>
                               </div>
                           </div>
                       )}

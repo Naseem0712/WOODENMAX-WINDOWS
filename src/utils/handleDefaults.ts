@@ -1,6 +1,7 @@
 import type { HandleConfig, WindowConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, WindowType } from '../types';
 import { getPartitionPanelWidthsMm } from './partitionPanelGeometry';
+import { effectiveFourGlassMeetingMm } from './slidingGeometry';
 
 /** Default inset from meeting stile / opening edge (mm). User can fine-tune in Handle Configuration. */
 export const HANDLE_EDGE_INSET_MM = 5;
@@ -108,18 +109,24 @@ export function getDefaultHandleConfig(panelId: string, config: WindowConfig): H
   const kind = parts[0];
   const inner = computeInnerHoleDims(config);
   const interlock = Number(config.series.dimensions.shutterInterlock) || 0;
-  const meeting = Number(config.series.dimensions.shutterMeeting) || 0;
   const shutterHandle = Number(config.series.dimensions.shutterHandle) || 0;
 
   if (kind === 'sliding') {
     const idx = parseInt(parts[1], 10);
     const { shutterConfig } = config;
 
-    const slidingLeverDefaults = {
+    const slidingLeverGlass = {
       y: 50,
       orientation: 'vertical' as const,
-      length: 158,
+      length: 172,
       variant: 'casement' as const,
+    };
+
+    const slidingMeshTouch = {
+      y: 48,
+      orientation: 'vertical' as const,
+      length: 72,
+      variant: 'mesh_touch' as const,
     };
 
     if (shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
@@ -130,10 +137,12 @@ export function getDefaultHandleConfig(panelId: string, config: WindowConfig): H
       if (idx === 0 || idx === 2) leftP = shutterHandle;
       if (idx === 3 || idx === 5) rightP = shutterHandle;
       const x = slidingHandleXPctOnFrameMember(panelW, leftP, rightP, side);
-      return { x, ...slidingLeverDefaults };
+      const isMeshPanel = idx === 2 || idx === 3;
+      return { x, ...(isMeshPanel ? slidingMeshTouch : slidingLeverGlass) };
     }
 
     if (shutterConfig === ShutterConfigType.FOUR_GLASS) {
+      const meeting = effectiveFourGlassMeetingMm(config.series.dimensions.shutterMeeting ?? '', config.series.dimensions.shutterInterlock ?? '');
       const shutterWidth = (inner.innerW + 2 * interlock + meeting) / 4;
       const profiles = [
         { l: shutterHandle, r: interlock },
@@ -144,7 +153,7 @@ export function getDefaultHandleConfig(panelId: string, config: WindowConfig): H
       const p = profiles[idx] ?? profiles[0];
       const side = slidingMemberSideStandard(idx, 4);
       const x = slidingHandleXPctOnFrameMember(shutterWidth, p.l, p.r, side);
-      return { x, ...slidingLeverDefaults };
+      return { x, ...slidingLeverGlass };
     }
 
     const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
@@ -155,7 +164,8 @@ export function getDefaultHandleConfig(panelId: string, config: WindowConfig): H
     const leftP = idx === 0 ? shutterHandle : interlock;
     const rightP = idx === numShutters - 1 ? shutterHandle : interlock;
     const x = slidingHandleXPctOnFrameMember(shutterWidth, leftP, rightP, side);
-    return { x, ...slidingLeverDefaults };
+    const isMeshPanel = hasMesh && idx === numShutters - 1;
+    return { x, ...(isMeshPanel ? slidingMeshTouch : slidingLeverGlass) };
   }
 
   if (kind === 'casement') {
@@ -166,7 +176,7 @@ export function getDefaultHandleConfig(panelId: string, config: WindowConfig): H
     const x_end_rel = col === verticalDividers.length ? 1 : verticalDividers[col];
     const cellW = (x_end_rel - x_start_rel) * inner.innerW;
     const x = defaultCasementHandleXPct(col, gridCols, cellW);
-    return { x, y: 50, orientation: 'vertical', length: 158, variant: 'casement' };
+    return { x, y: 50, orientation: 'vertical', length: 172, variant: 'casement' };
   }
 
   if (kind === 'ventilator') {
@@ -177,12 +187,12 @@ export function getDefaultHandleConfig(panelId: string, config: WindowConfig): H
     const x_end_rel = col === verticalDividers.length ? 1 : verticalDividers[col];
     const cellW = (x_end_rel - x_start_rel) * inner.innerW;
     const x = defaultCasementHandleXPct(col, gridCols, cellW);
-    return { x, y: 50, orientation: 'vertical', length: 158, variant: 'casement' };
+    return { x, y: 50, orientation: 'vertical', length: 172, variant: 'casement' };
   }
 
   if (kind === 'partition') {
     if (config.windowType !== WindowType.GLASS_PARTITION || !config.partitionPanels) {
-      return { x: 50, y: 50, orientation: 'vertical', length: 158, variant: 'casement' };
+      return { x: 50, y: 50, orientation: 'vertical', length: 172, variant: 'casement' };
     }
     const i = parseInt(parts[1], 10);
     const { partitionPanels } = config;
@@ -199,13 +209,13 @@ export function getDefaultHandleConfig(panelId: string, config: WindowConfig): H
       const leftP = i === 0 ? shutterHandle : interlock;
       const rightP = i === partitionPanels.count - 1 ? shutterHandle : interlock;
       const x = slidingHandleXPctOnFrameMember(panelWidth, leftP, rightP, side);
-      return { x, y: 50, orientation: 'vertical', length: 158, variant: 'casement' };
+      return { x, y: 50, orientation: 'vertical', length: 172, variant: 'casement' };
     }
     if (panelType === 'hinged') {
       const x = defaultCasementHandleXPct(i, partitionPanels.count, panelWidth);
-      return { x, y: 50, orientation: 'vertical', length: 158, variant: 'casement' };
+      return { x, y: 50, orientation: 'vertical', length: 172, variant: 'casement' };
     }
   }
 
-  return { x: 50, y: 50, orientation: 'vertical', length: 158, variant: 'casement' };
+  return { x: 50, y: 50, orientation: 'vertical', length: 172, variant: 'casement' };
 }

@@ -1,5 +1,8 @@
-import type { WindowConfig, QuotationItem, ProfileDimensions, BOM, BOMSeries, BOMProfile, GlassType } from '../types';
+import type { WindowConfig, QuotationItem, ProfileDimensions, BOM, BOMSeries, BOMProfile, GlassType, HardwareItem } from '../types';
 import { WindowType, ShutterConfigType, FixedPanelPosition } from '../types';
+import { effectiveFourGlassMeetingMm } from './slidingGeometry';
+import { getQuotationHardwareUnitMultiplier } from './quotationHardwareCost';
+import { getFixedPanelVerticalDivisionsMm } from './fixedPanelDivisions';
 
 const FEET_TO_MM = 304.8;
 const SQFT_TO_SQMM = 92903.04;
@@ -80,43 +83,53 @@ function calculateUsage(config: WindowConfig): {
     const glassUsage = new Map<string, number>();
     let meshArea = 0;
 
-    const { series, fixedPanels } = config;
-    const dims = series.dimensions;
+    const series = config.series;
+    const fixedPanels = config.fixedPanels ?? [];
+    const dims = series?.dimensions ?? ({} as ProfileDimensions);
 
     const addProfile = (key: keyof ProfileDimensions, ...lengths: number[]) => {
-        if (!dims[key] || Number(dims[key]) === 0) return;
-        const validLengths = lengths.filter(l => l > 0);
+        const dimVal = (dims as any)?.[key];
+        if (!dimVal || Number(dimVal) === 0) return;
+        const validLengths = lengths.filter((l) => Number.isFinite(l) && l > 0);
         if (validLengths.length === 0) return;
         if (!profileUsage.has(key)) profileUsage.set(key, []);
         profileUsage.get(key)!.push(...validLengths);
     };
 
+    const getGridPattern = (panelId: string) => {
+        const grid = config.glassGrid;
+        const patterns = grid?.patterns;
+        if (!patterns) return null;
+        if (grid?.applyToAll) return patterns['default'] ?? null;
+        return patterns[panelId] ?? patterns['default'] ?? null;
+    };
+
     const addGlass = (panelId: string, width: number, height: number) => {
-        if (width <= 0 || height <= 0) return;
+        if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
         const area = width * height;
         const desc = getGlassDescription(config);
         glassUsage.set(desc, (glassUsage.get(desc) || 0) + area);
-        
-        // Georgian Bars
-        const { glassGrid } = config;
-        const pattern = glassGrid.applyToAll ? glassGrid.patterns['default'] : (glassGrid.patterns[panelId] || glassGrid.patterns['default']);
+
+        const pattern = getGridPattern(panelId);
         if (pattern) {
-            if (pattern.horizontal.count > 0) addProfile('glassGridProfile', ...Array(pattern.horizontal.count).fill(width));
-            if (pattern.vertical.count > 0) addProfile('glassGridProfile', ...Array(pattern.vertical.count).fill(height));
+            const hc = Number(pattern.horizontal?.count) || 0;
+            const vc = Number(pattern.vertical?.count) || 0;
+            if (hc > 0) addProfile('glassGridProfile', ...Array(hc).fill(width));
+            if (vc > 0) addProfile('glassGridProfile', ...Array(vc).fill(height));
         }
     };
-    
+
     const addMesh = (panelId: string, width: number, height: number) => {
-         if (width <= 0 || height <= 0) return;
-         meshArea += width * height;
-         // Georgian bars on mesh are not standard, but check just in case
-         const { glassGrid } = config;
-         const pattern = glassGrid.applyToAll ? glassGrid.patterns['default'] : (glassGrid.patterns[panelId] || glassGrid.patterns['default']);
-         if (pattern) {
-             if (pattern.horizontal.count > 0) addProfile('glassGridProfile', ...Array(pattern.horizontal.count).fill(width));
-             if (pattern.vertical.count > 0) addProfile('glassGridProfile', ...Array(pattern.vertical.count).fill(height));
-         }
-    }
+        if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+        meshArea += width * height;
+        const pattern = getGridPattern(panelId);
+        if (pattern) {
+            const hc = Number(pattern.horizontal?.count) || 0;
+            const vc = Number(pattern.vertical?.count) || 0;
+            if (hc > 0) addProfile('glassGridProfile', ...Array(hc).fill(width));
+            if (vc > 0) addProfile('glassGridProfile', ...Array(vc).fill(height));
+        }
+    };
 
     const getSegmentSizes = (total: number, dividers: number[]): number[] => {
         if (total <= 0) return [];
@@ -192,8 +205,35 @@ function calculateUsage(config: WindowConfig): {
     if (leftFix) addProfile('fixedFrame', innerH);
     if (rightFix) addProfile('fixedFrame', innerH);
     
-    if (topFix) addGlass('fixed-top', innerW, topFix.size - frame - Number(dims.fixedFrame));
-    if (bottomFix) addGlass('fixed-bottom', innerW, bottomFix.size - frame - Number(dims.fixedFrame));
+    const hFixDivisions = getFixedPanelVerticalDivisionsMm(config, innerW);
+    const mullionSizeForFix = Math.max(Number(dims.fixedFrame) || 0, Number(dims.mullion) || 0) || Number(dims.fixedFrame) || 0;
+
+    const addHorizontalFixGlass = (panelIdPrefix: string, glassH: number) => {
+        if (glassH <= 0 || innerW <= 0) return;
+        const sortedDivs = hFixDivisions
+            .filter((d) => d > 0 && d < innerW)
+            .sort((a, b) => a - b);
+        if (sortedDivs.length === 0) {
+            addGlass(panelIdPrefix, innerW, glassH);
+            return;
+        }
+        let cursor = 0;
+        let idx = 0;
+        for (const dPos of sortedDivs) {
+            const segStart = cursor;
+            const segEnd = dPos - mullionSizeForFix / 2;
+            if (segEnd > segStart) addGlass(`${panelIdPrefix}-${idx++}`, segEnd - segStart, glassH);
+            cursor = dPos + mullionSizeForFix / 2;
+        }
+        if (cursor < innerW) addGlass(`${panelIdPrefix}-${idx++}`, innerW - cursor, glassH);
+        // Mullion profiles between the panes (one piece per divider, height = glassH)
+        if (sortedDivs.length > 0 && glassH > 0) {
+            addProfile('mullion', ...Array(sortedDivs.length).fill(glassH));
+        }
+    };
+
+    if (topFix) addHorizontalFixGlass('fixed-top', topFix.size - frame - Number(dims.fixedFrame));
+    if (bottomFix) addHorizontalFixGlass('fixed-bottom', bottomFix.size - frame - Number(dims.fixedFrame));
     if (leftFix) addGlass('fixed-left', leftFix.size - verticalFrame - Number(dims.fixedFrame), innerH);
     if (rightFix) addGlass('fixed-right', rightFix.size - verticalFrame - Number(dims.fixedFrame), innerH);
     
@@ -201,10 +241,8 @@ function calculateUsage(config: WindowConfig): {
         case WindowType.SLIDING: {
             const { shutterConfig } = config;
             const interlock = Number(dims.shutterInterlock) || 0;
-            let fixedBoundaryCount = 0;
 
             if (shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
-                fixedBoundaryCount = 5;
                 const shutterW = (innerW + 3 * interlock) / 4;
                 for (let i = 0; i < 6; i++) {
                     addProfile('shutterTop', shutterW);
@@ -218,8 +256,7 @@ function calculateUsage(config: WindowConfig): {
                 addProfile('shutterHandle', innerH, innerH, innerH, innerH); // 4 handles
                 addProfile('shutterInterlock', innerH, innerH, innerH, innerH, innerH, innerH, innerH, innerH); // 8 interlocks
             } else if (shutterConfig === ShutterConfigType.FOUR_GLASS) {
-                fixedBoundaryCount = 3;
-                const meeting = Number(dims.shutterMeeting) || 0;
+                const meeting = effectiveFourGlassMeetingMm(dims.shutterMeeting ?? '', dims.shutterInterlock ?? '');
                 const shutterW = (innerW + (2 * interlock) + meeting) / 4;
                  const profiles = [ { l: Number(dims.shutterHandle), r: interlock }, { l: interlock, r: meeting }, { l: meeting, r: interlock }, { l: interlock, r: Number(dims.shutterHandle) } ];
                 for (let i = 0; i < 4; i++) {
@@ -229,8 +266,7 @@ function calculateUsage(config: WindowConfig): {
                 addProfile('shutterHandle', innerH, innerH); addProfile('shutterInterlock', innerH, innerH, innerH, innerH); addProfile('shutterMeeting', innerH, innerH);
             } else {
                 const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
-                const numShutters = shutterConfig === ShutterConfigType.TWO_GLASS ? 2 : 3;
-                fixedBoundaryCount = Math.max(0, numShutters - 1);
+                const numShutters = hasMesh ? 3 : shutterConfig === ShutterConfigType.TWO_GLASS ? 2 : 3;
                 const shutterDivider = hasMesh ? 2 : numShutters;
                 const shutterW = (innerW + (shutterDivider - 1) * interlock) / shutterDivider;
                 for (let i = 0; i < numShutters; i++) {
@@ -245,28 +281,16 @@ function calculateUsage(config: WindowConfig): {
                 addProfile('shutterInterlock', ...Array((numShutters - 1) * 2).fill(innerH));
             }
 
-            // When top/bottom fixed panel exists in sliding, align mullions with shutter interlock boundaries.
-            const topFixMullionLen = topFix ? (topFix.size - frame - Number(dims.fixedFrame || 0)) : 0;
-            const bottomFixMullionLen = bottomFix ? (bottomFix.size - frame - Number(dims.fixedFrame || 0)) : 0;
-            if (topFix && topFixMullionLen > 0 && fixedBoundaryCount > 0) {
-                addProfile('mullion', ...Array(fixedBoundaryCount).fill(topFixMullionLen));
-            }
-            if (bottomFix && bottomFixMullionLen > 0 && fixedBoundaryCount > 0) {
-                addProfile('mullion', ...Array(fixedBoundaryCount).fill(bottomFixMullionLen));
-            }
             break;
         }
         case WindowType.CASEMENT: {
-            const colWidths = getSegmentSizes(innerW, config.verticalDividers || []);
-            const rowHeights = getSegmentSizes(innerH, config.horizontalDividers || []);
+            const vDiv = config.verticalDividers ?? [];
+            const hDiv = config.horizontalDividers ?? [];
+            const colWidths = getSegmentSizes(innerW, vDiv);
+            const rowHeights = getSegmentSizes(innerH, hDiv);
 
-            // Mullion on all internal dividers (vertical + horizontal)
-            if ((config.verticalDividers || []).length > 0) {
-                addProfile('mullion', ...Array(config.verticalDividers.length).fill(innerH));
-            }
-            if ((config.horizontalDividers || []).length > 0) {
-                addProfile('mullion', ...Array(config.horizontalDividers.length).fill(innerW));
-            }
+            if (vDiv.length > 0) addProfile('mullion', ...Array(vDiv.length).fill(innerH));
+            if (hDiv.length > 0) addProfile('mullion', ...Array(hDiv.length).fill(innerW));
 
             const doorSet = new Set((config.doorPositions || []).map(p => `${p.row}-${p.col}`));
             for (let r = 0; r < rowHeights.length; r++) {
@@ -288,16 +312,13 @@ function calculateUsage(config: WindowConfig): {
             break;
         }
         case WindowType.VENTILATOR: {
-            const colWidths = getSegmentSizes(innerW, config.verticalDividers || []);
-            const rowHeights = getSegmentSizes(innerH, config.horizontalDividers || []);
+            const vDiv = config.verticalDividers ?? [];
+            const hDiv = config.horizontalDividers ?? [];
+            const colWidths = getSegmentSizes(innerW, vDiv);
+            const rowHeights = getSegmentSizes(innerH, hDiv);
 
-            // Mullion on all internal dividers
-            if ((config.verticalDividers || []).length > 0) {
-                addProfile('mullion', ...Array(config.verticalDividers.length).fill(innerH));
-            }
-            if ((config.horizontalDividers || []).length > 0) {
-                addProfile('mullion', ...Array(config.horizontalDividers.length).fill(innerW));
-            }
+            if (vDiv.length > 0) addProfile('mullion', ...Array(vDiv.length).fill(innerH));
+            if (hDiv.length > 0) addProfile('mullion', ...Array(hDiv.length).fill(innerW));
 
             for (let r = 0; r < rowHeights.length; r++) {
                 for (let c = 0; c < colWidths.length; c++) {
@@ -317,6 +338,41 @@ function calculateUsage(config: WindowConfig): {
                     } else {
                         addGlass(`vent-glass-${r}-${c}`, cw, ch);
                     }
+                }
+            }
+            break;
+        }
+        case WindowType.MIRROR: {
+            const mirrorW = Math.max(0, w);
+            const mirrorH = Math.max(0, h);
+            if (mirrorW > 0 && mirrorH > 0) {
+                addGlass('mirror', mirrorW, mirrorH);
+            }
+            break;
+        }
+        case WindowType.LOUVERS: {
+            const pattern = config.louverPattern ?? [];
+            const orientation = config.orientation ?? 'vertical';
+            const totalDim = orientation === 'vertical' ? h : w;
+            const spanDim = orientation === 'vertical' ? w : h;
+            const unitSize = pattern.reduce((sum, p) => sum + (Number(p.size) || 0), 0);
+            if (unitSize > 0 && totalDim > 0 && spanDim > 0) {
+                const numCompletePatterns = Math.floor(totalDim / unitSize);
+                let bladeCount = 0;
+                for (const p of pattern) {
+                    if (p.type === 'profile') bladeCount += numCompletePatterns;
+                }
+                const remaining = totalDim - numCompletePatterns * unitSize;
+                let used = 0;
+                for (const p of pattern) {
+                    if (used >= remaining) break;
+                    if (p.type === 'profile' && used + (Number(p.size) || 0) <= remaining + 0.0001) {
+                        bladeCount += 1;
+                    }
+                    used += Number(p.size) || 0;
+                }
+                if (bladeCount > 0) {
+                    addProfile('louverBlade', ...Array(bladeCount).fill(spanDim));
                 }
             }
             break;
@@ -341,7 +397,7 @@ function calculateUsage(config: WindowConfig): {
             addProfile('bottomTrack', innerW);
 
             for (let i = 0; i < panelCount; i++) {
-                const p = config.partitionPanels.types?.[i];
+                const p = config.partitionPanels?.types?.[i];
                 const type = p?.type || 'fixed';
                 const pw = widths[i] || 0;
                 if (pw <= 0 || innerH <= 0) continue;
@@ -365,7 +421,12 @@ export function calculateUsageForConfig(config: WindowConfig): {
     glass: Map<string, number>,
     mesh: number
 } {
-    return calculateUsage(config);
+    try {
+        return calculateUsage(config);
+    } catch (err) {
+        console.error('calculateUsageForConfig failed; returning empty usage', err);
+        return { profiles: new Map(), glass: new Map(), mesh: 0 };
+    }
 }
 
 
@@ -383,66 +444,59 @@ export function generateBillOfMaterials(items: QuotationItem[]): BOM {
     }>();
 
     for (const item of items) {
-        const { config, quantity } = item;
-        const { series } = config;
+        try {
+            const { config, quantity } = item;
+            const qty = Number(quantity) || 0;
+            if (qty <= 0 || !config?.series) continue;
+            const series = config.series;
 
-        if (!seriesMap.has(series.id)) {
-            seriesMap.set(series.id, {
-                name: series.name,
-                profiles: new Map(),
-                hardware: new Map(),
-                series: series,
-                glass: new Map(),
-                meshArea: 0,
-            });
-        }
-        const seriesData = seriesMap.get(series.id)!;
+            if (!seriesMap.has(series.id)) {
+                seriesMap.set(series.id, {
+                    name: series.name,
+                    profiles: new Map(),
+                    hardware: new Map(),
+                    series: series,
+                    glass: new Map(),
+                    meshArea: 0,
+                });
+            }
+            const seriesData = seriesMap.get(series.id)!;
 
-        // Calculate usage for one item
-        const singleUsage = calculateUsage(config);
-        
-        // Add usage for all quantities of the item
-        for (let i = 0; i < quantity; i++) {
-            for (const [key, pieces] of singleUsage.profiles.entries()) {
-                if (!seriesData.profiles.has(key)) seriesData.profiles.set(key, []);
-                seriesData.profiles.get(key)!.push(...pieces);
+            const singleUsage = calculateUsage(config);
+
+            for (let i = 0; i < qty; i++) {
+                for (const [key, pieces] of singleUsage.profiles.entries()) {
+                    if (!seriesData.profiles.has(key)) seriesData.profiles.set(key, []);
+                    seriesData.profiles.get(key)!.push(...pieces);
+                }
+                for (const [desc, area] of singleUsage.glass.entries()) {
+                    seriesData.glass.set(desc, (seriesData.glass.get(desc) || 0) + area);
+                }
+                seriesData.meshArea += singleUsage.mesh;
             }
-            for (const [desc, area] of singleUsage.glass.entries()) {
-                seriesData.glass.set(desc, (seriesData.glass.get(desc) || 0) + area);
-            }
-            seriesData.meshArea += singleUsage.mesh;
-        }
-        
-        // Calculate and add hardware for all quantities
-        for (const hw of series.hardwareItems) {
-            const qtyPerUnit = Number(hw.qtyPerShutter) || 0;
-            let unitsPerWindow = 0;
-            if (hw.unit === 'per_window') {
-                unitsPerWindow = 1;
-            } else if (hw.unit === 'per_shutter_or_door') {
-                // This logic needs to be robust for all window types
-                 switch(config.windowType) {
-                    case WindowType.SLIDING:
-                        switch(config.shutterConfig) {
-                            case ShutterConfigType.TWO_GLASS: unitsPerWindow = 2; break;
-                            case ShutterConfigType.THREE_GLASS: case ShutterConfigType.TWO_GLASS_ONE_MESH: unitsPerWindow = 3; break;
-                            case ShutterConfigType.FOUR_GLASS: unitsPerWindow = 4; break;
-                            case ShutterConfigType.FOUR_GLASS_TWO_MESH: unitsPerWindow = 6; break;
-                        }
-                        break;
-                    case WindowType.CASEMENT: unitsPerWindow = config.doorPositions.length; break;
-                    case WindowType.GLASS_PARTITION: unitsPerWindow = config.partitionPanels.types.filter(t => t.type !== 'fixed').length; break;
-                    case WindowType.VENTILATOR:
-                        const doorCells = config.ventilatorGrid.flat().filter(c => c.type === 'door').length;
-                        const louverCells = config.ventilatorGrid.flat().filter(c => c.type === 'louvers').length;
-                        unitsPerWindow = hw.name.toLowerCase().includes('louver') ? louverCells : doorCells;
-                        break;
+
+            // Hardware: prefer per-line snapshot (item.hardwareItems) so changes after
+            // quotation save are still respected; fallback to series defaults.
+            const hardwareList: HardwareItem[] =
+                (item.hardwareItems && item.hardwareItems.length > 0
+                    ? item.hardwareItems
+                    : series.hardwareItems) ?? [];
+
+            for (const hw of hardwareList) {
+                if (!hw) continue;
+                const qtyPerUnit = Number(hw.qtyPerShutter) || 0;
+                if (qtyPerUnit <= 0) continue;
+                const unitsPerWindow = getQuotationHardwareUnitMultiplier(config, hardwareList, hw);
+                const totalQty = qtyPerUnit * unitsPerWindow * qty;
+                if (totalQty > 0 && hw.name) {
+                    seriesData.hardware.set(
+                        hw.name,
+                        (seriesData.hardware.get(hw.name) || 0) + totalQty
+                    );
                 }
             }
-            const totalQty = qtyPerUnit * unitsPerWindow * quantity;
-            if (totalQty > 0) {
-                seriesData.hardware.set(hw.name, (seriesData.hardware.get(hw.name) || 0) + totalQty);
-            }
+        } catch (err) {
+            console.error('BOM: skipped a quotation line due to error', { id: item?.id, err });
         }
     }
 

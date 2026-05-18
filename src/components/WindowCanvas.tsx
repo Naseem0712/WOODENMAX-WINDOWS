@@ -24,6 +24,8 @@ import {
   clampFoldLeafCount,
   getPartitionPanelTopMm,
 } from '../utils/partitionPanelGeometry';
+import { effectiveFourGlassMeetingMm } from '../utils/slidingGeometry';
+import { getFixedPanelVerticalDivisionsMm } from '../utils/fixedPanelDivisions';
 import { resolveFoldFrameEdges } from '../utils/foldDoorFrame';
 import { FoldDoorOpeningGraphic } from './FoldDoorOpeningVisual';
 
@@ -41,6 +43,13 @@ interface WindowCanvasProps {
 /** Convert mm at current canvas scale to CSS px; rounded so frame borders and glass insets stay aligned. */
 const mmToPx = (mm: number, scale: number) => Math.round(mm * scale * 100) / 100;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+/** Fit margins inside scroll container; clamp px/mm so tiny windows do not explode on screen. */
+const CANVAS_MARGIN_X = 0.92;
+const CANVAS_MARGIN_Y = 0.88;
+const MAX_PX_PER_MM = 12;
+const ZOOM_MIN = 0.2;
+const ZOOM_MAX = 5;
 
 function adjustHexColor(hex: string, delta: number): string {
     if (!hex || !hex.startsWith('#')) return hex;
@@ -104,8 +113,13 @@ const ShutterIndicator: React.FC<{ type: 'fixed' | 'sliding' | 'hinged' | 'fold'
 const Handle: React.FC<{ config: HandleConfig; scale: number; color: string; mirrored?: boolean }> = ({ config, scale, color, mirrored }) => {
     const gid = useId().replace(/:/g, '');
     const variant = config.variant ?? (config.orientation === 'horizontal' ? 'sliding' : 'casement');
-    const raw = config.length ?? (variant === 'sliding' ? 125 : 158);
-    const lenMm = Math.min(420, Math.max(96, raw));
+    const raw =
+        config.length ??
+        (variant === 'sliding' ? 125 : variant === 'mesh_touch' ? 72 : 172);
+    const lenMm =
+        variant === 'mesh_touch'
+            ? Math.min(115, Math.max(46, raw))
+            : Math.min(420, Math.max(variant === 'sliding' ? 72 : 100, raw));
     const metalTint = color.startsWith('#') ? color : '#8b939e';
     return <WindowHandleVisual variant={variant} lenMm={lenMm} color={metalTint} gid={gid} scale={scale} mirrored={mirrored} />;
 };
@@ -177,6 +191,9 @@ const GlassGrid: React.FC<{
 
     const elements: React.ReactNode[] = [];
     const barThicknessScaled = barThickness * scale;
+    const skipVerticalOnSlidingTransomSill =
+      config.windowType === WindowType.SLIDING &&
+      (panelId === 'fixed-top' || panelId === 'fixed-bottom');
 
     // Horizontal bars
     for (let i = 0; i < pattern.horizontal.count; i++) {
@@ -185,8 +202,9 @@ const GlassGrid: React.FC<{
         elements.push(<ProfilePiece key={`h-grid-${i}`} color={config.profileColor} texture={profileOverlayTexture(config)} style={{ top, left: 0, width: width * scale, height: barThicknessScaled }} />);
     }
 
-    // Vertical bars
-    for (let i = 0; i < pattern.vertical.count; i++) {
+    // Vertical bars (skip on sliding top/bottom fixed — one lite; avoids false shutter-column lines)
+    const vCount = skipVerticalOnSlidingTransomSill ? 0 : pattern.vertical.count;
+    for (let i = 0; i < vCount; i++) {
         const left = (pattern.vertical.offset + i * pattern.vertical.gap) * scale - barThicknessScaled / 2;
         if (left > width * scale || left < -barThicknessScaled) continue;
         elements.push(<ProfilePiece key={`v-grid-${i}`} color={config.profileColor} texture={profileOverlayTexture(config)} style={{ left, top: 0, width: barThicknessScaled, height: height * scale }} />);
@@ -388,7 +406,7 @@ const SlidingShutter: React.FC<{
     const shutterColor = config.profileColor.startsWith('#') ? adjustHexColor(config.profileColor, 0.08) : config.profileColor;
 
     return (
-        <div className="absolute" style={{ width: wPx, height: hPx }}>
+        <div className="absolute left-0 top-0" style={{ width: wPx, height: hPx }}>
              <MiteredFrame 
                 width={width}
                 height={height}
@@ -561,17 +579,77 @@ const createWindowElements = (
     const hDividerX = leftFix ? holeX1 : frameOffset;
     const hDividerWidth = (rightFix ? holeX2 : w - frameOffset) - hDividerX;
   
+    const horizontalFixDivisions = getFixedPanelVerticalDivisionsMm(config, hDividerWidth);
+    const mullionSize = Math.max(dims.fixedFrame, dims.mullion || dims.fixedFrame);
+
+    const pushHorizontalFixGlass = (
+      keyPrefix: string,
+      panelId: string,
+      topMm: number,
+      glassH: number,
+    ) => {
+      if (glassH <= 0) return;
+      const segments: { startMm: number; widthMm: number }[] = [];
+      const sortedDivs = horizontalFixDivisions
+        .filter((d) => d > 0 && d < hDividerWidth)
+        .sort((a, b) => a - b);
+      let cursor = 0;
+      for (const dPos of sortedDivs) {
+        const segStart = cursor;
+        const segEnd = dPos - mullionSize / 2;
+        if (segEnd > segStart) {
+          segments.push({ startMm: segStart, widthMm: segEnd - segStart });
+        }
+        cursor = dPos + mullionSize / 2;
+      }
+      if (cursor < hDividerWidth) {
+        segments.push({ startMm: cursor, widthMm: hDividerWidth - cursor });
+      }
+      if (segments.length === 0) {
+        glassElements.push(<GlassPanel key={`${keyPrefix}-full`} panelId={panelId} config={config} style={{ top: topMm * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: glassH * scale }} glassWidth={hDividerWidth} glassHeight={glassH} scale={scale} />);
+        return;
+      }
+      segments.forEach((seg, idx) => {
+        glassElements.push(
+          <GlassPanel
+            key={`${keyPrefix}-${idx}`}
+            panelId={`${panelId}-${idx}`}
+            config={config}
+            style={{ top: topMm * scale, left: (hDividerX + seg.startMm) * scale, width: seg.widthMm * scale, height: glassH * scale }}
+            glassWidth={seg.widthMm}
+            glassHeight={glassH}
+            scale={scale}
+          />
+        );
+      });
+      // Mullions between segments
+      sortedDivs.forEach((dPos, idx) => {
+        profileElements.push(
+          <ProfilePiece
+            key={`${keyPrefix}-mullion-${idx}`}
+            color={profileColor}
+            texture={pt}
+            style={{
+              top: topMm * scale,
+              left: (hDividerX + dPos - mullionSize / 2) * scale,
+              width: mullionSize * scale,
+              height: glassH * scale,
+              zIndex: 5,
+            }}
+          />
+        );
+      });
+    };
+
     if (topFix) {
         profileElements.push(<ProfilePiece key="divider-top" color={profileColor} texture={pt} style={{ top: (holeY1 - dims.fixedFrame) * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
-        const glassW = hDividerWidth;
         const glassH = holeY1 - frameOffset - dims.fixedFrame;
-        glassElements.push(<GlassPanel key="glass-top" panelId="fixed-top" config={config} style={{ top: frameOffset * scale, left: hDividerX * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH} scale={scale} />);
+        pushHorizontalFixGlass('glass-top', 'fixed-top', frameOffset, glassH);
     }
     if (bottomFix) {
         profileElements.push(<ProfilePiece key="divider-bottom" color={profileColor} texture={pt} style={{ top: holeY2 * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
-        const glassW = hDividerWidth;
         const glassH = numHeight - holeY2 - frameOffset - dims.fixedFrame;
-        glassElements.push(<GlassPanel key="glass-bottom" panelId="fixed-bottom" config={config} style={{ top: (holeY2 + dims.fixedFrame) * scale, left: hDividerX * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH} scale={scale}/>);
+        pushHorizontalFixGlass('glass-bottom', 'fixed-bottom', holeY2 + dims.fixedFrame, glassH);
     }
     const vGlassY = topFix ? holeY1 : frameOffset;
     const vGlassHeight = (bottomFix ? holeY2 : numHeight - frameOffset) - vGlassY;
@@ -699,7 +777,11 @@ const createWindowElements = (
             case WindowType.SLIDING: {
                 const { shutterConfig, fixedShutters, slidingHandles } = config;
                 const interlock = Number(dims.shutterInterlock) || 0;
-                const meeting = Number(dims.shutterMeeting) || 0;
+                const meetingRaw = Number(dims.shutterMeeting) || 0;
+                const meeting =
+                  shutterConfig === ShutterConfigType.FOUR_GLASS
+                    ? effectiveFourGlassMeetingMm(dims.shutterMeeting ?? '', dims.shutterInterlock ?? '')
+                    : meetingRaw;
                 const laneCount = (shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH || shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) ? 3 : 2;
                 const trackBandMm = Math.max(8, Math.min(16, Number(dims.topTrack) * 0.18));
                 const trackBandPx = mmToPx(trackBandMm, scale);
@@ -792,7 +874,7 @@ const createWindowElements = (
                         if (p.id === 3 || p.id === 5) rightProf = dims.shutterHandle;
 
                         innerContent.push(
-                            <div key={p.id} className="absolute" style={{ left: mmToPx(p.x, scale), zIndex: p.z }}>
+                            <div key={p.id} className="absolute" style={{ left: mmToPx(p.x, scale), top: 0, zIndex: p.z }}>
                                 <SlidingShutter
                                     panelId={`sliding-${p.id}`}
                                     config={config}
@@ -814,7 +896,7 @@ const createWindowElements = (
                     
                     slidingHandles.forEach((handleConfig, i) => { if (handleConfig) { const side = slidingMemberSideStandard(i, 4); const mirrored = mirrorHandleForSlidingMember(side); handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (positions[i] + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={handleConfig} scale={scale} color={profileColor} mirrored={mirrored} /></div>); } });
                     
-                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: mmToPx(positions[i], scale), zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} scale={scale} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
+                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: mmToPx(positions[i], scale), top: 0, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} scale={scale} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
                 } else {
                     const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
                     const numShutters = hasMesh ? 3 : (shutterConfig === ShutterConfigType.TWO_GLASS ? 2 : 3);
@@ -827,7 +909,7 @@ const createWindowElements = (
                         const handleConfig = slidingHandles[i];
                         if (handleConfig) { const side = slidingMemberSideStandard(i, numShutters); const mirrored = mirrorHandleForSlidingMember(side); handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={handleConfig} scale={scale} color={profileColor} mirrored={mirrored} /></div>); }
                         
-                        return ( <div key={i} className="absolute" style={{ left: mmToPx(leftPosition, scale), zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : interlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : interlock} scale={scale} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
+                        return ( <div key={i} className="absolute" style={{ left: mmToPx(leftPosition, scale), top: 0, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : interlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : interlock} scale={scale} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
                     }));
                 }
                 break;
@@ -1109,6 +1191,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const renderedWindowRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
   const [isExporting, setIsExporting] = useState(false);
   
   const numWidth = windowType === WindowType.CORNER 
@@ -1122,10 +1205,29 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   }), [series.dimensions]);
 
   useEffect(() => {
+    setZoom(1);
+  }, [numWidth, numHeight]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || numWidth <= 0 || numHeight <= 0) return;
+
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setContainerSize({ w: r.width, h: r.height });
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [numWidth, numHeight]);
+
+  useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
         if (e.ctrlKey) {
             e.preventDefault();
-            setZoom(prev => Math.max(0.2, Math.min(prev - e.deltaY * 0.001, 5)));
+            setZoom((prev) => clamp(prev - e.deltaY * 0.001, ZOOM_MIN, ZOOM_MAX));
         }
     };
     const currentRef = containerRef.current;
@@ -1135,11 +1237,25 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
 
   const scale = useMemo(() => {
     if (numWidth <= 0 || numHeight <= 0) return 1;
-    const containerWidth = containerRef.current?.clientWidth || window.innerWidth;
-    const containerHeight = containerRef.current?.clientHeight || window.innerHeight;
-    const fitScale = Math.min((containerWidth * 0.9) / numWidth, (containerHeight * 0.8) / numHeight, 10);
-    return fitScale * zoom;
-  }, [numWidth, numHeight, zoom]);
+    const cw = Math.max(
+      1,
+      containerSize.w || containerRef.current?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 800)
+    );
+    const ch = Math.max(
+      1,
+      containerSize.h || containerRef.current?.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 600)
+    );
+    const fitScale = Math.min((cw * CANVAS_MARGIN_X) / numWidth, (ch * CANVAS_MARGIN_Y) / numHeight, MAX_PX_PER_MM);
+    let nextScale = fitScale * clamp(zoom, ZOOM_MIN, ZOOM_MAX);
+    const rw = numWidth * nextScale;
+    const rh = numHeight * nextScale;
+    const maxW = cw * CANVAS_MARGIN_X;
+    const maxH = ch * CANVAS_MARGIN_Y;
+    if (rw > maxW || rh > maxH) {
+      nextScale *= Math.min(maxW / rw, maxH / rh);
+    }
+    return nextScale;
+  }, [numWidth, numHeight, zoom, containerSize.w, containerSize.h]);
 
   const canvasCallbacks = useMemo(() => ({
     onRemoveHorizontalDivider,
@@ -1224,7 +1340,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   }
 
   return (
-    <div ref={containerRef} className="absolute inset-0 p-6 flex items-center justify-center bg-transparent overflow-auto">
+    <div ref={containerRef} className="absolute inset-0 p-4 sm:p-6 flex items-center justify-center bg-transparent overflow-auto">
       <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none"> WoodenMax </div>
        <div ref={renderedWindowRef} style={{ margin: 'auto' }}>
             {windowType === WindowType.CORNER && config.leftConfig && config.rightConfig ? (
@@ -1269,10 +1385,13 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
         </button>
       </div>
       
-      <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2 no-print">
-         <button onClick={() => setZoom(z => z * 1.2)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><PlusIcon className="w-6 h-6"/></button>
-         <button onClick={() => setZoom(1)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><ArrowsPointingInIcon className="w-5 h-5"/></button>
-         <button onClick={() => setZoom(z => z / 1.2)} className="w-10 h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><MinusIcon className="w-6 h-6"/></button>
+      <div
+        className="absolute right-4 z-[100] flex flex-col gap-2 no-print touch-manipulation"
+        style={{ bottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}
+      >
+         <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => setZoom((z) => clamp(z * 1.2, ZOOM_MIN, ZOOM_MAX))} className="w-11 h-11 sm:w-10 sm:h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><PlusIcon className="w-6 h-6"/></button>
+         <button type="button" title="Fit view (reset zoom)" aria-label="Fit view" onClick={() => setZoom(1)} className="w-11 h-11 sm:w-10 sm:h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><ArrowsPointingInIcon className="w-5 h-5"/></button>
+         <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => setZoom((z) => clamp(z / 1.2, ZOOM_MIN, ZOOM_MAX))} className="w-11 h-11 sm:w-10 sm:h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><MinusIcon className="w-6 h-6"/></button>
       </div>
     </div>
   );

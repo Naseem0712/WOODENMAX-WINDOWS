@@ -136,7 +136,8 @@ export enum AreaType {
     SQMT = 'sqmt',
 }
 
-export type HandleVariant = 'sliding' | 'casement';
+/** casement = lever + mortice euro style (glass); sliding = flush pull bar; mesh_touch = recessed touch lock (mesh) */
+export type HandleVariant = 'sliding' | 'casement' | 'mesh_touch';
 
 export interface HandleConfig {
   x: number; // 0-100 percentage (of panel width)

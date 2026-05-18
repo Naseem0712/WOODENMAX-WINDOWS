@@ -1,6 +1,6 @@
 
 import React, { useMemo, useRef, useState, useEffect, useId } from 'react';
-import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig } from '../types';
+import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, MaterialRateSettings, PartitionPanelConfig } from '../types';
 import { Button } from './ui/Button';
 import { PrinterIcon } from './icons/PrinterIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -10,6 +10,7 @@ import { Input } from './ui/Input';
 import { WindowHandleVisual } from './WindowHandleVisual';
 import {
   slidingMemberSideStandard,
+  slidingMemberSide4G2M,
   mirrorHandleForSlidingMember,
   mirrorHandleForPartitionHandleX,
 } from '../utils/handleDefaults';
@@ -22,9 +23,16 @@ import {
   clampFoldLeafCount,
   getPartitionPanelTopMm,
 } from '../utils/partitionPanelGeometry';
+import { effectiveFourGlassMeetingMm } from '../utils/slidingGeometry';
+import { getFixedPanelVerticalDivisionsMm } from '../utils/fixedPanelDivisions';
+import { getElevationDimensionsMm } from '../utils/elevationDimensions';
+import { getQuotationHardwareUnitMultiplier } from '../utils/quotationHardwareCost';
 import { resolveFoldFrameEdges } from '../utils/foldDoorFrame';
 import { FoldDoorOpeningGraphic } from './FoldDoorOpeningVisual';
 import { autoContinueTermsSerial, normalizeWebsiteUrl } from '../utils/quotationText';
+import { calculateMaterialCostSummary } from '../utils/materialCosting';
+import { getMinimumMakingChargeForItems, getProfitSafetyInfo, getRawDiscountAmount } from '../utils/pricingSafety';
+import { DEFAULT_MATERIAL_RATES } from '../constants/materialRates';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
   return config.profileColor.startsWith('#') ? config.profileTexture || undefined : undefined;
@@ -186,6 +194,9 @@ const PrintGlassGrid: React.FC<{
 
         const elements: React.ReactNode[] = [];
         const barThicknessScaled = barThickness * scale;
+        const skipVerticalOnSlidingTransomSill =
+          config.windowType === WindowType.SLIDING &&
+          (panelId === 'fixed-top' || panelId === 'fixed-bottom');
 
         // Horizontal bars
         for (let i = 0; i < pattern.horizontal.count; i++) {
@@ -195,7 +206,8 @@ const PrintGlassGrid: React.FC<{
         }
 
         // Vertical bars
-        for (let i = 0; i < pattern.vertical.count; i++) {
+        const vCount = skipVerticalOnSlidingTransomSill ? 0 : pattern.vertical.count;
+        for (let i = 0; i < vCount; i++) {
             const left = (pattern.vertical.offset + i * pattern.vertical.gap) * scale - barThicknessScaled / 2;
             if (left > width * scale || left < -barThicknessScaled) continue;
             elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={profileColor} texture={profileOverlayTexture(config)} style={{ left, top: 0, width: barThicknessScaled, height: height * scale }} />);
@@ -222,7 +234,10 @@ const PrintGlassGrid: React.FC<{
                 elements.push(<PrintProfilePiece key={`h-grid-${i}`} color={profileColor} texture={profileOverlayTexture(config)} style={{ top: i * vGap - barThicknessScaled / 2, left: 0, width: width * scale, height: barThicknessScaled }} />);
             }
         }
-        if (cols > 0) {
+        const skipLegacyCols =
+          config.windowType === WindowType.SLIDING &&
+          (panelId === 'fixed-top' || panelId === 'fixed-bottom');
+        if (cols > 0 && !skipLegacyCols) {
             const hGap = (width * scale) / (cols + 1);
             for (let i = 1; i <= cols; i++) {
                 elements.push(<PrintProfilePiece key={`v-grid-${i}`} color={profileColor} texture={profileOverlayTexture(config)} style={{ left: i * hGap - barThicknessScaled / 2, top: 0, width: barThicknessScaled, height: height * scale }} />);
@@ -352,11 +367,16 @@ const PrintableMiteredFrame: React.FC<{
 };
 
 const PrintableHandle: React.FC<{ config: HandleConfig | null; scale: number; mirrored?: boolean }> = ({ config, scale, mirrored }) => {
-    if (!config) return null;
     const gid = useId().replace(/:/g, '');
+    if (!config) return null;
     const variant = config.variant ?? (config.orientation === 'horizontal' ? 'sliding' : 'casement');
-    const raw = config.length ?? (variant === 'sliding' ? 125 : 158);
-    const lenMm = Math.min(420, Math.max(96, raw));
+    const raw =
+        config.length ??
+        (variant === 'sliding' ? 125 : variant === 'mesh_touch' ? 72 : 172);
+    const lenMm =
+        variant === 'mesh_touch'
+            ? Math.min(115, Math.max(46, raw))
+            : Math.min(420, Math.max(variant === 'sliding' ? 72 : 100, raw));
     return <WindowHandleVisual variant={variant} lenMm={lenMm} color="#8892a0" gid={gid} scale={scale} print mirrored={mirrored} />;
 };
 
@@ -395,26 +415,36 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         );
     }
 
-    const containerWidthPx = 150; // max width in pixels
-    const containerHeightPx = 200; // max height in pixels
+    // Leaves headroom for the dimension bands rendered below + to the right
+    // of the elevation (per-shutter / per-fix mm callouts).
+    const containerWidthPx = 130;
+    const containerHeightPx = 180;
     const numWidth = Number(config.width) || 1;
     const numHeight = Number(config.height) || 1;
     
     const effectiveWidth = numWidth;
     const scale = externalScale || Math.min(containerWidthPx / effectiveWidth, containerHeightPx / numHeight);
 
-    const { series, fixedPanels, profileColor, windowType, glassTexture } = config;
+    const series = config.series;
+    if (!series || !series.dimensions) {
+        return <div style={{ padding: 16, color: '#b91c1c', fontSize: 12 }}>Series data missing for this line — please re-open the item to refresh.</div>;
+    }
+    const fixedPanels = config.fixedPanels ?? [];
+    const profileColor = config.profileColor ?? '#374151';
+    const windowType = config.windowType;
+    const glassTexture = config.glassTexture;
+    const seriesDims: any = series.dimensions ?? {};
     const pt = profileOverlayTexture(config);
     const dims = {
-        outerFrame: Number(series.dimensions.outerFrame) || 0,
-        outerFrameVertical: Number(series.dimensions.outerFrameVertical) || 0,
-        fixedFrame: Number(series.dimensions.fixedFrame) || 0,
-        shutterHandle: Number(series.dimensions.shutterHandle) || 0, shutterInterlock: Number(series.dimensions.shutterInterlock) || 0,
-        shutterTop: Number(series.dimensions.shutterTop) || 0, shutterBottom: Number(series.dimensions.shutterBottom) || 0,
-        shutterMeeting: Number(series.dimensions.shutterMeeting) || 0, casementShutter: Number(series.dimensions.casementShutter) || 0,
-        mullion: Number(series.dimensions.mullion) || 0, louverBlade: Number(series.dimensions.louverBlade) || 0,
-        topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0, 
-        glassGridProfile: Number(config.glassGrid?.barThickness) || Number(series.dimensions.glassGridProfile) || 0,
+        outerFrame: Number(seriesDims.outerFrame) || 0,
+        outerFrameVertical: Number(seriesDims.outerFrameVertical) || 0,
+        fixedFrame: Number(seriesDims.fixedFrame) || 0,
+        shutterHandle: Number(seriesDims.shutterHandle) || 0, shutterInterlock: Number(seriesDims.shutterInterlock) || 0,
+        shutterTop: Number(seriesDims.shutterTop) || 0, shutterBottom: Number(seriesDims.shutterBottom) || 0,
+        shutterMeeting: Number(seriesDims.shutterMeeting) || 0, casementShutter: Number(seriesDims.casementShutter) || 0,
+        mullion: Number(seriesDims.mullion) || 0, louverBlade: Number(seriesDims.louverBlade) || 0,
+        topTrack: Number(seriesDims.topTrack) || 0, bottomTrack: Number(seriesDims.bottomTrack) || 0,
+        glassGridProfile: Number(config.glassGrid?.barThickness) || Number(seriesDims.glassGridProfile) || 0,
     };
 
     const glassStyle = { backgroundColor: '#E2E8F0', boxSizing: 'border-box' as const };
@@ -483,18 +513,71 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
     const hDividerX = leftFix ? holeX1 : frameOffset;
     const hDividerWidth = (rightFix ? holeX2 : numWidth - frameOffset) - hDividerX;
 
+    const horizontalFixDivisions = getFixedPanelVerticalDivisionsMm(config, hDividerWidth);
+    const mullionSize = Math.max(dims.fixedFrame, dims.mullion || dims.fixedFrame);
+
+    const pushHorizontalFixGlass = (
+      keyPrefix: string,
+      panelId: string,
+      topMm: number,
+      glassH: number,
+    ) => {
+      if (glassH <= 0) return;
+      const sortedDivs = horizontalFixDivisions
+        .filter((d) => d > 0 && d < hDividerWidth)
+        .sort((a, b) => a - b);
+      const segments: { startMm: number; widthMm: number }[] = [];
+      let cursor = 0;
+      for (const dPos of sortedDivs) {
+        const segStart = cursor;
+        const segEnd = dPos - mullionSize / 2;
+        if (segEnd > segStart) segments.push({ startMm: segStart, widthMm: segEnd - segStart });
+        cursor = dPos + mullionSize / 2;
+      }
+      if (cursor < hDividerWidth) segments.push({ startMm: cursor, widthMm: hDividerWidth - cursor });
+      if (segments.length === 0) {
+        glassElements.push(<GlassPanel key={`${keyPrefix}-full`} panelId={panelId} style={{ top: topMm * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: glassH * scale }} glassWidthPx={hDividerWidth * scale} glassHeightPx={glassH * scale}><PrintShutterIndicator type="fixed"/></GlassPanel>);
+        return;
+      }
+      segments.forEach((seg, idx) => {
+        glassElements.push(
+          <GlassPanel
+            key={`${keyPrefix}-${idx}`}
+            panelId={`${panelId}-${idx}`}
+            style={{ top: topMm * scale, left: (hDividerX + seg.startMm) * scale, width: seg.widthMm * scale, height: glassH * scale }}
+            glassWidthPx={seg.widthMm * scale}
+            glassHeightPx={glassH * scale}
+          ><PrintShutterIndicator type="fixed"/></GlassPanel>
+        );
+      });
+      sortedDivs.forEach((dPos, idx) => {
+        profileElements.push(
+          <PrintProfilePiece
+            key={`${keyPrefix}-mullion-${idx}`}
+            color={profileColor}
+            texture={pt}
+            style={{
+              top: topMm * scale,
+              left: (hDividerX + dPos - mullionSize / 2) * scale,
+              width: mullionSize * scale,
+              height: glassH * scale,
+              zIndex: 5,
+            }}
+          />
+        );
+      });
+    };
+
     if (topFix) {
         profileElements.push(<PrintProfilePiece key="divider-top" color={profileColor} texture={pt} style={{ top: (holeY1 - dims.fixedFrame) * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
-        const glassW = hDividerWidth;
         const glassH = holeY1 - frameOffset - dims.fixedFrame;
-        glassElements.push(<GlassPanel key="glass-top" panelId="fixed-top" style={{ top: frameOffset * scale, left: hDividerX * scale, width: glassW * scale, height: glassH * scale }} glassWidthPx={glassW*scale} glassHeightPx={glassH*scale}><PrintShutterIndicator type="fixed"/></GlassPanel>);
+        pushHorizontalFixGlass('glass-top', 'fixed-top', frameOffset, glassH);
         labelElements.push(<PrintDimensionLabel key="label-top" value={topFix.size} className="left-1/2 -translate-x-1/2" style={{top: topFix.size * scale / 2}}/>)
     }
     if (bottomFix) {
         profileElements.push(<PrintProfilePiece key="divider-bottom" color={profileColor} texture={pt} style={{ top: holeY2 * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
-        const glassW = hDividerWidth;
         const glassH = numHeight - holeY2 - frameOffset - dims.fixedFrame;
-        glassElements.push(<GlassPanel key="glass-bottom" panelId="fixed-bottom" style={{ top: (holeY2 + dims.fixedFrame) * scale, left: hDividerX * scale, width: glassW * scale, height: glassH * scale }} glassWidthPx={glassW*scale} glassHeightPx={glassH*scale}><PrintShutterIndicator type="fixed"/></GlassPanel>);
+        pushHorizontalFixGlass('glass-bottom', 'fixed-bottom', holeY2 + dims.fixedFrame, glassH);
     }
     const vGlassY = topFix ? holeY1 : frameOffset;
     const vGlassHeight = (bottomFix ? holeY2 : numHeight - frameOffset) - vGlassY;
@@ -527,7 +610,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         const bPx = mmToPx(bottomProfile, scale);
 
         return (
-            <div className="absolute" style={{ width: wPx, height: hPx }}>
+            <div className="absolute left-0 top-0" style={{ width: wPx, height: hPx }}>
                 <PrintableMiteredFrame 
                     width={width} 
                     height={height} 
@@ -553,9 +636,12 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
             {glassElements}
             {profileElements}
             {innerAreaWidth > 0 && innerAreaHeight > 0 && (
-                <div className="absolute overflow-hidden" style={{ top: mmToPx(holeY1, scale), left: mmToPx(holeX1, scale), width: mmToPx(innerAreaWidth, scale), height: mmToPx(innerAreaHeight, scale) }}>
+                <div
+                    className={`absolute ${windowType === WindowType.SLIDING ? 'overflow-visible' : 'overflow-hidden'}`}
+                    style={{ top: mmToPx(holeY1, scale), left: mmToPx(holeX1, scale), width: mmToPx(innerAreaWidth, scale), height: mmToPx(innerAreaHeight, scale) }}
+                >
                     {windowType === WindowType.MIRROR ? (() => {
-                        const { mirrorConfig } = config;
+                        const mirrorConfig = config.mirrorConfig ?? { shape: MirrorShape.RECTANGLE, isFrameless: false, cornerRadius: 0 };
                         
                         let borderRadius = '0px';
                         switch (mirrorConfig.shape) {
@@ -590,7 +676,15 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                             </>);
                     })() : null}
                     {windowType === WindowType.SLIDING ? (() => {
-                        const { shutterConfig, fixedShutters, slidingHandles } = config;
+                        const { shutterConfig } = config;
+                        const fixedShutters = config.fixedShutters ?? [];
+                        const slidingHandles = config.slidingHandles ?? [];
+                        const interlock = Number(dims.shutterInterlock) || 0;
+                        const meetingRaw = Number(dims.shutterMeeting) || 0;
+                        const meeting =
+                          shutterConfig === ShutterConfigType.FOUR_GLASS
+                            ? effectiveFourGlassMeetingMm(dims.shutterMeeting ?? '', dims.shutterInterlock ?? '')
+                            : meetingRaw;
                         const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;
                         const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
 
@@ -600,12 +694,69 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                             case ShutterConfigType.TWO_GLASS: numShutters = 2; break;
                             case ShutterConfigType.THREE_GLASS: numShutters = 3; break;
                             case ShutterConfigType.TWO_GLASS_ONE_MESH: numShutters = 3; break;
+                            case ShutterConfigType.FOUR_GLASS_TWO_MESH: numShutters = 6; break;
                             default: numShutters = 0;
                         }
 
+                        if (shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
+                            const panelWidth = (innerAreaWidth + 3 * interlock) / 4;
+                            const panels: { id: number; type: 'glass' | 'mesh'; x: number; z: number }[] = [
+                                { id: 0, type: 'glass', x: 0, z: 5 },
+                                { id: 5, type: 'glass', x: innerAreaWidth - panelWidth, z: 5 },
+                                { id: 1, type: 'glass', x: panelWidth - interlock, z: 10 },
+                                { id: 4, type: 'glass', x: 2 * panelWidth - 2 * interlock, z: 10 },
+                                { id: 2, type: 'mesh', x: 0, z: 15 },
+                                { id: 3, type: 'mesh', x: innerAreaWidth - panelWidth, z: 15 },
+                            ];
+                            panels.forEach((p) => {
+                                const handleConfig = slidingHandles[p.id];
+                                if (handleConfig) {
+                                    const side = slidingMemberSide4G2M(p.id);
+                                    const mirrored = mirrorHandleForSlidingMember(side);
+                                    handleElements.push(
+                                        <div
+                                            key={`handle-${p.id}`}
+                                            style={{
+                                                zIndex: 30,
+                                                position: 'absolute',
+                                                left: (p.x + panelWidth * handleConfig.x / 100) * scale,
+                                                top: (innerAreaHeight * handleConfig.y / 100) * scale,
+                                                transform: 'translate(-50%, -50%)',
+                                                transformOrigin: 'center center',
+                                            }}
+                                        >
+                                            <PrintableHandle config={handleConfig} scale={scale} mirrored={mirrored} />
+                                        </div>
+                                    );
+                                }
+                            });
+                            return panels.map((p) => {
+                                let leftProf = interlock;
+                                let rightProf = interlock;
+                                if (p.id === 0 || p.id === 2) leftProf = dims.shutterHandle;
+                                if (p.id === 3 || p.id === 5) rightProf = dims.shutterHandle;
+                                return (
+                                    <div key={p.id} className="absolute" style={{ left: mmToPx(p.x, scale), top: 0, zIndex: p.z }}>
+                                        <PrintSlidingShutter
+                                            panelId={`sliding-${p.id}`}
+                                            width={panelWidth}
+                                            height={innerAreaHeight}
+                                            topProfile={dims.shutterTop}
+                                            bottomProfile={dims.shutterBottom}
+                                            leftProfile={leftProf}
+                                            rightProfile={rightProf}
+                                            isMesh={p.type === 'mesh'}
+                                            isFixed={fixedShutters[p.id]}
+                                            isSliding={!fixedShutters[p.id]}
+                                        />
+                                    </div>
+                                );
+                            });
+                        }
+
                         if (is4G) {
-                            const shutterWidth = (innerAreaWidth + (2 * dims.shutterInterlock) + dims.shutterMeeting) / 4;
-                            const positions = [ 0, shutterWidth - dims.shutterInterlock, (2*shutterWidth) - dims.shutterInterlock - dims.shutterMeeting, (3*shutterWidth) - (2*dims.shutterInterlock) - dims.shutterMeeting ];
+                            const shutterWidth = (innerAreaWidth + (2 * interlock) + meeting) / 4;
+                            const positions = [ 0, shutterWidth - interlock, (2*shutterWidth) - interlock - meeting, (3*shutterWidth) - (2*interlock) - meeting ];
                              slidingHandles.forEach((handleConfig, i) => {
                                 if (handleConfig) {
                                     const side = slidingMemberSideStandard(i, 4);
@@ -614,16 +765,16 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                 }
                             });
                             const profiles = [
-                                { l: dims.shutterHandle, r: dims.shutterInterlock }, { l: dims.shutterInterlock, r: dims.shutterMeeting },
-                                { l: dims.shutterMeeting, r: dims.shutterInterlock }, { l: dims.shutterInterlock, r: dims.shutterHandle }
+                                { l: dims.shutterHandle, r: interlock }, { l: interlock, r: meeting },
+                                { l: meeting, r: interlock }, { l: interlock, r: dims.shutterHandle }
                             ];
-                            return profiles.map((p, i) => <div key={i} className="absolute" style={{ left: mmToPx(positions[i], scale), zIndex: (i === 1 || i === 2) ? 10 : 5 }}><PrintSlidingShutter panelId={`sliding-${i}`} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>);
+                            return profiles.map((p, i) => <div key={i} className="absolute" style={{ left: mmToPx(positions[i], scale), top: 0, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><PrintSlidingShutter panelId={`sliding-${i}`} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>);
                         } else {
                             const shutterDivider = hasMesh ? 2 : numShutters;
-                            const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * dims.shutterInterlock) / shutterDivider;
+                            const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * interlock) / shutterDivider;
                             slidingHandles.forEach((handleConfig, i) => {
                                 if (handleConfig) {
-                                    let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - dims.shutterInterlock);
+                                    let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - interlock);
                                     const side = slidingMemberSideStandard(i, numShutters);
                                     const mirrored = mirrorHandleForSlidingMember(side);
                                     handleElements.push(<div key={`handle-${i}`} style={{ zIndex: 30, position: 'absolute', left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><PrintableHandle config={handleConfig} scale={scale} mirrored={mirrored} /></div>);
@@ -631,16 +782,19 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                             });
                             return Array.from({ length: numShutters }).map((_, i) => {
                                 const isMeshShutter = hasMesh && i === numShutters - 1;
-                                let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - dims.shutterInterlock);
-                                const leftProfile = i === 0 ? dims.shutterHandle : dims.shutterInterlock;
-                                const rightProfile = i === numShutters - 1 ? dims.shutterHandle : dims.shutterInterlock;
-                                return ( <div key={i} className="absolute" style={{ left: mmToPx(leftPosition, scale), zIndex: i + (isMeshShutter ? 10 : 5) }}><PrintSlidingShutter panelId={`sliding-${i}`} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={leftProfile} rightProfile={rightProfile} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
+                                let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - interlock);
+                                const leftProfile = i === 0 ? dims.shutterHandle : interlock;
+                                const rightProfile = i === numShutters - 1 ? dims.shutterHandle : interlock;
+                                return ( <div key={i} className="absolute" style={{ left: mmToPx(leftPosition, scale), top: 0, zIndex: i + (isMeshShutter ? 10 : 5) }}><PrintSlidingShutter panelId={`sliding-${i}`} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={leftProfile} rightProfile={rightProfile} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
                             });
                         }
                     })() : null}
 
                     {(windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) && (() => {
-                        const { verticalDividers, horizontalDividers } = config;
+                        const verticalDividers = config.verticalDividers ?? [];
+                        const horizontalDividers = config.horizontalDividers ?? [];
+                        const doorPositionsArr = config.doorPositions ?? [];
+                        const ventilatorGridArr = config.ventilatorGrid ?? [];
                         const gridCols = verticalDividers.length + 1;
                         const gridRows = horizontalDividers.length + 1;
                         const elements: React.ReactNode[] = [];
@@ -657,12 +811,12 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                 const cellW = (x_end_rel - x_start_rel) * innerAreaWidth;
                                 const cellH = (y_end_rel - y_start_rel) * innerAreaHeight;
                                 
-                                const doorInfo = config.doorPositions.find(p => p.row === r && p.col === c);
+                                const doorInfo = doorPositionsArr.find((p) => p.row === r && p.col === c);
                                 if (doorInfo?.handle) {
                                     const mirrored = mirrorHandleForPartitionHandleX(doorInfo.handle.x);
                                     handleElements.push(<div key={`handle-casement-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (cellX + cellW * doorInfo.handle.x / 100) * scale, top: (cellY + cellH * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><PrintableHandle config={doorInfo.handle} scale={scale} mirrored={mirrored} /></div>);
                                 }
-                                const cell = config.ventilatorGrid[r]?.[c];
+                                const cell = ventilatorGridArr[r]?.[c];
                                 if (cell?.type === 'door' && cell.handle) {
                                      const mirrored = mirrorHandleForPartitionHandleX(cell.handle.x);
                                      handleElements.push(<div key={`handle-vent-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (cellX + cellW * cell.handle.x / 100) * scale, top: (cellY + cellH * cell.handle.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><PrintableHandle config={cell.handle} scale={scale} mirrored={mirrored} /></div>);
@@ -698,7 +852,11 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                     })()}
 
                     {windowType === WindowType.GLASS_PARTITION && (() => {
-                        const { partitionPanels } = config;
+                        const partitionPanels = config.partitionPanels ?? {
+                          count: 0,
+                          types: [] as PartitionPanelConfig[],
+                          hasTopChannel: false,
+                        };
                         const gap = PARTITION_PANEL_GAP_MM;
                         const panelWidths = getPartitionPanelWidthsMm(
                           innerAreaWidth,
@@ -839,6 +997,84 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                 </>
             )}
             {labelElements}
+            {config.windowType !== WindowType.CORNER && (() => {
+                const { columns, rows } = getElevationDimensionsMm(config);
+                const hasMultipleCols = columns.length > 1;
+                const hasMultipleRows = rows.length > 1;
+                if (!hasMultipleCols && !hasMultipleRows) return null;
+                const colTotal = columns.reduce((s, c) => s + (c.sizeMm || 0), 0) || effectiveWidth;
+                const rowTotal = rows.reduce((s, r) => s + (r.sizeMm || 0), 0) || numHeight;
+                const segStyle: React.CSSProperties = {
+                    fontSize: '5.5pt',
+                    lineHeight: 1,
+                    color: '#000',
+                    border: '0.5px solid #555',
+                    boxSizing: 'border-box',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontFamily: 'monospace',
+                    padding: '0 1px',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                };
+                return (
+                    <>
+                        {hasMultipleCols && (
+                            <div
+                                className="absolute"
+                                style={{
+                                    top: '100%',
+                                    left: 0,
+                                    width: '100%',
+                                    height: 11,
+                                    marginTop: 2,
+                                    display: 'flex',
+                                    flexDirection: 'row',
+                                }}
+                            >
+                                {columns.map((c, i) => (
+                                    <div
+                                        key={`col-${i}`}
+                                        style={{
+                                            ...segStyle,
+                                            width: `${((c.sizeMm || 0) / colTotal) * 100}%`,
+                                        }}
+                                    >
+                                        {Math.round(c.sizeMm || 0)}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {hasMultipleRows && (
+                            <div
+                                className="absolute"
+                                style={{
+                                    top: 0,
+                                    left: '100%',
+                                    height: '100%',
+                                    width: 18,
+                                    marginLeft: 2,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                }}
+                            >
+                                {rows.map((r, i) => (
+                                    <div
+                                        key={`row-${i}`}
+                                        style={{
+                                            ...segStyle,
+                                            height: `${((r.sizeMm || 0) / rowTotal) * 100}%`,
+                                        }}
+                                    >
+                                        {Math.round(r.sizeMm || 0)}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </>
+                );
+            })()}
         </div>
     );
 };
@@ -965,7 +1201,9 @@ const getGlassDescription = (config: WindowConfig): string => {
 
 const getItemDetails = (item: QuotationItem) => {
     const { config, quantity } = item;
-    const { windowType, shutterConfig, doorPositions, ventilatorGrid } = config;
+    const { windowType, shutterConfig } = config;
+    const doorPositions = config.doorPositions ?? [];
+    const ventilatorGrid = config.ventilatorGrid ?? [];
 
     const panelCounts: { [key: string]: number } = {};
 
@@ -973,41 +1211,34 @@ const getItemDetails = (item: QuotationItem) => {
         if (shutterConfig === ShutterConfigType.TWO_GLASS) panelCounts['Sliding Shutter'] = 2;
         else if (shutterConfig === ShutterConfigType.THREE_GLASS) panelCounts['Sliding Shutter'] = 3;
         else if (shutterConfig === ShutterConfigType.FOUR_GLASS) panelCounts['Sliding Shutter'] = 4;
+        else if (shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
+            panelCounts['Sliding Shutter'] = 4;
+            panelCounts['Mesh Shutter'] = 2;
+        }
         else if (shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH) {
             panelCounts['Sliding Shutter'] = 2;
             panelCounts['Mesh Shutter'] = 1;
         }
     } else if (windowType === WindowType.CASEMENT) {
-        const gridCells = (config.verticalDividers.length + 1) * (config.horizontalDividers.length + 1);
+        const vDiv = config.verticalDividers ?? [];
+        const hDiv = config.horizontalDividers ?? [];
+        const gridCells = (vDiv.length + 1) * (hDiv.length + 1);
         panelCounts['Openable Door'] = doorPositions.length;
         panelCounts['Fixed Panel'] = gridCells - doorPositions.length;
     } else if (windowType === WindowType.VENTILATOR) {
-        ventilatorGrid.flat().forEach(cell => {
-            const typeName = cell.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+        ventilatorGrid.flat().forEach((cell) => {
+            const cellType = cell?.type;
+            if (!cellType) return;
+            const typeName = cellType.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase());
             panelCounts[typeName] = (panelCounts[typeName] || 0) + 1;
         });
     }
 
 
     const hardwareDetails: { name: string, qty: number, rate: number, total: number }[] = [];
-    for (const hw of item.hardwareItems) {
+    for (const hw of item.hardwareItems ?? []) {
         const qtyPerUnit = Number(hw.qtyPerShutter) || 0;
-        let unitsPerWindow = 0;
-        if (hw.unit === 'per_window') {
-            unitsPerWindow = 1;
-        } else if (hw.unit === 'per_shutter_or_door') {
-             if (windowType === WindowType.VENTILATOR) {
-                const doorCells = ventilatorGrid.flat().filter(c => c.type === 'door').length;
-                const louverCells = ventilatorGrid.flat().filter(c => c.type === 'louvers').length;
-                unitsPerWindow = hw.name.toLowerCase().includes('louver') ? louverCells : doorCells;
-            } else {
-                 switch(windowType) {
-                    case WindowType.SLIDING: unitsPerWindow = shutterConfig === '2G' ? 2 : shutterConfig === '4G' ? 4 : 3; break;
-                    case WindowType.CASEMENT: unitsPerWindow = doorPositions.length; break;
-                    case WindowType.GLASS_PARTITION: unitsPerWindow = config.partitionPanels.types.filter(t => t.type !== 'fixed').length; break;
-                }
-            }
-        }
+        const unitsPerWindow = getQuotationHardwareUnitMultiplier(config, item.hardwareItems ?? [], hw);
         const totalQtyForItem = qtyPerUnit * unitsPerWindow * quantity;
         if (totalQtyForItem > 0) {
             hardwareDetails.push({
@@ -1019,8 +1250,22 @@ const getItemDetails = (item: QuotationItem) => {
         }
     }
 
-    const relevantHardware = item.hardwareItems.filter(hw => hw.name.toLowerCase().includes('lock'));
+    // Locks shown next to the elevation. Skip any item whose quantity ends up
+    // zero for this window (handles mesh-lock on non-mesh sliding, friction-
+    // stay-suppressed door holders/butt hinges, etc.).
+    const hasMeshShutters =
+      config.windowType === WindowType.SLIDING &&
+      (config.shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH ||
+        config.shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH);
 
+    const relevantHardware = (item.hardwareItems ?? []).filter((hw) => {
+      const name = (hw?.name || '').toLowerCase();
+      if (!name.includes('lock')) return false;
+      if (name.includes('mesh') && !hasMeshShutters) return false;
+      const multiplier = getQuotationHardwareUnitMultiplier(config, item.hardwareItems ?? [], hw);
+      const qtyPerUnit = Number(hw.qtyPerShutter) || 0;
+      return qtyPerUnit > 0 && multiplier > 0;
+    });
 
     return { panelCounts, hardwareDetails, relevantHardware };
 }
@@ -1055,15 +1300,61 @@ const getColorName = (item: QuotationItem) => {
 
 export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, items, settings, setSettings }) => {
     
+  const customer = settings.customer ?? {
+    name: '',
+    address: '',
+    contactPerson: '',
+    email: '',
+    website: '',
+    gstNumber: '',
+    architectName: '',
+  };
+
   const printContainerRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isArchitecturalMode, setIsArchitecturalMode] = useState(false);
-
-  if (!isOpen) return null;
+  const isLikelyMobile = useMemo(() => {
+    try {
+      const ua = typeof navigator !== 'undefined' ? (navigator.userAgent || '') : '';
+      const coarsePointer =
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(pointer: coarse)').matches;
+      return /android|iphone|ipad|ipod|mobile/i.test(ua) || coarsePointer;
+    } catch {
+      return false;
+    }
+  }, []);
 
   const quoteDate = useMemo(() => new Date().toLocaleDateString('en-GB'), []);
   const quoteNumber = useMemo(() => `WM-${Date.now().toString().slice(-6)}`, []);
   const pdfDateStamp = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const makingChargePerSqFt = Number(settings.materialRates?.makingChargePerSqFt) || 120;
+  const resolvedMaterialRates = useMemo((): MaterialRateSettings => {
+    const r = settings.materialRates;
+    return {
+      ...DEFAULT_MATERIAL_RATES,
+      ...(r || {}),
+      meshShutterOptions: {
+        ...DEFAULT_MATERIAL_RATES.meshShutterOptions,
+        ...(r?.meshShutterOptions || {}),
+      },
+      powderCoatingPerRft: {
+        ...DEFAULT_MATERIAL_RATES.powderCoatingPerRft,
+        ...(r?.powderCoatingPerRft || {}),
+      },
+      glassPerSqFt: {
+        clear: { ...DEFAULT_MATERIAL_RATES.glassPerSqFt.clear, ...(r?.glassPerSqFt?.clear || {}) },
+        laminated: { ...DEFAULT_MATERIAL_RATES.glassPerSqFt.laminated, ...(r?.glassPerSqFt?.laminated || {}) },
+        dgu: { ...DEFAULT_MATERIAL_RATES.glassPerSqFt.dgu, ...(r?.glassPerSqFt?.dgu || {}) },
+      },
+      profit: { ...DEFAULT_MATERIAL_RATES.profit, ...(r?.profit || {}) },
+    };
+  }, [settings.materialRates]);
+  const materialCostSummary = useMemo(
+    () => calculateMaterialCostSummary(items, resolvedMaterialRates, makingChargePerSqFt),
+    [items, resolvedMaterialRates, makingChargePerSqFt]
+  );
   
   const subTotal = items.reduce((total, item) => {
     const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
@@ -1074,80 +1365,112 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
     return total + baseCost + totalHardwareCost;
   }, 0);
 
-  const discountAmount = settings.financials.discountType === 'percentage' 
-    ? subTotal * (Number(settings.financials.discount) / 100) 
-    : Number(settings.financials.discount);
+  const rawDiscountAmount = getRawDiscountAmount(subTotal, settings);
+  const profitBeforeDiscount = materialCostSummary.totals.profitCost;
+  const maxDiscountAllowed = Math.max(0, profitBeforeDiscount * 0.5);
+  const discountAmount = Math.min(rawDiscountAmount, maxDiscountAllowed);
+  const profitAfterDiscount = profitBeforeDiscount - discountAmount;
+  const preProfitTotal = Math.max(materialCostSummary.totals.totalCost - profitBeforeDiscount, 0);
+  const effectiveProfitPct = preProfitTotal > 0 ? (profitAfterDiscount / preProfitTotal) * 100 : 0;
+  const profitSafety = getProfitSafetyInfo(effectiveProfitPct, profitAfterDiscount);
+  const makingChargeMin = getMinimumMakingChargeForItems(items);
+  const makingChargeBelowMin = makingChargeMin > 0 && makingChargePerSqFt < makingChargeMin;
   
   const totalAfterDiscount = subTotal - discountAmount;
-  const gstAmount = totalAfterDiscount * (Number(settings.financials.gstPercentage) / 100);
+  const gstAmount = totalAfterDiscount * (Number(settings.financials?.gstPercentage ?? 0) / 100);
   const grandTotal = totalAfterDiscount + gstAmount;
 
   const handleExportPdf = () => {
     const element = printContainerRef.current?.querySelector<HTMLElement>('.a4-page');
-    if (!element || isExporting) {
-        return;
+    if (!element || isExporting) return;
+
+    try {
+      setIsExporting(true);
+      element.classList.add('pdf-export-mode');
+      const renderScale = isLikelyMobile ? 1 : 1.25;
+      const opt = {
+          margin: [8, 8, 8, 8] as [number, number, number, number],
+          filename: quotationPdfFilename(customer.name, pdfDateStamp),
+          image: { type: 'jpeg' as const, quality: 0.9 },
+          html2canvas: {
+              scale: renderScale,
+              logging: false,
+              useCORS: true,
+              backgroundColor: '#ffffff',
+              scrollX: 0,
+              scrollY: 0,
+          },
+          jsPDF: {
+              unit: 'mm',
+              format: 'a4',
+              orientation: 'portrait' as const,
+              compress: true,
+          },
+          pagebreak: { mode: ['css', 'legacy'] as ('css' | 'legacy' | 'avoid-all')[] },
+      };
+
+      setTimeout(() => {
+        import('html2pdf.js').then(({ default: html2pdf }) => {
+            const worker = html2pdf().from(element).set(opt);
+            worker
+                .toPdf()
+                .get('pdf')
+                .then((pdf: any) => {
+                    // CSS counter(pages) doesn't work with html2canvas-based exports
+                    // (always shows "of 0"). Stamp real page numbers via jsPDF.
+                    try {
+                        const totalPages = pdf.internal.getNumberOfPages();
+                        const pageW = pdf.internal.pageSize.getWidth();
+                        const pageH = pdf.internal.pageSize.getHeight();
+                        pdf.setFont('helvetica', 'normal');
+                        pdf.setFontSize(8);
+                        pdf.setTextColor(110);
+                        for (let i = 1; i <= totalPages; i++) {
+                            pdf.setPage(i);
+                            // Cover the leftover "Page 1 of 0" badge stamped by the
+                            // HTML footer (small white rectangle at bottom-right).
+                            pdf.setFillColor(255, 255, 255);
+                            pdf.rect(pageW - 40, pageH - 12, 35, 8, 'F');
+                            pdf.setTextColor(110);
+                            pdf.text(`Page ${i} of ${totalPages}`, pageW - 8, pageH - 6, { align: 'right' });
+                        }
+                    } catch (stampErr) {
+                        console.warn('Page-number stamp skipped:', stampErr);
+                    }
+                })
+                .save()
+                .then(() => {
+                    setIsExporting(false);
+                    element.classList.remove('pdf-export-mode');
+                })
+                .catch((err: any) => {
+                    console.error("PDF export failed", err);
+                    setIsExporting(false);
+                    element.classList.remove('pdf-export-mode');
+                    alert("Sorry, there was an error exporting the PDF.");
+                });
+        }).catch((err: any) => {
+          console.error('Failed to load html2pdf:', err);
+          setIsExporting(false);
+          element.classList.remove('pdf-export-mode');
+          alert('Sorry, there was an error exporting the PDF.');
+        });
+      }, 20);
+    } catch (err: any) {
+      console.error('Unexpected PDF export error:', err);
+      setIsExporting(false);
+      element.classList.remove('pdf-export-mode');
+      alert('Sorry, there was an error exporting the PDF.');
     }
-
-    setIsExporting(true);
-    element.classList.add('pdf-export-mode');
-    
-    const opt = {
-        margin: [8, 8, 8, 8] as [number, number, number, number],
-        filename: quotationPdfFilename(settings.customer.name, pdfDateStamp),
-        image: { type: 'jpeg' as const, quality: 0.95 },
-        html2canvas: {
-            scale: 2,
-            logging: false,
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: '#ffffff',
-            letterRendering: true,
-            scrollX: 0,
-            scrollY: 0,
-        },
-        jsPDF: {
-            unit: 'mm',
-            format: 'a4',
-            orientation: 'portrait' as const,
-            compress: true,
-        },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] as ('css' | 'legacy' | 'avoid-all')[] },
-    };
-
-    import('html2pdf.js').then(({ default: html2pdf }) => {
-        html2pdf()
-            .from(element)
-            .set(opt)
-            .toPdf()
-            .get('pdf')
-            .then((pdf: any) => {
-                const totalPages = pdf.internal.getNumberOfPages();
-                const pageWidth = pdf.internal.pageSize.getWidth();
-                const pageHeight = pdf.internal.pageSize.getHeight();
-                pdf.setFontSize(8);
-                pdf.setTextColor(100);
-                for (let i = 1; i <= totalPages; i++) {
-                    pdf.setPage(i);
-                    pdf.text(`Page ${i} of ${totalPages}`, pageWidth - 10, pageHeight - 6, { align: 'right' });
-                }
-            })
-            .save()
-            .then(() => {
-                setIsExporting(false);
-                element.classList.remove('pdf-export-mode');
-            })
-            .catch((err: any) => {
-                console.error("PDF export failed", err);
-                setIsExporting(false);
-                element.classList.remove('pdf-export-mode');
-                alert("Sorry, there was an error exporting the PDF.");
-            });
-    });
   };
   
   const handlePrint = () => {
+    if (isLikelyMobile || typeof window.print !== 'function') {
+      handleExportPdf();
+      return;
+    }
     const prevTitle = document.title;
-    document.title = printDocumentTitleForQuotation(settings.customer.name);
+    document.title = printDocumentTitleForQuotation(customer.name);
     let finished = false;
     const finish = () => {
       if (finished) return;
@@ -1161,6 +1484,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
     window.print();
   };
 
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-slate-900 z-50 flex flex-col print-preview-modal">
@@ -1183,7 +1507,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                 <Button onClick={handleExportPdf} variant="secondary" disabled={isExporting}>
                     {isExporting ? 'Exporting...' : <><DownloadIcon className="w-5 h-5 mr-2"/> Export PDF</>}
                 </Button>
-                <Button onClick={handlePrint}><PrinterIcon className="w-5 h-5 mr-2"/> Print</Button>
+                <Button onClick={handlePrint}><PrinterIcon className="w-5 h-5 mr-2"/>{isLikelyMobile ? 'Download/Print PDF' : 'Print'}</Button>
                 <Button onClick={onClose} variant="secondary"><XMarkIcon className="w-5 h-5 mr-2"/> Close</Button>
             </div>
         </div>
@@ -1203,8 +1527,8 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         id="architect-name"
                         name="architect-name"
                         label="Architect's Name"
-                        value={settings.customer.architectName || ''}
-                        onChange={e => setSettings({ ...settings, customer: { ...settings.customer, architectName: e.target.value }})}
+                        value={customer.architectName || ''}
+                        onChange={e => setSettings({ ...settings, customer: { ...customer, architectName: e.target.value }})}
                         placeholder="Enter Architect's Name"
                         className="!py-1"
                     />
@@ -1247,28 +1571,28 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                     <div className="flex justify-between text-xs mt-4">
                         <div className="bg-gray-100 p-2 rounded w-full">
                             <h3 className="font-bold mb-1">To:</h3>
-                            <p className="font-semibold">{settings.customer.name}</p>
-                            <p className="whitespace-pre-wrap">{settings.customer.address}</p>
-                            <p><strong>Attn:</strong> {settings.customer.contactPerson}</p>
-                            {settings.customer.email ? (
+                            <p className="font-semibold">{customer.name}</p>
+                            <p className="whitespace-pre-wrap">{customer.address}</p>
+                            <p><strong>Attn:</strong> {customer.contactPerson}</p>
+                            {customer.email ? (
                                 <p>
                                     <strong>Email:</strong>{' '}
-                                    <a href={`mailto:${settings.customer.email}`} className="underline">{settings.customer.email}</a>
+                                    <a href={`mailto:${customer.email}`} className="underline">{customer.email}</a>
                                 </p>
                             ) : null}
-                            {settings.customer.website ? (
+                            {customer.website ? (
                                 <p>
                                     <strong>Website:</strong>{' '}
-                                    <a href={normalizeWebsiteUrl(settings.customer.website)} target="_blank" rel="noreferrer" className="underline">
-                                        {settings.customer.website}
+                                    <a href={normalizeWebsiteUrl(customer.website)} target="_blank" rel="noreferrer" className="underline">
+                                        {customer.website}
                                     </a>
                                 </p>
                             ) : null}
-                            {settings.customer.gstNumber ? (
-                                <p><strong>GSTIN:</strong> {(settings.customer.gstNumber || '').toUpperCase()}</p>
+                            {customer.gstNumber ? (
+                                <p><strong>GSTIN:</strong> {(customer.gstNumber || '').toUpperCase()}</p>
                             ) : null}
                             <div className="show-for-arch mt-1">
-                                <p><strong>Architect:</strong> {settings.customer.architectName || 'N/A'}</p>
+                                <p><strong>Architect:</strong> {customer.architectName || 'N/A'}</p>
                             </div>
                         </div>
                     </div>
@@ -1302,23 +1626,24 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                     
                                     let isFrameless = false;
                                     if (item.config.windowType === WindowType.MIRROR) {
-                                        isFrameless = item.config.mirrorConfig.isFrameless;
+                                        isFrameless = Boolean(item.config.mirrorConfig?.isFrameless);
                                     } else if (item.config.windowType === WindowType.GLASS_PARTITION) {
-                                        const { partitionPanels } = item.config;
-                                        // A partition is frameless if it has no top/bottom channels AND no individual panels are framed.
-                                        // Hinged panels are always considered framed.
-                                        const hasFramedPanels = partitionPanels.types.some(p => p.type === 'hinged' || p.framing === 'full');
-                                        if (!partitionPanels.hasTopChannel && !hasFramedPanels) {
+                                        const partitionPanels = item.config.partitionPanels;
+                                        const types = partitionPanels?.types ?? [];
+                                        const hasFramedPanels = types.some(p => p.type === 'hinged' || p.framing === 'full');
+                                        if (partitionPanels && !partitionPanels.hasTopChannel && !hasFramedPanels) {
                                             isFrameless = true;
                                         }
                                     }
 
                                     return (
-                                        <tr key={item.id} className="border-b border-gray-300 print-item">
+                                        <tr key={item.id} className="border-b border-gray-300 print-item" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                                             <td className="p-2 align-top text-center">{index + 1}</td>
                                             
                                             <td className="p-2 align-top w-[25%]">
-                                                <PrintableWindow config={item.config} />
+                                                <div style={{ paddingRight: 24, paddingBottom: 16 }}>
+                                                    <PrintableWindow config={item.config} />
+                                                </div>
                                             </td>
                                             
                                             <td className="p-2 align-top">
@@ -1357,6 +1682,17 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                     </div>
 
                     <div className="print-summary final-summary-page" style={{breakInside: 'avoid'}}>
+                        <div className={`text-xs p-2 border rounded mb-2 ${profitSafety.colorClass}`}>
+                            <strong className={profitSafety.textClass}>Profit Safety: {profitSafety.label.toUpperCase()}</strong>
+                            <span className="ml-2">({effectiveProfitPct.toFixed(2)}% after discount)</span>
+                            <span className="ml-3">Discount cap: ₹{Math.round(maxDiscountAllowed).toLocaleString('en-IN')}</span>
+                        </div>
+                        {makingChargeMin > 0 && (
+                          <div className={`text-xs p-2 border rounded mb-2 ${makingChargeBelowMin ? 'bg-red-100 border-red-300 text-red-700' : 'bg-emerald-100 border-emerald-300 text-emerald-700'}`}>
+                            Making charge minimum for selected window types: ₹{makingChargeMin}/sq ft
+                            {makingChargeBelowMin ? ` (currently ₹${makingChargePerSqFt}/sq ft)` : ' (ok)'}
+                          </div>
+                        )}
                         <div className="flex justify-end mt-4 hide-for-arch">
                             <div className="w-2/5 text-xs">
                                 <table className="w-full">
@@ -1366,7 +1702,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                             <td className="py-1 text-right font-semibold">₹{subTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                         </tr>
                                         <tr className="border-b border-gray-300">
-                                            <td className="py-1 pr-4">Discount ({settings.financials.discountType === 'percentage' ? `${settings.financials.discount}%` : 'Fixed'})</td>
+                                            <td className="py-1 pr-4">Discount ({settings.financials?.discountType === 'percentage' ? `${settings.financials?.discount ?? 0}%` : 'Fixed'})</td>
                                             <td className="py-1 text-right font-semibold">(-) ₹{discountAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                         </tr>
                                         <tr className="border-b-2 border-black">
@@ -1374,7 +1710,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                             <td className="py-1 text-right font-bold">₹{totalAfterDiscount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                         </tr>
                                         <tr className="border-b border-gray-300">
-                                            <td className="py-1 pr-4">GST @ {settings.financials.gstPercentage}%</td>
+                                            <td className="py-1 pr-4">GST @ {settings.financials?.gstPercentage ?? 0}%</td>
                                             <td className="py-1 text-right font-semibold">(+) ₹{gstAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                         </tr>
                                         <tr className="border-t-2 border-black bg-gray-200">
