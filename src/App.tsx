@@ -46,6 +46,24 @@ interface BeforeInstallPromptEvent extends Event {
 
 type ConfigState = Omit<WindowConfig, 'series'>;
 
+const SQFT_PER_SQMT = 1000000 / 92903.04;
+
+const buildSyncedVentilatorGrid = (
+  existing: VentilatorCell[][],
+  rows: number,
+  cols: number
+): VentilatorCell[][] => {
+  const safeRows = Math.max(1, Math.floor(Number(rows) || 1));
+  const safeCols = Math.max(1, Math.floor(Number(cols) || 1));
+
+  return Array.from({ length: safeRows }, (_, r) =>
+    Array.from({ length: safeCols }, (_, c) => {
+      const cell = existing[r]?.[c];
+      return cell ? { ...cell } : { type: 'glass' };
+    })
+  );
+};
+
 type ConfigAction =
   | { type: 'SET_FIELD'; field: keyof ConfigState; payload: any }
   | { type: 'ADD_FIXED_PANEL'; payload: FixedPanelPosition }
@@ -823,7 +841,12 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             const { row, col, side } = action.payload;
             const [configKey, config] = getSideConfig(side);
             const sequence: VentilatorCellType[] = ['glass', 'louvers', 'door', 'exhaust_fan'];
-            const newGrid = config.ventilatorGrid.map(r => r.slice());
+            const newGrid = buildSyncedVentilatorGrid(
+                config.ventilatorGrid,
+                config.horizontalDividers.length + 1,
+                config.verticalDividers.length + 1
+            );
+            if (!newGrid[row]?.[col]) return state;
             const currentType = newGrid[row][col].type;
             const currentIndex = sequence.indexOf(currentType);
             const nextType = sequence[(currentIndex + 1) % sequence.length];
@@ -841,7 +864,13 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             const [configKey, config] = getSideConfig(side);
             const newH = Array.from({ length: rows - 1 }).map((_, i) => (i + 1) / rows);
             const newV = Array.from({ length: cols - 1 }).map((_, i) => (i + 1) / cols);
-            const newConfig = { ...config, horizontalDividers: newH, verticalDividers: newV };
+            const newConfig = {
+                ...config,
+                horizontalDividers: newH,
+                verticalDividers: newV,
+                ventilatorGrid: buildSyncedVentilatorGrid(config.ventilatorGrid, rows, cols),
+                doorPositions: config.doorPositions.filter((p) => p.row < rows && p.col < cols),
+            };
             if (configKey) {
                 return { ...state, [configKey]: newConfig };
             }
@@ -904,7 +933,12 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
                 case 'ventilator': {
                     const row = parseInt(parts[1], 10);
                     const col = parseInt(parts[2], 10);
-                    const newGrid = config.ventilatorGrid.map(r => r.slice());
+                    const newGrid = buildSyncedVentilatorGrid(
+                        config.ventilatorGrid,
+                        config.horizontalDividers.length + 1,
+                        config.verticalDividers.length + 1
+                    );
+                    if (!newGrid[row]?.[col]) break;
                     if (newConfig) {
                         newGrid[row][col] = { ...newGrid[row][col], handle: newConfig };
                     } else if (newGrid[row][col]) {
@@ -1535,7 +1569,8 @@ const App: React.FC = () => {
       if (item.config.windowType !== WindowType.SLIDING) return item;
       const base = summary.byItemId[item.id];
       if (!base) return item;
-      const safeRate = Number(base.basicRatePerSqFt) || 0;
+      const ratePerSqFt = Number(base.basicRatePerSqFt) || 0;
+      const safeRate = item.areaType === AreaType.SQMT ? ratePerSqFt * SQFT_PER_SQMT : ratePerSqFt;
       if (item.rate !== safeRate || item.hardwareCost !== 0) {
         changed = true;
         return { ...item, rate: safeRate, hardwareCost: 0 };
@@ -1930,14 +1965,7 @@ const App: React.FC = () => {
 
       const gridRows = sideConfig.horizontalDividers.length + 1;
       const gridCols = sideConfig.verticalDividers.length + 1;
-      const newGrid: VentilatorCell[][] = Array.from({ length: gridRows }, () => 
-          Array.from({ length: gridCols }, () => ({ type: 'glass' }))
-      );
-      for (let r = 0; r < Math.min(gridRows, sideConfig.ventilatorGrid.length); r++) {
-          for (let c = 0; c < Math.min(gridCols, sideConfig.ventilatorGrid[r]?.length || 0); c++) {
-              newGrid[r][c] = sideConfig.ventilatorGrid[r][c];
-          }
-      }
+      const newGrid = buildSyncedVentilatorGrid(sideConfig.ventilatorGrid, gridRows, gridCols);
       dispatch({ type: 'SET_SIDE_CONFIG', payload: { side, config: { ventilatorGrid: newGrid } } });
     };
 
@@ -1947,12 +1975,7 @@ const App: React.FC = () => {
     } else if ([WindowType.CASEMENT, WindowType.VENTILATOR].includes(windowType)) {
         const gridRows = windowConfigState.horizontalDividers.length + 1;
         const gridCols = windowConfigState.verticalDividers.length + 1;
-        const newGrid: VentilatorCell[][] = Array.from({ length: gridRows }, () => Array.from({ length: gridCols }, () => ({ type: 'glass' })));
-        for (let r = 0; r < Math.min(gridRows, windowConfigState.ventilatorGrid.length); r++) {
-            for (let c = 0; c < Math.min(gridCols, windowConfigState.ventilatorGrid[r]?.length || 0); c++) {
-                newGrid[r][c] = windowConfigState.ventilatorGrid[r][c];
-            }
-        }
+        const newGrid = buildSyncedVentilatorGrid(windowConfigState.ventilatorGrid, gridRows, gridCols);
         dispatch({ type: 'SET_FIELD', field: 'ventilatorGrid', payload: newGrid });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

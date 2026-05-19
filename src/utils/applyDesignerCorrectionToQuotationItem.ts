@@ -1,5 +1,4 @@
 import type { ProfileSeries, QuotationItem, SavedColor, WindowConfig } from '../types';
-import { WindowType } from '../types';
 import { computeHardwareCostForQuotation } from './quotationHardwareCost';
 
 /**
@@ -29,10 +28,6 @@ export function applyDesignerCorrectionToQuotationItem(
   next.config.dguGlassConfig = JSON.parse(JSON.stringify(d.dguGlassConfig));
   next.config.profileColor = d.profileColor;
   next.config.profileTexture = d.profileTexture;
-
-  if (d.windowType === WindowType.GLASS_PARTITION) {
-    next.config.partitionPanels = JSON.parse(JSON.stringify(d.partitionPanels));
-  }
 
   next.hardwareItems = JSON.parse(JSON.stringify(params.designerSeries.hardwareItems));
   next.hardwareCost = computeHardwareCostForQuotation(next.config, next.hardwareItems);

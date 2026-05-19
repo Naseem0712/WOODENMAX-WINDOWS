@@ -1241,21 +1241,6 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   }, [numWidth, numHeight]);
 
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el || numWidth <= 0 || numHeight <= 0) return;
-
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      setContainerSize({ w: r.width, h: r.height });
-    };
-
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [numWidth, numHeight]);
-
-  useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
         if (e.ctrlKey) {
             e.preventDefault();

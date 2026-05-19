@@ -1215,7 +1215,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                 </div>
                 {discountWasCapped && (
                   <div className="text-right text-xs text-amber-300">
-                    Discount capped to 50% of profit: max ₹{Math.round(maxDiscountAllowed).toLocaleString('en-IN')}
+                    Discount capped to 50% of profit: max ₹{Math.round(maxDiscountAmount).toLocaleString('en-IN')}
                   </div>
                 )}
                 <div className="flex gap-2 items-end">
