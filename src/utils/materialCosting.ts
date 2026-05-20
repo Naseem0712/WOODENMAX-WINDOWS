@@ -282,16 +282,22 @@ export function calculateMaterialCostSummary(
         const n = (hw.name || '').toLowerCase();
         return n.includes('mesh') && n.includes('handle');
       });
+      const hasMeshShutters = meshShutterCount > 0;
       const perWindowCost = (item.hardwareItems ?? []).reduce((sum, hw) => {
         const itemQty = Number(hw.qtyPerShutter) || 0;
         const itemRate = Number(hw.rate) || 0;
         const name = (hw.name || '').toLowerCase();
+        const isMeshHardware = name.includes('mesh') || name.includes('mosquito') || name.includes('net ');
         let units = 0;
         if (hw.unit === 'per_window') {
           units = 1;
+        } else if (isMeshHardware && !hasMeshShutters) {
+          units = 0;
         } else if (name.includes('mesh lock')) {
           units = operableMeshCount;
         } else if (name.includes('mesh') && name.includes('handle')) {
+          units = operableMeshCount;
+        } else if (isMeshHardware) {
           units = operableMeshCount;
         } else if (name.includes('handle')) {
           units = hasMeshHandleItem ? operableGlassCount : operableTotalCount;
