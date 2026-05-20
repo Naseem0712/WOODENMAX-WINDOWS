@@ -19,7 +19,7 @@ import { TrashIcon } from './icons/TrashIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { sanitizeFilenameSegment } from '../utils/pdfFilename';
 import { autoContinueTermsSerial } from '../utils/quotationText';
-import { getMinimumMakingChargeForItems, getProfitSafetyInfo, getRawDiscountAmount } from '../utils/pricingSafety';
+import { getRawDiscountAmount } from '../utils/pricingSafety';
 import { SpringScrollArea } from './ui/SpringScrollArea';
 interface QuotationListModalProps {
   isOpen: boolean;
@@ -222,22 +222,6 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
   const safeDiscountAmount = Math.min(Math.max(discountAmount, 0), maxDiscountAmount);
   const profitAfterDiscount = profitBeforeDiscount - safeDiscountAmount;
   const discountWasCapped = Math.abs((discountAmount || 0) - safeDiscountAmount) > 0.01;
-  const baseCostBeforeProfit = Math.max(0, materialCostSummary.totals.totalCost - profitBeforeDiscount);
-  const effectiveProfitPercent = baseCostBeforeProfit > 0 ? (profitAfterDiscount / baseCostBeforeProfit) * 100 : 0;
-  const profitHealth =
-    effectiveProfitPercent >= 15
-      ? { label: 'Safe', toneClass: 'text-emerald-300', badgeClass: 'bg-emerald-600/20 border border-emerald-500/40' }
-      : effectiveProfitPercent >= 12
-        ? { label: 'Risky', toneClass: 'text-amber-300', badgeClass: 'bg-amber-500/20 border border-amber-400/40' }
-        : effectiveProfitPercent >= 10
-          ? { label: 'Danger', toneClass: 'text-orange-300', badgeClass: 'bg-orange-500/20 border border-orange-400/40' }
-          : { label: 'Critical', toneClass: 'text-red-300', badgeClass: 'bg-red-600/20 border border-red-500/40' };
-
-  const profitSafety = getProfitSafetyInfo(effectiveProfitPercent, profitAfterDiscount);
-
-  const makingChargeMin = getMinimumMakingChargeForItems(items);
-  const makingChargeCurrent = Number(settings.materialRates?.makingChargePerSqFt) || 0;
-  const makingChargeBelowMin = makingChargeMin > 0 && makingChargeCurrent < makingChargeMin;
 
   const totalAfterDiscount = subTotal - safeDiscountAmount;
   const gstAmount = totalAfterDiscount * (Number(fin?.gstPercentage ?? 0) / 100);
@@ -842,18 +826,6 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
               </div>
 
               <Section title="Material Rates (Editable Anytime)">
-                <div className={`rounded-md border p-2 text-xs ${profitSafety.colorClass}`}>
-                  <span className={`font-semibold uppercase ${profitSafety.textClass}`}>Profit safety: {profitSafety.label}</span>
-                  <span className="text-slate-200 ml-2">
-                    ({effectiveProfitPct.toFixed(2)}% after discount)
-                  </span>
-                </div>
-                {makingChargeMin > 0 && (
-                  <div className={`rounded-md border p-2 text-xs ${makingChargeBelowMin ? 'bg-red-900/30 border-red-500 text-red-200' : 'bg-emerald-900/20 border-emerald-500 text-emerald-200'}`}>
-                    Making charge recommended minimum for current windows: ₹{makingChargeMin}/sq ft
-                    {makingChargeBelowMin ? ' (currently below minimum)' : ' (ok)'}
-                  </div>
-                )}
                 <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
                   <Input
                     id="modal-rate-making-charge"
@@ -902,17 +874,6 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                     }
                     unit={settings.materialRates.profit.mode === 'percentage' ? '%' : '₹ / sq ft'}
                   />
-                  <div className="rounded-md bg-slate-900/70 border border-slate-600 px-3 py-2">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-400">Profit Health</p>
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <span className={`px-2 py-1 rounded text-xs font-semibold ${profitHealth.badgeClass} ${profitHealth.toneClass}`}>
-                        {profitHealth.label}
-                      </span>
-                      <span className={`text-sm font-semibold ${profitHealth.toneClass}`}>
-                        {effectiveProfitPercent.toFixed(2)}%
-                      </span>
-                    </div>
-                  </div>
                   <Input
                     id="modal-rate-wastage-cartage"
                     name="modal-rate-wastage-cartage"
@@ -1215,7 +1176,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                 </div>
                 {discountWasCapped && (
                   <div className="text-right text-xs text-amber-300">
-                    Discount capped to 50% of profit: max ₹{Math.round(maxDiscountAllowed).toLocaleString('en-IN')}
+                    Discount capped to 50% of profit: max ₹{Math.round(maxDiscountAmount).toLocaleString('en-IN')}
                   </div>
                 )}
                 <div className="flex gap-2 items-end">

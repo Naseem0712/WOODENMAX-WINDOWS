@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useId } from 'react';
+import { createPortal } from 'react-dom';
 // FIX: Corrected import path for types from './types' to '../types'.
 import type { WindowConfig, HandleConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType, MirrorShape } from '../types';
@@ -27,7 +28,6 @@ import {
 import { effectiveFourGlassMeetingMm } from '../utils/slidingGeometry';
 import { getFixedPanelVerticalDivisionsMm } from '../utils/fixedPanelDivisions';
 import { resolveFoldFrameEdges } from '../utils/foldDoorFrame';
-import { getWindowPanelSizeRows } from '../utils/windowPanelSizeList';
 import { FoldDoorOpeningGraphic } from './FoldDoorOpeningVisual';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
@@ -1196,6 +1196,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   const [zoom, setZoom] = useState(1);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
   const [isExporting, setIsExporting] = useState(false);
+  const [viewportEl, setViewportEl] = useState<HTMLElement | null>(null);
 
   const numWidth = windowType === WindowType.CORNER 
     ? (Number(config.leftWidth) || 0) + (Number(config.rightWidth) || 0) + (Number(config.cornerPostWidth) || 0)
@@ -1207,11 +1208,6 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     outerFrame: Number(series.dimensions.outerFrame) || 0, outerFrameVertical: Number(series.dimensions.outerFrameVertical) || 0, fixedFrame: Number(series.dimensions.fixedFrame) || 0, shutterHandle: Number(series.dimensions.shutterHandle) || 0, shutterInterlock: Number(series.dimensions.shutterInterlock) || 0, shutterTop: Number(series.dimensions.shutterTop) || 0, shutterBottom: Number(series.dimensions.shutterBottom) || 0, shutterMeeting: Number(series.dimensions.shutterMeeting) || 0, casementShutter: Number(series.dimensions.casementShutter) || 0, mullion: Number(series.dimensions.mullion) || 0, louverBlade: Number(series.dimensions.louverBlade) || 0, topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0
   }), [series.dimensions]);
 
-  const panelSizeRows = useMemo(
-    () => getWindowPanelSizeRows(config, series.dimensions),
-    [config, series.dimensions]
-  );
-
   useLayoutEffect(() => {
     const pickTarget = () => fitViewportRef?.current ?? containerRef.current;
     const measure = () => {
@@ -1219,6 +1215,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
       if (!el) return;
       setContainerSize({ w: el.clientWidth, h: el.clientHeight });
     };
+    setViewportEl(fitViewportRef?.current ?? null);
     measure();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
     const attach = () => {
@@ -1281,14 +1278,13 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
       containerSize.h > 80
         ? containerSize.h
         : Math.max(240, fitViewportRef?.current?.clientHeight || vpH * 0.52);
-    /** Room for dimension labels + panel size list + padding so drawing + list fit in one viewport band. */
-    const listReservePx =
-      panelSizeRows.length > 0 ? Math.min(280, 72 + panelSizeRows.length * 20) : 72;
+    /** Room for dimension labels + padding so the drawing fits in one viewport band. */
+    const labelReservePx = 72;
     /** Quotation bar is outside the scrollport on desktop; fitViewportRef height is already canvas-only. */
-    const chDraw = Math.max(140, vhObserved * 0.94 - listReservePx);
+    const chDraw = Math.max(140, vhObserved * 0.94 - labelReservePx);
     const fitScale = Math.min((cw * 0.88) / numWidth, (chDraw * 0.86) / numHeight, 10);
     return fitScale * zoom;
-  }, [numWidth, numHeight, zoom, containerSize.w, containerSize.h, panelSizeRows.length, fitViewportRef]);
+  }, [numWidth, numHeight, zoom, containerSize.w, containerSize.h, fitViewportRef]);
 
   const canvasCallbacks = useMemo(() => ({
     onRemoveHorizontalDivider,
@@ -1365,6 +1361,22 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
         });
     };
 
+  const zoomControls = (
+    <div
+      className="pointer-events-none absolute inset-0 z-10 overflow-hidden no-print"
+      aria-hidden={false}
+    >
+      <div
+        className="pointer-events-auto absolute right-4 flex flex-col gap-2 touch-manipulation"
+        style={{ bottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}
+      >
+        <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => setZoom((z) => clamp(z * 1.2, ZOOM_MIN, ZOOM_MAX))} className="w-11 h-11 sm:w-10 sm:h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><PlusIcon className="w-6 h-6"/></button>
+        <button type="button" title="Fit view (reset zoom)" aria-label="Fit view" onClick={() => setZoom(1)} className="w-11 h-11 sm:w-10 sm:h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><ArrowsPointingInIcon className="w-5 h-5"/></button>
+        <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => setZoom((z) => clamp(z / 1.2, ZOOM_MIN, ZOOM_MAX))} className="w-11 h-11 sm:w-10 sm:h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><MinusIcon className="w-6 h-6"/></button>
+      </div>
+    </div>
+  );
+
   if (numWidth <= 0 || numHeight <= 0) {
     return (
       <div className="flex min-h-[200px] w-full items-center justify-center bg-transparent py-10">
@@ -1414,23 +1426,6 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
             ) : (
                 <RenderedWindow config={config} elements={createWindowElements(config, scale, dims, canvasCallbacks)} scale={scale} />
             )}
-            {panelSizeRows.length > 0 && (
-              <div className="mt-5 w-full max-w-2xl border-t border-slate-500/50 pt-3 px-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">
-                  Panel sizes (clear glass / opening, mm)
-                </p>
-                <ul className="space-y-1.5 text-xs text-slate-200 font-mono leading-snug">
-                  {panelSizeRows.map((row, i) => (
-                    <li key={i} className="flex justify-between gap-4 border-b border-slate-700/40 pb-1 last:border-b-0">
-                      <span className="text-slate-300 min-w-0 flex-1">{row.label}</span>
-                      <span className="text-slate-100 shrink-0 tabular-nums">
-                        {row.widthMm > 0 || row.heightMm > 0 ? `${row.widthMm} × ${row.heightMm}` : '—'}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
         </div>
       
       <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 no-print">
@@ -1438,15 +1433,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
             {isExporting ? <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <PhotoIcon className="w-6 h-6"/>}
         </button>
       </div>
-      
-      <div
-        className="absolute right-4 z-[100] flex flex-col gap-2 no-print touch-manipulation"
-        style={{ bottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}
-      >
-         <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => setZoom((z) => clamp(z * 1.2, ZOOM_MIN, ZOOM_MAX))} className="w-11 h-11 sm:w-10 sm:h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><PlusIcon className="w-6 h-6"/></button>
-         <button type="button" title="Fit view (reset zoom)" aria-label="Fit view" onClick={() => setZoom(1)} className="w-11 h-11 sm:w-10 sm:h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><ArrowsPointingInIcon className="w-5 h-5"/></button>
-         <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => setZoom((z) => clamp(z / 1.2, ZOOM_MIN, ZOOM_MAX))} className="w-11 h-11 sm:w-10 sm:h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><MinusIcon className="w-6 h-6"/></button>
-      </div>
+      {viewportEl ? createPortal(zoomControls, viewportEl) : zoomControls}
     </div>
   );
 });

@@ -25,13 +25,13 @@ import {
 } from '../utils/partitionPanelGeometry';
 import { effectiveFourGlassMeetingMm } from '../utils/slidingGeometry';
 import { getFixedPanelVerticalDivisionsMm } from '../utils/fixedPanelDivisions';
-import { getElevationDimensionsMm } from '../utils/elevationDimensions';
+import { getElevationDimensionsMm, type ElevationSegment } from '../utils/elevationDimensions';
 import { getQuotationHardwareUnitMultiplier } from '../utils/quotationHardwareCost';
 import { resolveFoldFrameEdges } from '../utils/foldDoorFrame';
 import { FoldDoorOpeningGraphic } from './FoldDoorOpeningVisual';
 import { autoContinueTermsSerial, normalizeWebsiteUrl } from '../utils/quotationText';
 import { calculateMaterialCostSummary } from '../utils/materialCosting';
-import { getMinimumMakingChargeForItems, getProfitSafetyInfo, getRawDiscountAmount } from '../utils/pricingSafety';
+import { getRawDiscountAmount } from '../utils/pricingSafety';
 import { DEFAULT_MATERIAL_RATES } from '../constants/materialRates';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
@@ -47,6 +47,25 @@ interface PrintPreviewProps {
 }
 
 const mmToPx = (mm: number, scale: number) => Math.round(mm * scale * 100) / 100;
+
+/** True lock hardware for quotation (excludes interlock connector/cap profiles). */
+function isQuotationLockHardware(name: string): boolean {
+  const n = (name || '').toLowerCase();
+  if (!n.includes('lock')) return false;
+  if (n.includes('interlock')) return false;
+  return true;
+}
+
+function isShutterElevationColumn(col: ElevationSegment): boolean {
+  return col.label === 'S' || col.label === 'M';
+}
+
+function formatElevationSizesMm(sizes: number[]): string {
+  const rounded = sizes.map((s) => Math.round(s));
+  if (rounded.length === 0) return '';
+  if (rounded.every((s) => s === rounded[0])) return String(rounded[0]);
+  return rounded.join('  ');
+}
 
 const numWords = {
     a: ['', 'one ', 'two ', 'three ', 'four ', 'five ', 'six ', 'seven ', 'eight ', 'nine ', 'ten ', 'eleven ', 'twelve ', 'thirteen ', 'fourteen ', 'fifteen ', 'sixteen ', 'seventeen ', 'eighteen ', 'nineteen '],
@@ -1004,20 +1023,32 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                 if (!hasMultipleCols && !hasMultipleRows) return null;
                 const colTotal = columns.reduce((s, c) => s + (c.sizeMm || 0), 0) || effectiveWidth;
                 const rowTotal = rows.reduce((s, r) => s + (r.sizeMm || 0), 0) || numHeight;
-                const segStyle: React.CSSProperties = {
+                const dimTextStyle: React.CSSProperties = {
                     fontSize: '5.5pt',
-                    lineHeight: 1,
+                    lineHeight: 1.1,
                     color: '#000',
+                    fontFamily: 'monospace',
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                };
+                const rowSegStyle: React.CSSProperties = {
+                    ...dimTextStyle,
                     border: '0.5px solid #555',
                     boxSizing: 'border-box',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontFamily: 'monospace',
                     padding: '0 1px',
                     overflow: 'hidden',
-                    whiteSpace: 'nowrap',
                 };
+                type ColGroup = { kind: 'shutter' | 'other'; cols: ElevationSegment[] };
+                const colGroups: ColGroup[] = [];
+                for (const col of columns) {
+                    const kind = isShutterElevationColumn(col) ? 'shutter' : 'other';
+                    const last = colGroups[colGroups.length - 1];
+                    if (last && last.kind === kind) last.cols.push(col);
+                    else colGroups.push({ kind, cols: [col] });
+                }
                 return (
                     <>
                         {hasMultipleCols && (
@@ -1027,23 +1058,47 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                     top: '100%',
                                     left: 0,
                                     width: '100%',
-                                    height: 11,
                                     marginTop: 2,
                                     display: 'flex',
                                     flexDirection: 'row',
                                 }}
                             >
-                                {columns.map((c, i) => (
-                                    <div
-                                        key={`col-${i}`}
-                                        style={{
-                                            ...segStyle,
-                                            width: `${((c.sizeMm || 0) / colTotal) * 100}%`,
-                                        }}
-                                    >
-                                        {Math.round(c.sizeMm || 0)}
-                                    </div>
-                                ))}
+                                {colGroups.map((group, gi) => {
+                                    const groupTotal = group.cols.reduce((s, c) => s + (c.sizeMm || 0), 0);
+                                    const widthPct = (groupTotal / colTotal) * 100;
+                                    const sizes = group.cols.map((c) => c.sizeMm || 0);
+                                    if (group.kind === 'shutter') {
+                                        return (
+                                            <div
+                                                key={`col-grp-${gi}`}
+                                                style={{
+                                                    width: `${widthPct}%`,
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'stretch',
+                                                }}
+                                            >
+                                                <div style={{ borderBottom: '0.5px solid #333', marginTop: 1 }} />
+                                                <div style={{ ...dimTextStyle, marginTop: 1 }}>
+                                                    {formatElevationSizesMm(sizes)}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <div
+                                            key={`col-grp-${gi}`}
+                                            style={{
+                                                width: `${widthPct}%`,
+                                                display: 'flex',
+                                                alignItems: 'flex-start',
+                                                justifyContent: 'center',
+                                            }}
+                                        >
+                                            <div style={dimTextStyle}>{formatElevationSizesMm(sizes)}</div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                         {hasMultipleRows && (
@@ -1063,7 +1118,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                     <div
                                         key={`row-${i}`}
                                         style={{
-                                            ...segStyle,
+                                            ...rowSegStyle,
                                             height: `${((r.sizeMm || 0) / rowTotal) * 100}%`,
                                         }}
                                     >
@@ -1259,9 +1314,9 @@ const getItemDetails = (item: QuotationItem) => {
         config.shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH);
 
     const relevantHardware = (item.hardwareItems ?? []).filter((hw) => {
-      const name = (hw?.name || '').toLowerCase();
-      if (!name.includes('lock')) return false;
-      if (name.includes('mesh') && !hasMeshShutters) return false;
+      const name = hw?.name || '';
+      if (!isQuotationLockHardware(name)) return false;
+      if (name.toLowerCase().includes('mesh') && !hasMeshShutters) return false;
       const multiplier = getQuotationHardwareUnitMultiplier(config, item.hardwareItems ?? [], hw);
       const qtyPerUnit = Number(hw.qtyPerShutter) || 0;
       return qtyPerUnit > 0 && multiplier > 0;
@@ -1370,13 +1425,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
   const profitBeforeDiscount = materialCostSummary.totals.profitCost;
   const maxDiscountAllowed = Math.max(0, profitBeforeDiscount * 0.5);
   const discountAmount = Math.min(rawDiscountAmount, maxDiscountAllowed);
-  const profitAfterDiscount = profitBeforeDiscount - discountAmount;
-  const preProfitTotal = Math.max(materialCostSummary.totals.totalCost - profitBeforeDiscount, 0);
-  const effectiveProfitPct = preProfitTotal > 0 ? (profitAfterDiscount / preProfitTotal) * 100 : 0;
-  const profitSafety = getProfitSafetyInfo(effectiveProfitPct, profitAfterDiscount);
-  const makingChargeMin = getMinimumMakingChargeForItems(items);
-  const makingChargeBelowMin = makingChargeMin > 0 && makingChargePerSqFt < makingChargeMin;
-  
+
   const totalAfterDiscount = subTotal - discountAmount;
   const gstAmount = totalAfterDiscount * (Number(settings.financials?.gstPercentage ?? 0) / 100);
   const grandTotal = totalAfterDiscount + gstAmount;
@@ -1696,17 +1745,6 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                     </div>
 
                     <div className="print-summary final-summary-page" style={{breakInside: 'avoid'}}>
-                        <div className={`text-xs p-2 border rounded mb-2 ${profitSafety.colorClass}`}>
-                            <strong className={profitSafety.textClass}>Profit Safety: {profitSafety.label.toUpperCase()}</strong>
-                            <span className="ml-2">({effectiveProfitPct.toFixed(2)}% after discount)</span>
-                            <span className="ml-3">Discount cap: ₹{Math.round(maxDiscountAllowed).toLocaleString('en-IN')}</span>
-                        </div>
-                        {makingChargeMin > 0 && (
-                          <div className={`text-xs p-2 border rounded mb-2 ${makingChargeBelowMin ? 'bg-red-100 border-red-300 text-red-700' : 'bg-emerald-100 border-emerald-300 text-emerald-700'}`}>
-                            Making charge minimum for selected window types: ₹{makingChargeMin}/sq ft
-                            {makingChargeBelowMin ? ` (currently ₹${makingChargePerSqFt}/sq ft)` : ' (ok)'}
-                          </div>
-                        )}
                         <div className="flex justify-end mt-4 hide-for-arch">
                             <div className="w-2/5 text-xs">
                                 <table className="w-full">
