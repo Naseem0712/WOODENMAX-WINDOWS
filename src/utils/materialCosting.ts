@@ -1,4 +1,4 @@
-import type { MaterialRateSettings, ProfileDimensions, QuotationItem } from '../types';
+import type { MaterialRateSettings, ProfileDimensions, QuotationItem, WindowConfig } from '../types';
 import { ShutterConfigType, WindowType } from '../types';
 import { calculateUsageForConfig, packPieces } from './materialCalculator';
 import { computeHardwareCostForQuotation } from './quotationHardwareCost';
@@ -7,6 +7,8 @@ import { resolveSeriesNumeric } from './profileDimensionKeys';
 
 const SQFT_TO_SQMM = 92903.04;
 const MM_TO_FT = 0.00328084;
+/** Float glass: kg per m² per mm thickness (area in mm² × mm × this constant). */
+const GLASS_KG_PER_SQMM_PER_MM = 2.5 / 1_000_000;
 
 type ProfileKey = keyof ProfileDimensions;
 
@@ -42,6 +44,13 @@ export interface MaterialCostPerItem {
   profitCost: number;
   totalCost: number;
   basicRatePerSqFt: number;
+  aluminiumWeightKg: number;
+  glassWeightKg: number;
+  totalWeightKg: number;
+}
+
+export function formatItemWeightKg(kg: number): string {
+  return kg.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export interface MaterialCostSummary {
@@ -120,6 +129,23 @@ const isReinforcementSeries = (item: QuotationItem): boolean => {
   return /reinf|reinforcement/i.test(`${item.config.series.name} ${item.config.series.id}`);
 };
 
+/** Effective glass thickness (mm) for weight — PVB / air gap excluded. */
+export const getGlassEffectiveThicknessMm = (config: WindowConfig): number => {
+  if (config.glassSpecialType === 'laminated' && config.laminatedGlassConfig) {
+    const c = config.laminatedGlassConfig;
+    return (Number(c.glass1Thickness) || 0) + (Number(c.glass2Thickness) || 0);
+  }
+  if (config.glassSpecialType === 'dgu' && config.dguGlassConfig) {
+    const c = config.dguGlassConfig;
+    return (Number(c.glass1Thickness) || 0) + (Number(c.glass2Thickness) || 0);
+  }
+  if (config.customGlassName) {
+    const m = config.customGlassName.match(/(\d+(?:\.\d+)?)\s*mm/i);
+    if (m) return Number(m[1]) || 0;
+  }
+  return Number(config.glassThickness) || 0;
+};
+
 const getGlassRatePerSqFt = (item: QuotationItem, rates: MaterialRateSettings): number => {
   const config = item.config;
   const g = rates.glassPerSqFt;
@@ -189,6 +215,9 @@ const ensureItem = (
       profitCost: 0,
       totalCost: 0,
       basicRatePerSqFt: 0,
+      aluminiumWeightKg: 0,
+      glassWeightKg: 0,
+      totalWeightKg: 0,
     };
   }
   return result[item.id];
@@ -265,8 +294,13 @@ export function calculateMaterialCostSummary(
       });
 
     // Glass cost + making cost per item (area based)
-    const totalGlassAreaSqFt = Array.from(usageSingle.glass.values()).reduce((sum, areaMm2) => sum + areaMm2 / SQFT_TO_SQMM, 0) * qty;
+    const totalGlassAreaMm2 = Array.from(usageSingle.glass.values()).reduce((sum, areaMm2) => sum + areaMm2, 0);
+    const totalGlassAreaSqFt = (totalGlassAreaMm2 / SQFT_TO_SQMM) * qty;
     target.glassCost += totalGlassAreaSqFt * getGlassRatePerSqFt(item, rates);
+    const glassThicknessMm = getGlassEffectiveThicknessMm(item.config);
+    if (glassThicknessMm > 0 && totalGlassAreaMm2 > 0) {
+      target.glassWeightKg += totalGlassAreaMm2 * glassThicknessMm * GLASS_KG_PER_SQMM_PER_MM * qty;
+    }
     target.makingCost += target.areaSqFt * makingChargePerSqFt;
     // `wastageCartage` is set after pools are built — scaled by *actual* bar-end waste
     // (purchased rft vs used rft) so bin-packing / cross-line reuse does not add a
@@ -310,6 +344,7 @@ export function calculateMaterialCostSummary(
         const clipWeightKg = clipPieces * (Number(meshOpts.meshClipWeightKgPerPc) || 0);
         const clipLengthFt = clipPieces * (Number(meshOpts.meshClipLengthFt) || 0);
         target.aluminiumCost += clipWeightKg * rates.aluminiumProfilePerKg;
+        target.aluminiumWeightKg += clipWeightKg;
         target.powderCoatingCost += clipLengthFt * (Number(meshOpts.meshClipPowderRatePerRft) || 0);
       }
     }
@@ -427,6 +462,7 @@ export function calculateMaterialCostSummary(
       const ratio = pool.usedLengthMm > 0 ? contribution.usedLengthMm / pool.usedLengthMm : 0;
       byItemId[contribution.itemId].aluminiumCost += purchasedCost * ratio;
       byItemId[contribution.itemId].powderCoatingCost += purchasedPowderCost * ratio;
+      byItemId[contribution.itemId].aluminiumWeightKg += usedWeightKg * ratio;
     }
   }
 
@@ -455,6 +491,7 @@ export function calculateMaterialCostSummary(
         : subtotalBeforeProfit * ((Number(rates.profit.value) || 0) / 100);
     row.totalCost = subtotalBeforeProfit + row.profitCost;
     row.basicRatePerSqFt = row.areaSqFt > 0 ? row.totalCost / row.areaSqFt : 0;
+    row.totalWeightKg = row.aluminiumWeightKg + row.glassWeightKg;
 
     totals.areaSqFt += row.areaSqFt;
     totals.aluminiumCost += row.aluminiumCost;

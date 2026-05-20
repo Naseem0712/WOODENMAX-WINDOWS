@@ -1,4 +1,11 @@
 import { WindowType } from '../types';
+import { buildRouteJsonLd, type SeoPageKind } from './jsonLd';
+import {
+  SEO_CONTENT_MODIFIED,
+  SEO_PUBLISHER_NAME,
+  SEO_PUBLISHER_URL,
+  SEO_ROBOTS,
+} from './siteSeo';
 
 /** Open Graph / Twitter image (full WoodenMax logo). */
 export const OG_IMAGE_URL = 'https://window.woodenmax.in/logo.jpg';
@@ -43,6 +50,8 @@ const GUIDE_DESCRIPTIONS: Record<string, string> = {
     'Mirror design guide: shapes, frames & pricing — WoodenMax Window Designer.',
   georgian_bars:
     'Georgian bar grids on glass: luxury window & partition finish — WoodenMax guide.',
+  embed_api:
+    'Embed WoodenMax Window Designer on your site: direct design links, query parameters and iframe examples for campaigns.',
   qna: 'WoodenMax Window Designer FAQ: BOM export, profiles, data storage & who the tool is for.',
 };
 
@@ -77,13 +86,39 @@ function ensureMetaProperty(property: string, content: string) {
   el.setAttribute('content', content);
 }
 
+const GUIDE_TITLES: Record<string, string> = {
+  index: 'Features & Guides',
+  sliding: 'Sliding Windows & Doors',
+  casement: 'Casement Windows & Doors',
+  ventilator: 'Bathroom Ventilators',
+  glass_partition: 'Glass & Shower Partitions',
+  louvers: 'Louvers & Façade Ventilation',
+  corner: 'L-Type Corner Windows',
+  mirror: 'Mirror Design',
+  georgian_bars: 'Georgian Bars',
+  embed_api: 'Embed, API Links & Campaign URLs',
+  qna: 'FAQ & Q&A',
+};
+
+export function getGuideDisplayTitle(slug: string): string {
+  return GUIDE_TITLES[slug] ?? slug.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+}
+
 /** Updates description, Open Graph & Twitter cards for SPA route changes. */
 export function applyRouteSeo(args: {
   title: string;
   description: string;
   canonicalUrl: string;
+  pageKind?: 'design' | 'guide' | 'home';
 }) {
   ensureMetaName('description', args.description);
+  ensureMetaName('author', SEO_PUBLISHER_NAME);
+  ensureMetaName('robots', SEO_ROBOTS);
+  ensureMetaName('publisher', SEO_PUBLISHER_NAME);
+  if (args.pageKind === 'guide') {
+    ensureMetaProperty('article:publisher', SEO_PUBLISHER_URL);
+    ensureMetaName('article:modified_time', SEO_CONTENT_MODIFIED);
+  }
   ensureMetaProperty('og:title', args.title);
   ensureMetaProperty('og:description', args.description);
   ensureMetaProperty('og:url', args.canonicalUrl);
@@ -96,4 +131,22 @@ export function applyRouteSeo(args: {
   ensureMetaName('twitter:title', args.title);
   ensureMetaName('twitter:description', args.description);
   ensureMetaName('twitter:image', OG_IMAGE_URL);
+}
+
+export function applyRouteJsonLd(args: {
+  canonicalUrl: string;
+  title: string;
+  description: string;
+  pageKind: SeoPageKind;
+  breadcrumbLabel?: string;
+}) {
+  const id = 'seo-route-jsonld';
+  let el = document.getElementById(id) as HTMLScriptElement | null;
+  if (!el) {
+    el = document.createElement('script');
+    el.id = id;
+    el.type = 'application/ld+json';
+    document.head.appendChild(el);
+  }
+  el.textContent = buildRouteJsonLd(args);
 }

@@ -1,5 +1,5 @@
 import type { WindowConfig, QuotationItem, ProfileDimensions, BOM, BOMSeries, BOMProfile, GlassType, BOMGlassCutRow, BOMMeshCutRow, HardwareItem } from '../types';
-import { WindowType, ShutterConfigType, FixedPanelPosition } from '../types';
+import { WindowType, FixedPanelPosition } from '../types';
 import { computeSlidingCutLayout, isSlidingSeriesUnifiedOuter } from './slidingCutFormula';
 import { hasResolvedSeriesValue, resolveSeriesNumeric } from './profileDimensionKeys';
 import { getQuotationHardwareUnitMultiplier } from './quotationHardwareCost';

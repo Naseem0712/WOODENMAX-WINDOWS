@@ -1,3 +1,7 @@
 {
+  "redirects": [
+    { "source": "/", "destination": "/design/sliding", "permanent": true },
+    { "source": "/guides", "destination": "/guides/index", "permanent": true }
+  ],
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-// FIX: Corrected import path for types to be relative to the parent directory.
 import type { WindowConfig, BatchAddItem } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from './ui/Button';

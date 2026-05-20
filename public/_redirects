@@ -1,1 +1,7 @@
-/*    /index.html   200
+# Canonical redirects (must be before SPA fallback)
+/               /design/sliding    301
+/guides         /guides/index      301
+/guides/        /guides/index      301
+
+# SPA fallback — static files (design/*/index.html, guides/*/index.html) take precedence
+/*              /index.html        200

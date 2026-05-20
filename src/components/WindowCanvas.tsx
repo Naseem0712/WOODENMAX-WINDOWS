@@ -1,10 +1,8 @@
 
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useId } from 'react';
 import { createPortal } from 'react-dom';
-// FIX: Corrected import path for types from './types' to '../types'.
 import type { WindowConfig, HandleConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, WindowType, GlassType, MirrorShape } from '../types';
-// FIX: Corrected import paths for icons.
 import { PlusIcon } from './icons/PlusIcon';
 import { MinusIcon } from './icons/MinusIcon';
 import { ArrowsPointingInIcon } from './icons/ArrowsPointingInIcon';
@@ -47,10 +45,6 @@ interface WindowCanvasProps {
 const mmToPx = (mm: number, scale: number) => Math.round(mm * scale * 100) / 100;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-/** Fit margins inside scroll container; clamp px/mm so tiny windows do not explode on screen. */
-const CANVAS_MARGIN_X = 0.92;
-const CANVAS_MARGIN_Y = 0.88;
-const MAX_PX_PER_MM = 12;
 const ZOOM_MIN = 0.2;
 const ZOOM_MAX = 5;
 

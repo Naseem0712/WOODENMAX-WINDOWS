@@ -5,6 +5,8 @@ import { Button } from './ui/Button';
 import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
 import { Logo } from './icons/Logo';
 import { guideOrder } from '../guides/order';
+import { COMPANY_BRAND, CONTACT_EMAIL } from '../constants/site';
+import { SEO_CONTENT_MODIFIED } from '../seo/siteSeo';
 import { WoodenMaxCatalogMenu } from './WoodenMaxCatalogMenu';
 import { SpringScrollArea } from './ui/SpringScrollArea';
 
@@ -70,7 +72,20 @@ export const GuidesViewer: React.FC<GuidesViewerProps> = ({ activeSlug, onClose 
                     <div className="prose prose-invert max-w-none prose-headings:text-indigo-300 prose-headings:border-b prose-headings:border-slate-700 prose-headings:pb-2 prose-a:text-indigo-400 hover:prose-a:text-indigo-300 prose-strong:text-slate-100 prose-h2:mt-8 prose-h3:mt-6">
                         <header className="not-prose mb-6 border-b border-slate-700 pb-4">
                             <h1 className="text-3xl font-bold tracking-tight text-white md:text-4xl">{guideArticleHeading(content.title)}</h1>
-                            <p className="mt-2 text-sm text-slate-400">WoodenMax Window Designer — help &amp; how-to</p>
+                            <p className="mt-2 text-sm text-slate-400">
+                                Published by{' '}
+                                <a href="https://www.woodenmax.in" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300">
+                                    {COMPANY_BRAND}
+                                </a>
+                                {' '}
+                                · Window design &amp; fabrication expertise · Last updated {SEO_CONTENT_MODIFIED}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500">
+                                Questions:{' '}
+                                <a href={`mailto:${CONTACT_EMAIL}`} className="text-indigo-400 hover:text-indigo-300">
+                                    {CONTACT_EMAIL}
+                                </a>
+                            </p>
                         </header>
                         <div dangerouslySetInnerHTML={{ __html: content.html }} />
                     </div>

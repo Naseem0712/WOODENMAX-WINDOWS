@@ -30,7 +30,7 @@ import { getQuotationHardwareUnitMultiplier } from '../utils/quotationHardwareCo
 import { resolveFoldFrameEdges } from '../utils/foldDoorFrame';
 import { FoldDoorOpeningGraphic } from './FoldDoorOpeningVisual';
 import { autoContinueTermsSerial, normalizeWebsiteUrl } from '../utils/quotationText';
-import { calculateMaterialCostSummary } from '../utils/materialCosting';
+import { calculateMaterialCostSummary, formatItemWeightKg } from '../utils/materialCosting';
 import { getRawDiscountAmount } from '../utils/pricingSafety';
 import { DEFAULT_MATERIAL_RATES } from '../constants/materialRates';
 
@@ -48,6 +48,11 @@ interface PrintPreviewProps {
 
 const mmToPx = (mm: number, scale: number) => Math.round(mm * scale * 100) / 100;
 
+/** Bottom/top track band height in mm (matches WindowCanvas sliding track overlay). */
+function slidingTrackBandMm(topTrackDim: number): number {
+  return Math.max(8, Math.min(16, (Number(topTrackDim) || 0) * 0.18));
+}
+
 /** True lock hardware for quotation (excludes interlock connector/cap profiles). */
 function isQuotationLockHardware(name: string): boolean {
   const n = (name || '').toLowerCase();
@@ -58,13 +63,6 @@ function isQuotationLockHardware(name: string): boolean {
 
 function isShutterElevationColumn(col: ElevationSegment): boolean {
   return col.label === 'S' || col.label === 'M';
-}
-
-function formatElevationSizesMm(sizes: number[]): string {
-  const rounded = sizes.map((s) => Math.round(s));
-  if (rounded.length === 0) return '';
-  if (rounded.every((s) => s === rounded[0])) return String(rounded[0]);
-  return rounded.join('  ');
 }
 
 const numWords = {
@@ -409,7 +407,11 @@ const PrintableMirrorPanel: React.FC<{ style: React.CSSProperties }> = ({ style 
 };
 
 
-const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }> = ({ config, externalScale }) => {
+const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; weightKg?: number }> = ({
+  config,
+  externalScale,
+  weightKg,
+}) => {
     if (config.windowType === WindowType.CORNER && config.leftConfig && config.rightConfig) {
         const leftW = Number(config.leftWidth) || 0;
         const rightW = Number(config.rightWidth) || 0;
@@ -621,15 +623,13 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         const glassWidth = width - leftProfile - rightProfile;
         const glassHeight = height - topProfile - bottomProfile;
         const meshStyle: React.CSSProperties = isMesh ? {backgroundColor: '#ccc', opacity: 0.6, backgroundImage: `linear-gradient(45deg, #aaa 25%, transparent 25%), linear-gradient(-45deg, #aaa 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #aaa 75%), linear-gradient(-45deg, transparent 75%, #aaa 75%)`, backgroundSize: '3px 3px' } : {};
-        const wPx = mmToPx(width, scale);
-        const hPx = mmToPx(height, scale);
         const lPx = mmToPx(leftProfile, scale);
         const tPx = mmToPx(topProfile, scale);
         const rPx = mmToPx(rightProfile, scale);
         const bPx = mmToPx(bottomProfile, scale);
 
         return (
-            <div className="absolute left-0 top-0" style={{ width: wPx, height: hPx }}>
+            <div className="absolute inset-0" style={{ width: '100%', height: '100%' }}>
                 <PrintableMiteredFrame 
                     width={width} 
                     height={height} 
@@ -650,13 +650,147 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
         );
     };
 
+    const slidingShutterColumnStyle = (leftMm: number, widthMm: number, zIndex: number): React.CSSProperties => ({
+        position: 'absolute',
+        left: mmToPx(leftMm, scale),
+        top: 0,
+        bottom: 0,
+        width: mmToPx(widthMm, scale),
+        zIndex,
+    });
+
+    const elevationDimsBelow = config.windowType !== WindowType.CORNER ? (() => {
+        const { columns } = getElevationDimensionsMm(config);
+        if (columns.length <= 1) return null;
+        const colTotal = columns.reduce((s, c) => s + (c.sizeMm || 0), 0) || effectiveWidth;
+        const dimTextStyle: React.CSSProperties = {
+            fontSize: '5.5pt',
+            lineHeight: 1.1,
+            color: '#000',
+            fontFamily: 'monospace',
+            textAlign: 'center',
+            whiteSpace: 'nowrap',
+        };
+        const shutterIndices = columns
+            .map((col, i) => (isShutterElevationColumn(col) ? i : -1))
+            .filter((i) => i >= 0);
+        const hasShutters = shutterIndices.length > 0;
+        const firstShutter = shutterIndices[0] ?? 0;
+        const gridCols = columns
+            .map((c) => `${((c.sizeMm || 0) / colTotal) * 100}fr`)
+            .join(' ');
+        const labelRow = hasShutters ? 1 : 0;
+        const lineRow = hasShutters ? 2 : 1;
+        const sizeRow = hasShutters ? 3 : 2;
+        return (
+            <div
+                style={{
+                    marginTop: 2,
+                    marginBottom: 4,
+                    width: '100%',
+                    display: 'grid',
+                    gridTemplateColumns: gridCols,
+                    gridTemplateRows: hasShutters ? 'auto auto auto' : 'auto auto',
+                    rowGap: 1,
+                    alignItems: 'end',
+                }}
+            >
+                {hasShutters && (
+                    <div
+                        style={{
+                            gridColumn: `${firstShutter + 1} / span ${shutterIndices.length}`,
+                            gridRow: labelRow,
+                            ...dimTextStyle,
+                            fontSize: '5pt',
+                        }}
+                    >
+                        Door size
+                    </div>
+                )}
+                {columns.map((col, i) =>
+                    isShutterElevationColumn(col) ? (
+                        <div
+                            key={`door-line-${i}`}
+                            style={{
+                                gridColumn: i + 1,
+                                gridRow: lineRow,
+                                borderBottom: '0.5px solid #333',
+                                marginTop: 1,
+                                alignSelf: 'end',
+                            }}
+                        />
+                    ) : null,
+                )}
+                {columns.map((col, i) => (
+                    <div
+                        key={`door-size-${i}`}
+                        style={{ gridColumn: i + 1, gridRow: sizeRow, ...dimTextStyle }}
+                    >
+                        {isShutterElevationColumn(col) ? Math.round(col.sizeMm || 0) : ''}
+                    </div>
+                ))}
+            </div>
+        );
+    })() : null;
+
+    const elevationDimsBeside = config.windowType !== WindowType.CORNER ? (() => {
+        const { rows } = getElevationDimensionsMm(config);
+        if (rows.length <= 1) return null;
+        const rowTotal = rows.reduce((s, r) => s + (r.sizeMm || 0), 0) || numHeight;
+        const dimTextStyle: React.CSSProperties = {
+            fontSize: '5.5pt',
+            lineHeight: 1.1,
+            color: '#000',
+            fontFamily: 'monospace',
+            textAlign: 'center',
+            whiteSpace: 'nowrap',
+        };
+        const rowSegStyle: React.CSSProperties = {
+            ...dimTextStyle,
+            border: '0.5px solid #555',
+            boxSizing: 'border-box',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 1px',
+            overflow: 'hidden',
+        };
+        return (
+            <div
+                className="absolute"
+                style={{
+                    top: 0,
+                    left: '100%',
+                    height: '100%',
+                    width: 18,
+                    marginLeft: 2,
+                    display: 'flex',
+                    flexDirection: 'column',
+                }}
+            >
+                {rows.map((r, i) => (
+                    <div
+                        key={`row-${i}`}
+                        style={{
+                            ...rowSegStyle,
+                            height: `${((r.sizeMm || 0) / rowTotal) * 100}%`,
+                        }}
+                    >
+                        {Math.round(r.sizeMm || 0)}
+                    </div>
+                ))}
+            </div>
+        );
+    })() : null;
+
     return (
-        <div className="relative" style={{ width: mmToPx(effectiveWidth, scale), height: mmToPx(numHeight, scale), margin: 'auto' }}>
+        <div style={{ margin: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+        <div className="relative" style={{ width: mmToPx(effectiveWidth, scale), height: mmToPx(numHeight, scale) }}>
             {glassElements}
             {profileElements}
             {innerAreaWidth > 0 && innerAreaHeight > 0 && (
                 <div
-                    className={`absolute ${windowType === WindowType.SLIDING ? 'overflow-visible' : 'overflow-hidden'}`}
+                    className="absolute overflow-hidden"
                     style={{ top: mmToPx(holeY1, scale), left: mmToPx(holeX1, scale), width: mmToPx(innerAreaWidth, scale), height: mmToPx(innerAreaHeight, scale) }}
                 >
                     {windowType === WindowType.MIRROR ? (() => {
@@ -706,6 +840,73 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                             : meetingRaw;
                         const is4G = shutterConfig === ShutterConfigType.FOUR_GLASS;
                         const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
+                        const trackBandMm = slidingTrackBandMm(dims.topTrack);
+                        const trackBandPx = mmToPx(trackBandMm, scale);
+                        const laneCount =
+                          shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH ||
+                          shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH
+                            ? 3
+                            : 2;
+                        const laneGapPx = laneCount > 1 ? (innerAreaWidth * scale) / laneCount : 0;
+
+                        const slidingTrackBands = (
+                          <>
+                            <PrintProfilePiece
+                              key="sliding-track-top"
+                              color={profileColor}
+                              texture={pt}
+                              style={{
+                                left: 0,
+                                top: 0,
+                                width: innerAreaWidth * scale,
+                                height: trackBandPx,
+                                zIndex: 2,
+                              }}
+                            />
+                            <PrintProfilePiece
+                              key="sliding-track-bottom"
+                              color={profileColor}
+                              texture={pt}
+                              style={{
+                                left: 0,
+                                bottom: 0,
+                                width: innerAreaWidth * scale,
+                                height: trackBandPx,
+                                zIndex: 2,
+                              }}
+                            />
+                            {Array.from({ length: laneCount - 1 }, (_, laneIdx) => {
+                              const i = laneIdx + 1;
+                              const x = laneGapPx * i;
+                              return (
+                                <React.Fragment key={`sliding-lane-${i}`}>
+                                  <PrintProfilePiece
+                                    color={profileColor}
+                                    texture={pt}
+                                    style={{
+                                      left: x - 0.5,
+                                      top: 0,
+                                      width: 1,
+                                      height: trackBandPx,
+                                      zIndex: 3,
+                                    }}
+                                  />
+                                  <PrintProfilePiece
+                                    color={profileColor}
+                                    texture={pt}
+                                    style={{
+                                      left: x - 0.5,
+                                      bottom: 0,
+                                      width: 1,
+                                      height: trackBandPx,
+                                      zIndex: 3,
+                                    }}
+                                  />
+                                </React.Fragment>
+                              );
+                            })}
+                          </>
+                        );
 
                         let numShutters: number;
                         switch (shutterConfig) {
@@ -749,28 +950,33 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                     );
                                 }
                             });
-                            return panels.map((p) => {
-                                let leftProf = interlock;
-                                let rightProf = interlock;
-                                if (p.id === 0 || p.id === 2) leftProf = dims.shutterHandle;
-                                if (p.id === 3 || p.id === 5) rightProf = dims.shutterHandle;
-                                return (
-                                    <div key={p.id} className="absolute" style={{ left: mmToPx(p.x, scale), top: 0, zIndex: p.z }}>
-                                        <PrintSlidingShutter
-                                            panelId={`sliding-${p.id}`}
-                                            width={panelWidth}
-                                            height={innerAreaHeight}
-                                            topProfile={dims.shutterTop}
-                                            bottomProfile={dims.shutterBottom}
-                                            leftProfile={leftProf}
-                                            rightProfile={rightProf}
-                                            isMesh={p.type === 'mesh'}
-                                            isFixed={fixedShutters[p.id]}
-                                            isSliding={!fixedShutters[p.id]}
-                                        />
+                            return (
+                              <>
+                                {slidingTrackBands}
+                                {panels.map((p) => {
+                                  let leftProf = interlock;
+                                  let rightProf = interlock;
+                                  if (p.id === 0 || p.id === 2) leftProf = dims.shutterHandle;
+                                  if (p.id === 3 || p.id === 5) rightProf = dims.shutterHandle;
+                                  return (
+                                    <div key={p.id} style={slidingShutterColumnStyle(p.x, panelWidth, p.z)}>
+                                      <PrintSlidingShutter
+                                        panelId={`sliding-${p.id}`}
+                                        width={panelWidth}
+                                        height={innerAreaHeight}
+                                        topProfile={dims.shutterTop}
+                                        bottomProfile={dims.shutterBottom}
+                                        leftProfile={leftProf}
+                                        rightProfile={rightProf}
+                                        isMesh={p.type === 'mesh'}
+                                        isFixed={fixedShutters[p.id]}
+                                        isSliding={!fixedShutters[p.id]}
+                                      />
                                     </div>
-                                );
-                            });
+                                  );
+                                })}
+                              </>
+                            );
                         }
 
                         if (is4G) {
@@ -787,7 +993,27 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                 { l: dims.shutterHandle, r: interlock }, { l: interlock, r: meeting },
                                 { l: meeting, r: interlock }, { l: interlock, r: dims.shutterHandle }
                             ];
-                            return profiles.map((p, i) => <div key={i} className="absolute" style={{ left: mmToPx(positions[i], scale), top: 0, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><PrintSlidingShutter panelId={`sliding-${i}`} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>);
+                            return (
+                              <>
+                                {slidingTrackBands}
+                                {profiles.map((p, i) => (
+                                  <div key={i} style={slidingShutterColumnStyle(positions[i], shutterWidth, (i === 1 || i === 2) ? 10 : 5)}>
+                                    <PrintSlidingShutter
+                                      panelId={`sliding-${i}`}
+                                      width={shutterWidth}
+                                      height={innerAreaHeight}
+                                      topProfile={dims.shutterTop}
+                                      bottomProfile={dims.shutterBottom}
+                                      leftProfile={p.l}
+                                      rightProfile={p.r}
+                                      isMesh={false}
+                                      isFixed={fixedShutters[i]}
+                                      isSliding={!fixedShutters[i]}
+                                    />
+                                  </div>
+                                ))}
+                              </>
+                            );
                         } else {
                             const shutterDivider = hasMesh ? 2 : numShutters;
                             const shutterWidth = (innerAreaWidth + (shutterDivider - 1) * interlock) / shutterDivider;
@@ -799,13 +1025,33 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                                     handleElements.push(<div key={`handle-${i}`} style={{ zIndex: 30, position: 'absolute', left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><PrintableHandle config={handleConfig} scale={scale} mirrored={mirrored} /></div>);
                                 }
                             });
-                            return Array.from({ length: numShutters }).map((_, i) => {
-                                const isMeshShutter = hasMesh && i === numShutters - 1;
-                                let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - interlock);
-                                const leftProfile = i === 0 ? dims.shutterHandle : interlock;
-                                const rightProfile = i === numShutters - 1 ? dims.shutterHandle : interlock;
-                                return ( <div key={i} className="absolute" style={{ left: mmToPx(leftPosition, scale), top: 0, zIndex: i + (isMeshShutter ? 10 : 5) }}><PrintSlidingShutter panelId={`sliding-${i}`} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={leftProfile} rightProfile={rightProfile} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
-                            });
+                            return (
+                              <>
+                                {slidingTrackBands}
+                                {Array.from({ length: numShutters }).map((_, i) => {
+                                  const isMeshShutter = hasMesh && i === numShutters - 1;
+                                  const leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - interlock);
+                                  const leftProfile = i === 0 ? dims.shutterHandle : interlock;
+                                  const rightProfile = i === numShutters - 1 ? dims.shutterHandle : interlock;
+                                  return (
+                                    <div key={i} style={slidingShutterColumnStyle(leftPosition, shutterWidth, i + (isMeshShutter ? 10 : 5))}>
+                                      <PrintSlidingShutter
+                                        panelId={`sliding-${i}`}
+                                        width={shutterWidth}
+                                        height={innerAreaHeight}
+                                        topProfile={dims.shutterTop}
+                                        bottomProfile={dims.shutterBottom}
+                                        leftProfile={leftProfile}
+                                        rightProfile={rightProfile}
+                                        isMesh={isMeshShutter}
+                                        isFixed={fixedShutters[i]}
+                                        isSliding={!fixedShutters[i]}
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </>
+                            );
                         }
                     })() : null}
 
@@ -1016,120 +1262,23 @@ const PrintableWindow: React.FC<{ config: WindowConfig, externalScale?: number }
                 </>
             )}
             {labelElements}
-            {config.windowType !== WindowType.CORNER && (() => {
-                const { columns, rows } = getElevationDimensionsMm(config);
-                const hasMultipleCols = columns.length > 1;
-                const hasMultipleRows = rows.length > 1;
-                if (!hasMultipleCols && !hasMultipleRows) return null;
-                const colTotal = columns.reduce((s, c) => s + (c.sizeMm || 0), 0) || effectiveWidth;
-                const rowTotal = rows.reduce((s, r) => s + (r.sizeMm || 0), 0) || numHeight;
-                const dimTextStyle: React.CSSProperties = {
-                    fontSize: '5.5pt',
-                    lineHeight: 1.1,
-                    color: '#000',
-                    fontFamily: 'monospace',
+            {elevationDimsBeside}
+        </div>
+        {elevationDimsBelow}
+        {weightKg != null && weightKg > 0 && (
+            <p
+                style={{
+                    fontSize: '7pt',
                     textAlign: 'center',
-                    whiteSpace: 'nowrap',
-                };
-                const rowSegStyle: React.CSSProperties = {
-                    ...dimTextStyle,
-                    border: '0.5px solid #555',
-                    boxSizing: 'border-box',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '0 1px',
-                    overflow: 'hidden',
-                };
-                type ColGroup = { kind: 'shutter' | 'other'; cols: ElevationSegment[] };
-                const colGroups: ColGroup[] = [];
-                for (const col of columns) {
-                    const kind = isShutterElevationColumn(col) ? 'shutter' : 'other';
-                    const last = colGroups[colGroups.length - 1];
-                    if (last && last.kind === kind) last.cols.push(col);
-                    else colGroups.push({ kind, cols: [col] });
-                }
-                return (
-                    <>
-                        {hasMultipleCols && (
-                            <div
-                                className="absolute"
-                                style={{
-                                    top: '100%',
-                                    left: 0,
-                                    width: '100%',
-                                    marginTop: 2,
-                                    display: 'flex',
-                                    flexDirection: 'row',
-                                }}
-                            >
-                                {colGroups.map((group, gi) => {
-                                    const groupTotal = group.cols.reduce((s, c) => s + (c.sizeMm || 0), 0);
-                                    const widthPct = (groupTotal / colTotal) * 100;
-                                    const sizes = group.cols.map((c) => c.sizeMm || 0);
-                                    if (group.kind === 'shutter') {
-                                        return (
-                                            <div
-                                                key={`col-grp-${gi}`}
-                                                style={{
-                                                    width: `${widthPct}%`,
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'stretch',
-                                                }}
-                                            >
-                                                <div style={{ borderBottom: '0.5px solid #333', marginTop: 1 }} />
-                                                <div style={{ ...dimTextStyle, marginTop: 1 }}>
-                                                    {formatElevationSizesMm(sizes)}
-                                                </div>
-                                            </div>
-                                        );
-                                    }
-                                    return (
-                                        <div
-                                            key={`col-grp-${gi}`}
-                                            style={{
-                                                width: `${widthPct}%`,
-                                                display: 'flex',
-                                                alignItems: 'flex-start',
-                                                justifyContent: 'center',
-                                            }}
-                                        >
-                                            <div style={dimTextStyle}>{formatElevationSizesMm(sizes)}</div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                        {hasMultipleRows && (
-                            <div
-                                className="absolute"
-                                style={{
-                                    top: 0,
-                                    left: '100%',
-                                    height: '100%',
-                                    width: 18,
-                                    marginLeft: 2,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                }}
-                            >
-                                {rows.map((r, i) => (
-                                    <div
-                                        key={`row-${i}`}
-                                        style={{
-                                            ...rowSegStyle,
-                                            height: `${((r.sizeMm || 0) / rowTotal) * 100}%`,
-                                        }}
-                                    >
-                                        {Math.round(r.sizeMm || 0)}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </>
-                );
-            })()}
+                    marginTop: 6,
+                    marginBottom: 0,
+                    fontWeight: 600,
+                    color: '#374151',
+                }}
+            >
+                Weight: {formatItemWeightKg(weightKg)} kg
+            </p>
+        )}
         </div>
     );
 };
@@ -1686,6 +1835,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
 
                                     const { panelCounts, relevantHardware } = getItemDetails(item);
                                     const glassDescription = getGlassDescription(item.config);
+                                    const itemWeight = materialCostSummary.byItemId[item.id];
                                     
                                     let isFrameless = false;
                                     if (item.config.windowType === WindowType.MIRROR) {
@@ -1704,8 +1854,11 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                             <td className="p-2 align-top text-center">{index + 1}</td>
                                             
                                             <td className="p-2 align-top w-[25%]">
-                                                <div style={{ paddingRight: 24, paddingBottom: 16 }}>
-                                                    <PrintableWindow config={item.config} />
+                                                <div style={{ paddingRight: 24, paddingBottom: 8 }}>
+                                                    <PrintableWindow
+                                                        config={item.config}
+                                                        weightKg={itemWeight?.totalWeightKg}
+                                                    />
                                                 </div>
                                             </td>
                                             

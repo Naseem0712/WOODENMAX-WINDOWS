@@ -12,7 +12,7 @@ import { DownloadIcon } from './icons/DownloadIcon';
 import { generateBillOfMaterials } from '../utils/materialCalculator';
 import { MaterialSummaryModal } from './MaterialSummaryModal';
 import { ErrorBoundary } from './ErrorBoundary';
-import { calculateMaterialCostSummary } from '../utils/materialCosting';
+import { calculateMaterialCostSummary, formatItemWeightKg } from '../utils/materialCosting';
 import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
 import { PencilIcon } from './icons/PencilIcon';
 import { TrashIcon } from './icons/TrashIcon';
@@ -761,6 +761,12 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                                                 </>
                                               ) : null}
                                               {' · '}Line total: ₹{Math.round(materialCost.totalCost).toLocaleString('en-IN')}
+                                              {materialCost.totalWeightKg > 0 && (
+                                                <>
+                                                  {' · '}Weight: {formatItemWeightKg(materialCost.totalWeightKg)} kg
+                                                  {' '}(Al {formatItemWeightKg(materialCost.aluminiumWeightKg)}, Gl {formatItemWeightKg(materialCost.glassWeightKg)})
+                                                </>
+                                              )}
                                             </p>
                                           )}
                                       </div>

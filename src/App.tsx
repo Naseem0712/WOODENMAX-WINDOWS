@@ -23,8 +23,8 @@ import {
   type DesignSnapshot,
 } from './utils/windowTypeDesignSnapshots';
 import { SITE_ORIGIN } from './constants/site';
+import { applyRouteJsonLd, applyRouteSeo, getGuideDisplayTitle, getMetaDescription } from './seo/meta';
 import { DEFAULT_MATERIAL_RATES } from './constants/materialRates';
-import { applyRouteSeo, getMetaDescription } from './seo/meta';
 import { computeHardwareCostForQuotation } from './utils/quotationHardwareCost';
 import { applyDesignerCorrectionToQuotationItem } from './utils/applyDesignerCorrectionToQuotationItem';
 import { calculateMaterialCostSummary } from './utils/materialCosting';
@@ -1645,21 +1645,27 @@ const App: React.FC = () => {
     
     let pageTitle = 'WoodenMax Window Designer | Aluminium & uPVC Window & Door Design + Quotations';
 
+    let pageKind: 'design' | 'guide' | 'home' = 'home';
+    let breadcrumbLabel: string | undefined;
+
     if (appView === 'guides') {
+        pageKind = 'guide';
+        const guideLabel = getGuideDisplayTitle(guideSlug);
+        breadcrumbLabel = guideLabel;
         if (guideSlug === 'index') {
           pageTitle = 'Features & Guides | WoodenMax Window Designer';
         } else {
-          const guideTitle = guideSlug.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-          pageTitle = `${guideTitle} | Guides & Help | WoodenMax Window Designer`;
+          pageTitle = `${guideLabel} | Guides & Help | WoodenMax Window Designer`;
         }
         canonicalUrl = `${SITE_ORIGIN}/guides/${guideSlug}`;
     } else if (windowType) {
+        pageKind = 'design';
         const mapped = titleMap[windowType];
+        breadcrumbLabel = mapped ?? windowType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
         if (mapped) {
             pageTitle = `${mapped} | WoodenMax`;
         } else {
-            const typeLabel = windowType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-            pageTitle = `${typeLabel} Design Tool | WoodenMax Window Designer`;
+            pageTitle = `${breadcrumbLabel} Design Tool | WoodenMax Window Designer`;
         }
         canonicalUrl = `${SITE_ORIGIN}/design/${windowType}`;
     }
@@ -1671,7 +1677,14 @@ const App: React.FC = () => {
       windowType,
       guideSlug,
     });
-    applyRouteSeo({ title: pageTitle, description, canonicalUrl });
+    applyRouteSeo({ title: pageTitle, description, canonicalUrl, pageKind });
+    applyRouteJsonLd({
+      canonicalUrl,
+      title: pageTitle,
+      description,
+      pageKind,
+      breadcrumbLabel,
+    });
 
     let link = document.querySelector<HTMLLinkElement>("link[rel='canonical']");
     if (!link) {
@@ -2115,9 +2128,7 @@ const App: React.FC = () => {
   const handleInstallClick = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
-    const { outcome } = await installPrompt.userChoice;
-    if (outcome === 'accepted') { console.log('User accepted the A2HS prompt'); } 
-    else { console.log('User dismissed the A2HS prompt'); }
+    await installPrompt.userChoice;
     setInstallPrompt(null);
   };
   
