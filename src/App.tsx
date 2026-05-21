@@ -692,6 +692,8 @@ const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
     materialRates: DEFAULT_MATERIAL_RATES,
 };
 
+const SQFT_PER_SQMT = 1_000_000 / (304.8 * 304.8);
+
 const defaultCornerSideConfig: CornerSideConfig = {
     windowType: WindowType.SLIDING,
     trackType: TrackType.TWO_TRACK,
@@ -1535,7 +1537,8 @@ const App: React.FC = () => {
       if (item.config.windowType !== WindowType.SLIDING) return item;
       const base = summary.byItemId[item.id];
       if (!base) return item;
-      const safeRate = Number(base.basicRatePerSqFt) || 0;
+      const safeRatePerSqFt = Number(base.basicRatePerSqFt) || 0;
+      const safeRate = item.areaType === AreaType.SQMT ? safeRatePerSqFt * SQFT_PER_SQMT : safeRatePerSqFt;
       if (item.rate !== safeRate || item.hardwareCost !== 0) {
         changed = true;
         return { ...item, rate: safeRate, hardwareCost: 0 };
