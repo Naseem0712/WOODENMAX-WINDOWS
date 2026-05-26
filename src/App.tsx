@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import type { ProfileSeries, WindowConfig, HardwareItem, QuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, PartitionPanelConfig, QuotationSettings, HandleConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig } from './types';
+import type { ProfileSeries, WindowConfig, HardwareItem, QuotationItem, WindowQuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, PartitionPanelConfig, QuotationSettings, HandleConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType, MirrorShape } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
@@ -28,6 +28,31 @@ import { DEFAULT_MATERIAL_RATES } from './constants/materialRates';
 import { computeHardwareCostForQuotation } from './utils/quotationHardwareCost';
 import { applyDesignerCorrectionToQuotationItem } from './utils/applyDesignerCorrectionToQuotationItem';
 import { calculateMaterialCostSummary } from './utils/materialCosting';
+import { RailingDesignerApp } from './railing/App';
+import { recalculateQuoteLine as recalculateRailingQuoteLine } from './railing/quotationFormat';
+import { displayDesignTitle as railingDisplayTitle } from './railing/utils';
+import type { QuotationLine } from './railing/types';
+import { isWindowQuotationItem } from './utils/quotationItemKinds';
+
+function normalizeQuotationItemFromStorage(raw: unknown): QuotationItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  if (o.kind === 'railing' && o.railingLine && typeof o.id === 'string') {
+    return {
+      kind: 'railing',
+      id: o.id,
+      title: typeof o.title === 'string' ? o.title : 'Glass railing',
+      railingLine: recalculateRailingQuoteLine(structuredClone(o.railingLine as QuotationLine)),
+    };
+  }
+  if (o.config && typeof o.id === 'string') {
+    return {
+      ...(o as unknown as WindowQuotationItem),
+      kind: 'window',
+    };
+  }
+  return null;
+}
 
 const BatchAddModal = lazy(() => import('./components/BatchAddModal').then(module => ({ default: module.BatchAddModal })));
 const GuidesViewer = lazy(() => import('./components/GuidesViewer').then(module => ({ default: module.GuidesViewer })));
@@ -1192,7 +1217,7 @@ const getInitialConfig = (): ConfigState => {
 };
 
 type MobilePanelState = 'none' | 'configure' | 'quotation';
-type AppView = 'designer' | 'guides';
+type AppView = 'designer' | 'guides' | 'railing';
 
 interface DesignerViewProps {
   onOpenGuides: () => void;
@@ -1445,7 +1470,13 @@ const App: React.FC = () => {
     try { 
       const s = window.localStorage.getItem('woodenmax-quotation-items'); 
       const parsed = s ? JSON.parse(s) : [];
-      return Array.isArray(parsed) ? parsed : [];
+      if (!Array.isArray(parsed)) return [];
+      const out: QuotationItem[] = [];
+      for (const row of parsed) {
+        const n = normalizeQuotationItemFromStorage(row);
+        if (n) out.push(n);
+      }
+      return out;
     } catch { 
       return []; 
     } 
@@ -1532,6 +1563,7 @@ const App: React.FC = () => {
     );
     let changed = false;
     const mapped = items.map((item) => {
+      if (!isWindowQuotationItem(item)) return item;
       if (item.config.windowType !== WindowType.SLIDING) return item;
       const base = summary.byItemId[item.id];
       if (!base) return item;
@@ -1544,6 +1576,53 @@ const App: React.FC = () => {
     });
     return changed ? mapped : items;
   }, [quotationSettings.materialRates]);
+
+  const handleUpsertUnifiedRailingLine = useCallback(
+    (line: QuotationLine) => {
+      const rec = recalculateRailingQuoteLine(structuredClone(line));
+      const title =
+        rec.designName?.trim() ||
+        railingDisplayTitle(rec.draftSnapshot) ||
+        rec.designLabel ||
+        'Glass railing';
+      const uni: QuotationItem = {
+        kind: 'railing',
+        id: rec.id,
+        title,
+        railingLine: rec,
+      };
+      setQuotationItems((prev) => {
+        const idx = prev.findIndex((i) => i.kind === 'railing' && i.id === rec.id);
+        const merged = idx >= 0 ? prev.map((p, i) => (i === idx ? uni : p)) : [...prev, uni];
+        return applySlidingBasicRateProtection(merged);
+      });
+    },
+    [applySlidingBasicRateProtection],
+  );
+
+  const handleReplaceUnifiedRailingLines = useCallback(
+    (lines: QuotationLine[]) => {
+      setQuotationItems((prev) => {
+        const windows = prev.filter(isWindowQuotationItem);
+        const railingItems: QuotationItem[] = lines.map((line) => {
+          const rec = recalculateRailingQuoteLine(structuredClone(line));
+          const title =
+            rec.designName?.trim() ||
+            railingDisplayTitle(rec.draftSnapshot) ||
+            rec.designLabel ||
+            'Glass railing';
+          return {
+            kind: 'railing',
+            id: rec.id,
+            title,
+            railingLine: rec,
+          };
+        });
+        return applySlidingBasicRateProtection([...windows, ...railingItems]);
+      });
+    },
+    [applySlidingBasicRateProtection],
+  );
 
   const panelRef = useRef<HTMLDivElement>(null);
   const lastAppliedSearchRef = useRef<string>('');
@@ -1612,6 +1691,10 @@ const App: React.FC = () => {
       setGuideSlug(slug);
       return;
     }
+    if (path.startsWith('/design/railing')) {
+      setAppView('railing');
+      return;
+    }
     if (path.startsWith('/design')) {
       setAppView('designer');
       const parts = path.split('/').filter(Boolean);
@@ -1658,6 +1741,12 @@ const App: React.FC = () => {
           pageTitle = `${guideLabel} | Guides & Help | WoodenMax Window Designer`;
         }
         canonicalUrl = `${SITE_ORIGIN}/guides/${guideSlug}`;
+    } else if (appView === 'railing') {
+        pageKind = 'design';
+        pageTitle =
+          'Glass & SS Railing Designer | Staircase & Balcony Layouts — Combined quotations | WoodenMax';
+        breadcrumbLabel = 'Glass railing';
+        canonicalUrl = `${SITE_ORIGIN}/design/railing`;
     } else if (windowType) {
         pageKind = 'design';
         const mapped = titleMap[windowType];
@@ -1673,7 +1762,8 @@ const App: React.FC = () => {
     document.title = pageTitle;
 
     const description = getMetaDescription({
-      appView: appView === 'guides' ? 'guides' : 'designer',
+      appView:
+        appView === 'guides' ? 'guides' : appView === 'railing' ? 'railing' : 'designer',
       windowType,
       guideSlug,
     });
@@ -2149,21 +2239,37 @@ const App: React.FC = () => {
   
   const handleEditItem = useCallback((id: string) => {
     const itemToEdit = quotationItems.find(item => item.id === id);
-    if (itemToEdit) {
-        const { series, ...configState } = itemToEdit.config;
-        dispatch({ type: 'LOAD_CONFIG', payload: configState });
-        setSeries(series);
-        setWindowTitle(itemToEdit.title);
-        setQuantity(itemToEdit.quantity);
-        setRate(itemToEdit.rate);
-        setAreaType(itemToEdit.areaType);
-        setEditingItemId(id);
-        setQuotationBulkTargetIds([]);
-        setIsPreviewing(false);
-        setIsQuotationModalOpen(false);
-        setActiveMobilePanel('none');
-        navigate(`/design/${itemToEdit.config.windowType}`);
+    if (!itemToEdit) return;
+
+    if (itemToEdit.kind === 'railing') {
+      try {
+        sessionStorage.setItem(
+          'wm-railing-unified-restore-v1',
+          JSON.stringify({ line: itemToEdit.railingLine }),
+        );
+      } catch {
+        /* ignore */
+      }
+      setIsQuotationModalOpen(false);
+      setQuotationBulkTargetIds([]);
+      setIsPreviewing(false);
+      navigate('/design/railing');
+      return;
     }
+
+    const { series, ...configState } = itemToEdit.config;
+    dispatch({ type: 'LOAD_CONFIG', payload: configState });
+    setSeries(series);
+    setWindowTitle(itemToEdit.title);
+    setQuantity(itemToEdit.quantity);
+    setRate(itemToEdit.rate);
+    setAreaType(itemToEdit.areaType);
+    setEditingItemId(id);
+    setQuotationBulkTargetIds([]);
+    setIsPreviewing(false);
+    setIsQuotationModalOpen(false);
+    setActiveMobilePanel('none');
+    navigate(`/design/${itemToEdit.config.windowType}`);
   }, [quotationItems, navigate]);
 
   const handleUpdateQuotationItem = useCallback(() => {
@@ -2209,12 +2315,21 @@ const App: React.FC = () => {
       setQuotationBulkTargetIds([]);
       return;
     }
-    const wt = selectedInOrder[0].config.windowType;
-    if (!selectedInOrder.every((i) => i.config.windowType === wt)) {
+    if (selectedInOrder.some((i) => i.kind === 'railing')) {
+      alert('Bulk correction: railing lines ko edit karne ke liye Glass railing designer par jao (Edit).');
+      return;
+    }
+    const windowRows = selectedInOrder.filter(isWindowQuotationItem);
+    if (windowRows.length === 0) {
+      setQuotationBulkTargetIds([]);
+      return;
+    }
+    const wt = windowRows[0].config.windowType;
+    if (!windowRows.every((i) => i.config.windowType === wt)) {
       alert('Bulk correction: select rows of the same window type only.');
       return;
     }
-    const first = selectedInOrder[0];
+    const first = windowRows[0];
     const { series: ser, ...configState } = first.config;
     dispatch({ type: 'LOAD_CONFIG', payload: configState });
     setSeries(ser);
@@ -2237,12 +2352,20 @@ const App: React.FC = () => {
     let skipped = 0;
     const newItems = quotationItems.map((item) => {
       if (!idSet.has(item.id)) return item;
+      if (!isWindowQuotationItem(item)) {
+        skipped++;
+        return item;
+      }
       const merged = applyDesignerCorrectionToQuotationItem(item, {
         designerConfig: windowConfig,
         designerSeries: series,
         savedColors,
       });
       if (!merged) {
+        skipped++;
+        return item;
+      }
+      if (!isWindowQuotationItem(merged)) {
         skipped++;
         return item;
       }
@@ -2393,6 +2516,11 @@ const App: React.FC = () => {
         navigate('/guides/index');
         return;
       }
+      if (key === '8' || event.code === 'Digit8') {
+        event.preventDefault();
+        navigate('/design/railing');
+        return;
+      }
 
       const typeByDigit: Record<string, WindowType> = {
         '1': WindowType.SLIDING,
@@ -2463,6 +2591,7 @@ const App: React.FC = () => {
               <div><strong>Ctrl/Cmd + G</strong> Open guides</div>
               <div><strong>Ctrl/Cmd + /</strong> Toggle this help</div>
               <div><strong>Ctrl/Cmd + 1..7</strong> Quick switch feature types</div>
+              <div><strong>Ctrl/Cmd + 8</strong> Glass railing designer</div>
               <div><strong>Esc</strong> Close active modal/panel</div>
             </div>
             <div className="mt-4 rounded border border-slate-700 bg-slate-800/70 p-3 text-xs text-slate-300">
@@ -2477,11 +2606,25 @@ const App: React.FC = () => {
       
       <div
         className={`flex min-h-0 flex-1 flex-col overflow-x-hidden overscroll-y-contain font-sans bg-slate-900 ${
-          appView === 'designer' ? 'overflow-y-hidden' : 'overflow-y-auto'
+          appView === 'designer' || appView === 'railing'
+            ? 'overflow-y-hidden'
+            : 'overflow-y-auto'
         } ${isPreviewing ? 'hidden' : ''}`}
       >
         <Suspense fallback={null}>
-            {appView === 'designer' ? (
+            {appView === 'railing' ? (
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                  <div className="custom-scrollbar min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
+                    <RailingDesignerApp
+                      embedUnified={{
+                        onPushLine: handleUpsertUnifiedRailingLine,
+                        onBackToWindows: () => navigate(`/design/${windowType}`),
+                        onReplaceUnifiedRailingLines: handleReplaceUnifiedRailingLines,
+                      }}
+                    />
+                  </div>
+                </div>
+            ) : appView === 'designer' ? (
                 <DesignerView
                     onOpenGuides={() => navigate('/guides/index')}
                     installPrompt={installPrompt}

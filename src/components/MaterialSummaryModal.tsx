@@ -1,5 +1,7 @@
 import React, { useRef, useState } from 'react';
 import type { BOM, BOMSeries, QuotationItem, QuotationSettings, ProfileDimensions } from '../types';
+import { windowItemsOnly } from '../utils/quotationItemKinds';
+import { quotationItemSubtotalContribution } from '../utils/quotationTotals';
 import { WindowType } from '../types';
 import { Button } from './ui/Button';
 import { bomPdfFilename, printDocumentTitleForBom } from '../utils/pdfFilename';
@@ -248,14 +250,9 @@ export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOp
     const quoteNumber = `WM-BOM-${Date.now().toString().slice(-6)}`;
     const pdfDateStamp = new Date().toISOString().slice(0, 10);
     const makingChargePerSqFt = Number(settings.materialRates.makingChargePerSqFt) || 120;
-    const materialCostSummary = calculateMaterialCostSummary(items, settings.materialRates, makingChargePerSqFt);
-    const subTotal = items.reduce((total, item) => {
-        const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
-        const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
-        const totalArea = singleArea * item.quantity;
-        const baseCost = totalArea * item.rate;
-        return total + baseCost + (item.hardwareCost * item.quantity);
-    }, 0);
+    const bomItems = windowItemsOnly(items);
+    const materialCostSummary = calculateMaterialCostSummary(bomItems, settings.materialRates, makingChargePerSqFt);
+    const subTotal = items.reduce((total, item) => total + quotationItemSubtotalContribution(item), 0);
     const rawDiscountAmount = getRawDiscountAmount(subTotal, settings);
     const profitBeforeDiscount = materialCostSummary.totals.profitCost;
     const maxDiscountAllowed = Math.max(0, profitBeforeDiscount * 0.5);
@@ -421,17 +418,24 @@ export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOp
                             {makingChargeBelowMin ? ` (current ₹${makingChargePerSqFt}/sq ft)` : ' (ok)'}
                           </div>
                         )}
+                        {items.length > bomItems.length && (
+                          <div className="rounded border border-sky-400/50 bg-sky-50 p-2 text-[8pt] text-sky-950">
+                            <strong>Note:</strong> Is combined quote mein{' '}
+                            <strong>glass railing</strong> line(s) bhi shamil hain — window profile / mesh BOM yahan sirf
+                            window items ke liye hai. Railing ka production BOM railing tool se export karein.
+                          </div>
+                        )}
                         <div className="w-full text-xs mt-4 space-y-6">
                             {bom.map(seriesData => {
                                 const trackRows = seriesData.profiles.filter((p) => TRACK_RAIL_KEYS.includes(p.profileKey as keyof ProfileDimensions));
                                 const hasMeshSummary = !!(seriesData.mesh && seriesData.mesh.totalAreaSqFt > 0);
                                 const showWeightCol = seriesData.profiles.some((p) => p.weightPerMeter);
-                                const seriesWindowItems = items.filter((i) => i.config.series.id === seriesData.seriesId);
+                                const seriesWindowItems = bomItems.filter((i) => i.config.series.id === seriesData.seriesId);
                                 const allSlidingInSeries =
                                     seriesWindowItems.length > 0 && seriesWindowItems.every((i) => i.config.windowType === WindowType.SLIDING);
                                 const slidingReport = buildSlidingSeriesCutReport(
                                     seriesData.seriesId,
-                                    items,
+                                    bomItems,
                                     settings.materialRates,
                                     { separateMeshSections: !!settings.materialRates?.meshShutterOptions?.separateSections }
                                 );
@@ -668,10 +672,10 @@ export const MaterialSummaryModal: React.FC<MaterialSummaryModalProps> = ({ isOp
                                 );
                             })}
 
-                            {items.some((item) => item.config.windowType === WindowType.SLIDING) && (
+                            {bomItems.some((item) => item.config.windowType === WindowType.SLIDING) && (
                               <div className="print-item">
                                 <h3 className="text-lg font-bold bg-gray-200 p-2 -mx-2">Sliding cost (per line)</h3>
-                                {items
+                                {bomItems
                                   .filter((item) => item.config.windowType === WindowType.SLIDING)
                                   .map((item) => {
                                     const plan = getSlidingCuttingPlanPerWindow(item, settings.materialRates, {

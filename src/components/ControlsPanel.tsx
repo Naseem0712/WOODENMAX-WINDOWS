@@ -395,6 +395,16 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
                   );
               })}
           </div>
+          <NavLink
+            to="/design/railing"
+            className={({ isActive }) =>
+              `mt-2 block w-full rounded-md border border-slate-600 bg-slate-800 py-2 text-center text-xs font-semibold capitalize ${
+                isActive ? 'border-sky-500 bg-sky-700 text-white' : 'text-sky-100 hover:bg-slate-600'
+              }`
+            }
+          >
+            Glass railing (SS)
+          </NavLink>
       </CollapsibleCard>
       
       <CollapsibleCard title="Overall Dimensions" isOpen={openCard === 'Overall Dimensions'} onToggle={() => handleToggleCard('Overall Dimensions')}>

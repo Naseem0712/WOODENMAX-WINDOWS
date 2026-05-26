@@ -20,6 +20,7 @@ export const getRawDiscountAmount = (subTotal: number, settings: QuotationSettin
 export const getMinimumMakingChargeForItems = (items: QuotationItem[]): number => {
   let minimum = 0;
   for (const item of items) {
+    if (item.kind === 'railing') continue;
     switch (item.config.windowType) {
       case WindowType.SLIDING:
       case WindowType.CASEMENT:

@@ -70,6 +70,13 @@ const DESIGN = [
       'Custom mirror designer: round, oval, capsule & framed shapes. Instant pricing & quotation — WoodenMax Window Designer.',
     breadcrumb: 'Mirror Designer',
   },
+  {
+    seg: 'railing',
+    title: 'Glass & SS Railing Designer | Staircase Balcony Layouts — Same quotation as windows | WoodenMax',
+    description:
+      'Glass railing CAD-style designer: staircase, balcony, straight and custom perimeter; hardware & glass BOM; each line merges into WoodenMax unified quotation PDF with windows.',
+    breadcrumb: 'Glass railing designer',
+  },
 ];
 
 const GUIDES = [

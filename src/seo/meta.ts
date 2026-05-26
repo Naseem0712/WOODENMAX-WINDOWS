@@ -56,12 +56,15 @@ const GUIDE_DESCRIPTIONS: Record<string, string> = {
 };
 
 export function getMetaDescription(args: {
-  appView: 'designer' | 'guides';
+  appView: 'designer' | 'guides' | 'railing';
   windowType: WindowType;
   guideSlug: string;
 }): string {
   if (args.appView === 'guides') {
     return GUIDE_DESCRIPTIONS[args.guideSlug] ?? GUIDE_DESCRIPTIONS.index;
+  }
+  if (args.appView === 'railing') {
+    return 'SS / glass railing layout tool — staircase, balcony, straight and custom runs; BOM, hardware & glass sizing. Sync each line into the same combined WoodenMax quotation as windows and PDF.';
   }
   return DESIGN_DESCRIPTIONS[args.windowType] ?? DEFAULT_DESCRIPTION;
 }

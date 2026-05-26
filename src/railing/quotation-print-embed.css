@@ -1,0 +1,216 @@
+/**
+ * Railing quotation item block — same look as RailingQ QuotationDocument, scoped for WoodenMax print/PDF.
+ * Parent: .wm-railing-quote-print
+ */
+
+.wm-railing-quote-print .qdoc-line-type {
+  color: #64748b;
+  font-size: 8pt;
+}
+
+.wm-railing-quote-print .qdoc-item-price-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+  margin: 0 0 8px;
+}
+
+.wm-railing-quote-print .qdoc-item-price-table th {
+  background: #fff;
+  color: #0f172a;
+  padding: 5px 6px;
+  text-align: left;
+  font-size: 8pt;
+  font-weight: 700;
+  border-bottom: 2px solid #cbd5e1;
+}
+
+.wm-railing-quote-print .qdoc-item-price-table td {
+  padding: 6px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+
+.wm-railing-quote-print .qdoc-item-extras {
+  margin: 0 0 8px 1rem;
+  font-size: 8.5pt;
+  color: #475569;
+}
+
+.wm-railing-quote-print .text-right {
+  text-align: right;
+}
+
+.wm-railing-quote-print .quote-item-detail .quote-item-body {
+  border-bottom: none;
+}
+
+.wm-railing-quote-print .quote-item-block {
+  margin-bottom: 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  overflow: visible;
+}
+
+.wm-railing-quote-print .quote-item-block.quote-item-detail,
+.wm-railing-quote-print .quote-item-pack {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+}
+
+.wm-railing-quote-print .quote-item-pack {
+  display: block;
+}
+
+.wm-railing-quote-print .quote-item-detail .qdoc-item-price-table,
+.wm-railing-quote-print .quote-item-detail .quote-item-body,
+.wm-railing-quote-print .quote-item-detail .qdoc-item-extras,
+.wm-railing-quote-print .quote-item-detail .item-notes,
+.wm-railing-quote-print .quote-item-detail .spec-table {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.wm-railing-quote-print .quote-item-detail .spec-table tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.wm-railing-quote-print .quote-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  color: #0f172a;
+  padding: 8px 12px;
+  break-after: avoid;
+  page-break-after: avoid;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.wm-railing-quote-print .quote-item-head h3 {
+  margin: 0;
+  font-size: 11pt;
+  font-weight: 600;
+  color: inherit;
+}
+
+.wm-railing-quote-print .item-qty-badge {
+  background: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 9pt;
+  font-weight: 600;
+}
+
+.wm-railing-quote-print .quote-item-body {
+  display: grid;
+  grid-template-columns: 42% 58%;
+  gap: 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.wm-railing-quote-print .quote-item-left {
+  padding: 10px;
+  border-right: 1px solid #e2e8f0;
+  background: #fafafa;
+}
+
+.wm-railing-quote-print .quote-mini-svg {
+  width: 100%;
+  max-height: 165px;
+  height: auto;
+  display: block;
+  margin-bottom: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  overflow: visible;
+}
+
+.wm-railing-quote-print .dim-box {
+  font-size: 8pt;
+  color: #334155;
+}
+
+.wm-railing-quote-print .dim-box p {
+  margin: 2px 0;
+}
+
+.wm-railing-quote-print .dim-title {
+  font-weight: 700;
+  color: #475569;
+  margin-top: 6px !important;
+  font-size: 7.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.wm-railing-quote-print .glass-cut {
+  font-family: 'Consolas', monospace;
+  font-size: 7.5pt;
+  color: #475569;
+}
+
+.wm-railing-quote-print .quote-item-right {
+  padding: 10px 12px;
+}
+
+.wm-railing-quote-print .spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+}
+
+.wm-railing-quote-print .spec-table td {
+  padding: 4px 0;
+  vertical-align: top;
+  border-bottom: 1px dotted #e2e8f0;
+}
+
+.wm-railing-quote-print .spec-label {
+  color: #64748b;
+  width: 48%;
+  padding-right: 8px !important;
+}
+
+.wm-railing-quote-print .spec-value {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.wm-railing-quote-print .item-notes {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 8pt;
+  font-style: italic;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+@media print {
+  .wm-railing-quote-print .quote-item-block.quote-item-detail,
+  .wm-railing-quote-print .quote-item-pack {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
+  }
+
+  .wm-railing-quote-print .quote-item-block {
+    margin-bottom: 8px;
+  }
+
+  .wm-railing-quote-print .quote-item-head {
+    padding: 6px 10px;
+  }
+
+  .wm-railing-quote-print .quote-item-head h3 {
+    font-size: 10pt;
+  }
+
+  .wm-railing-quote-print .quote-item-body {
+    grid-template-columns: 36% 64%;
+  }
+}

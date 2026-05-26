@@ -14,6 +14,7 @@ export function applyDesignerCorrectionToQuotationItem(
     savedColors: SavedColor[];
   }
 ): QuotationItem | null {
+  if (item.kind === 'railing') return null;
   if (item.config.windowType !== params.designerConfig.windowType) return null;
 
   const next = JSON.parse(JSON.stringify(item)) as QuotationItem;

@@ -10,6 +10,7 @@ import { Select } from './ui/Select';
 import { PrintPreview } from './PrintPreview';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { generateBillOfMaterials } from '../utils/materialCalculator';
+import { loadProjectSettings } from '../railing/projectStorage';
 import { MaterialSummaryModal } from './MaterialSummaryModal';
 import { ErrorBoundary } from './ErrorBoundary';
 import { calculateMaterialCostSummary, formatItemWeightKg } from '../utils/materialCosting';
@@ -21,6 +22,11 @@ import { sanitizeFilenameSegment } from '../utils/pdfFilename';
 import { autoContinueTermsSerial } from '../utils/quotationText';
 import { getRawDiscountAmount } from '../utils/pricingSafety';
 import { SpringScrollArea } from './ui/SpringScrollArea';
+import { quotationItemSubtotalContribution } from '../utils/quotationTotals';
+import { quoteBasisForLine, quoteRateForLine, recalculateQuoteLine as recalculateRailingQuoteLine } from '../railing/quotationFormat';
+import { migrateBackup, parseBackupJson } from '../railing/backup';
+import { displayDesignTitle as railingDisplayTitle } from '../railing/utils';
+import { isWindowQuotationItem } from '../utils/quotationItemKinds';
 interface QuotationListModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -83,10 +89,11 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
   const [isMaterialSummaryOpen, setIsMaterialSummaryOpen] = useState(false);
   const [isActionPanelOpen, setIsActionPanelOpen] = useState(false);
   const [bom, setBom] = useState<BOM | null>(null);
-  const [typeFilter, setTypeFilter] = useState<WindowType | 'all'>('all');
+  const [typeFilter, setTypeFilter] = useState<WindowType | 'all' | 'railing'>('all');
   const visibleItems = useMemo(() => {
     if (typeFilter === 'all') return items;
-    return items.filter((i) => i.config.windowType === typeFilter);
+    if (typeFilter === 'railing') return items.filter((i) => i.kind === 'railing');
+    return items.filter((i) => i.kind !== 'railing' && i.config.windowType === typeFilter);
   }, [items, typeFilter]);
   const makingChargePerSqFt = Number(settings.materialRates.makingChargePerSqFt) || 120;
   const materialCostSummary = useMemo(
@@ -103,6 +110,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
     let usesSlimInterlock = false;
 
     for (const item of source) {
+      if (item.kind === 'railing') continue;
       const config = item.config;
       if (config.windowType === WindowType.SLIDING) {
         usesSliding = true;
@@ -175,14 +183,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
   }, [isPreviewOpen]);
 
   useEffect(() => {
-    const computedSubTotal = items.reduce((total, item) => {
-      const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
-      const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
-      const totalArea = singleArea * item.quantity;
-      const baseCost = totalArea * item.rate;
-      const totalHardwareCost = item.hardwareCost * item.quantity;
-      return total + baseCost + totalHardwareCost;
-    }, 0);
+    const computedSubTotal = items.reduce((total, item) => total + quotationItemSubtotalContribution(item), 0);
     const rawDiscount = getRawDiscountAmount(computedSubTotal, settings);
     const profitBefore = materialCostSummary.totals.profitCost;
     const maxDiscount = Math.max(0, profitBefore * 0.5);
@@ -204,14 +205,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
     }
   }, [items, settings, setSettings, materialCostSummary]);
 
-  const subTotal = items.reduce((total, item) => {
-    const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
-    const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
-    const totalArea = singleArea * item.quantity;
-    const baseCost = totalArea * item.rate;
-    const totalHardwareCost = item.hardwareCost * item.quantity;
-    return total + baseCost + totalHardwareCost;
-  }, 0);
+  const subTotal = items.reduce((total, item) => total + quotationItemSubtotalContribution(item), 0);
 
   const fin = settings.financials;
   const discountAmount = fin?.discountType === 'percentage'
@@ -340,10 +334,19 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
   }
 
   const handleExport = () => {
-    const quotationData = {
-        settings,
-        items,
+    const hasRailing = items.some((i) => i.kind === 'railing');
+    const quotationData: Record<string, unknown> = {
+      settings,
+      items,
     };
+    if (hasRailing) {
+      const proj = loadProjectSettings();
+      quotationData.railingEmbeddedProject = {
+        presets: proj.presets,
+        ratesNormal: proj.ratesNormal,
+        ratesStaircase: proj.ratesStaircase,
+      };
+    }
     const jsonString = JSON.stringify(quotationData, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -431,7 +434,44 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                 setItems(data.items);
                 alert('Quotation imported successfully!');
             } else {
-                throw new Error('Invalid quotation file format.');
+                try {
+                    const migrated = migrateBackup(parseBackupJson(result));
+                    const railingItemsFull = migrated.lines.map((line) => {
+                        const rec = recalculateRailingQuoteLine(structuredClone(line));
+                        const title =
+                            rec.designName?.trim() ||
+                            railingDisplayTitle(rec.draftSnapshot) ||
+                            rec.designLabel ||
+                            'Glass railing';
+                        return {
+                            kind: 'railing' as const,
+                            id: rec.id,
+                            title,
+                            railingLine: rec,
+                        };
+                    });
+                    setSettings({
+                        ...settings,
+                        customer: {
+                            ...settings.customer,
+                            name: migrated.meta.clientName?.trim() || settings.customer.name,
+                            address: migrated.meta.clientAddress?.trim() || settings.customer.address,
+                            contactPerson: migrated.meta.clientPhone?.trim() || settings.customer.contactPerson,
+                        },
+                        title: migrated.meta.projectName?.trim() || settings.title,
+                        description: migrated.meta.introText ?? settings.description,
+                        terms: migrated.meta.termsText ?? settings.terms,
+                    });
+                    const windowsOnly = items.filter(isWindowQuotationItem);
+                    setItems([...windowsOnly, ...railingItemsFull]);
+                    alert(
+                        railingItemsFull.length > 0
+                            ? `Imported ${railingItemsFull.length} glass railing line(s). Window lines kept; client details updated from backup where present.`
+                            : 'Imported backup — no railing lines in file (railing quotation list cleared).',
+                    );
+                } catch {
+                    throw new Error('Invalid quotation file format.');
+                }
             }
         } catch (error) {
             console.error('Failed to import quotation:', error);
@@ -688,10 +728,11 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                                 <span>Show type</span>
                                 <select
                                   value={typeFilter}
-                                  onChange={(e) => setTypeFilter(e.target.value as WindowType | 'all')}
+                                  onChange={(e) => setTypeFilter(e.target.value as WindowType | 'all' | 'railing')}
                                   className="bg-slate-800 border border-slate-600 rounded-md px-2 py-1 text-white text-sm"
                                 >
                                   <option value="all">All</option>
+                                  <option value="railing">Glass railing (SS)</option>
                                   {(Object.values(WindowType) as WindowType[]).map((t) => (
                                     <option key={t} value={t}>
                                       {WINDOW_TYPE_FILTER_LABEL[t]}
@@ -717,6 +758,65 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                           </div>
                           <div className="space-y-2">
                           {visibleItems.map((item) => {
+                              const globalIndex = items.findIndex((i) => i.id === item.id) + 1;
+
+                              if (item.kind === 'railing') {
+                                const rl = item.railingLine;
+                                const basis = quoteBasisForLine(rl);
+                                const totalCost = quotationItemSubtotalContribution(item);
+                                const rate = quoteRateForLine(rl);
+
+                                return (
+                                  <div key={item.id} className="bg-slate-900/50 p-3 rounded-lg flex flex-col md:flex-row md:items-center gap-4">
+                                    <label className="flex items-center gap-2 cursor-pointer shrink-0 no-print">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedLineIds.includes(item.id)}
+                                        onChange={() => toggleSelect(item.id)}
+                                        className="rounded border-slate-500"
+                                        aria-label={`Select ${item.title}`}
+                                      />
+                                      <span className="font-bold text-slate-300">#{globalIndex}</span>
+                                    </label>
+                                    <div className="flex-grow min-w-0">
+                                      <h4 className="font-bold text-md text-white">{item.title}</h4>
+                                      <p className="text-xs text-slate-300">
+                                        <span className="text-sky-300/90">Glass railing (SS)</span>
+                                        {' · '}
+                                        {rl.dimensionsText || '—'} · {rl.heightText || '—'}
+                                      </p>
+                                      <p className="text-xs text-slate-400 mt-1">
+                                        {basis.label}: {basis.qty.toFixed(2)} {basis.unit}
+                                        {' · '}
+                                        ₹{rate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}/{basis.unit.toLowerCase()}
+                                        {' · '}
+                                        Glass: {rl.glassLabel}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-4 text-xs whitespace-nowrap">
+                                      <div className="text-right">
+                                        <p className="text-slate-400">Sets</p>
+                                        <p className="font-semibold text-slate-200">{rl.quantity}</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-slate-400">Line total</p>
+                                        <p className="font-bold text-lg text-green-400">
+                                          ₹{Math.round(totalCost).toLocaleString('en-IN')}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Button variant="secondary" onClick={() => onEdit(item.id)} className="p-2 h-9 w-9 flex-shrink-0 no-print" aria-label={`Edit ${item.title}`}>
+                                        <PencilIcon className="w-4 h-4" />
+                                      </Button>
+                                      <Button variant="danger" onClick={() => onRemove(item.id)} className="p-2 h-9 w-9 flex-shrink-0 no-print" aria-label={`Delete ${item.title}`}>
+                                        <TrashIcon className="w-4 h-4"/>
+                                      </Button>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
                               const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
                               const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
                               const totalArea = singleArea * item.quantity;
@@ -724,7 +824,6 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                               const totalHardwareCost = item.hardwareCost * item.quantity;
                               const totalCost = baseCost + totalHardwareCost;
                               const materialCost = materialCostSummary.byItemId[item.id];
-                              const globalIndex = items.findIndex((i) => i.id === item.id) + 1;
                               const wt = item.config.windowType;
                               /** Sliding: hardware is rolled into sq ft rate (see applySlidingBasicRateProtection); avoid showing two hardware figures. */
                               const hardwareBundledInRate =

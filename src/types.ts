@@ -315,7 +315,11 @@ export interface WindowConfig {
   cornerPostWidth: number | '';
 }
 
-export interface QuotationItem {
+import type { QuotationLine } from './railing/types';
+
+/** Window catalogue line (existing behaviour). `kind` omitted in older saved data = window. */
+export interface WindowQuotationItem {
+  kind?: 'window';
   id: string;
   title: string;
   config: WindowConfig;
@@ -326,6 +330,16 @@ export interface QuotationItem {
   hardwareItems: HardwareItem[];
   profileColorName?: string;
 }
+
+/** Glass railing line merged into the same View Quotation / PDF as windows. */
+export interface RailingQuotationItem {
+  kind: 'railing';
+  id: string;
+  title: string;
+  railingLine: QuotationLine;
+}
+
+export type QuotationItem = WindowQuotationItem | RailingQuotationItem;
 
 export interface MaterialRateSettings {
   aluminiumProfilePerKg: number;

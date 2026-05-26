@@ -1,6 +1,6 @@
 
 import React, { useMemo, useRef, useState, useEffect, useId } from 'react';
-import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, MaterialRateSettings, PartitionPanelConfig } from '../types';
+import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, MaterialRateSettings, PartitionPanelConfig, WindowQuotationItem } from '../types';
 import { Button } from './ui/Button';
 import { PrinterIcon } from './icons/PrinterIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -33,6 +33,9 @@ import { autoContinueTermsSerial, normalizeWebsiteUrl } from '../utils/quotation
 import { calculateMaterialCostSummary, formatItemWeightKg } from '../utils/materialCosting';
 import { getRawDiscountAmount } from '../utils/pricingSafety';
 import { DEFAULT_MATERIAL_RATES } from '../constants/materialRates';
+import { quotationItemSubtotalContribution } from '../utils/quotationTotals';
+import { RailingQuotationLinePrintBlock } from '../railing/components/RailingQuotationLinePrintBlock';
+import '../railing/quotation-print-embed.css';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
   return config.profileColor.startsWith('#') ? config.profileTexture || undefined : undefined;
@@ -1403,7 +1406,7 @@ const getGlassDescription = (config: WindowConfig): string => {
     return desc;
 }
 
-const getItemDetails = (item: QuotationItem) => {
+const getItemDetails = (item: WindowQuotationItem) => {
     const { config, quantity } = item;
     const { windowType, shutterConfig } = config;
     const doorPositions = config.doorPositions ?? [];
@@ -1475,6 +1478,7 @@ const getItemDetails = (item: QuotationItem) => {
 }
 
 const getColorName = (item: QuotationItem) => {
+    if (item.kind === 'railing') return '—';
     const quickColorNames: Record<string, string> = {
         '#6b7280': 'Grey',
         '#2f3238': 'Black',
@@ -1561,14 +1565,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
     [items, resolvedMaterialRates, makingChargePerSqFt]
   );
 
-  const subTotal = items.reduce((total, item) => {
-    const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
-    const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
-    const totalArea = singleArea * item.quantity;
-    const baseCost = totalArea * item.rate;
-    const totalHardwareCost = item.hardwareCost * item.quantity;
-    return total + baseCost + totalHardwareCost;
-  }, 0);
+  const subTotal = items.reduce((total, item) => total + quotationItemSubtotalContribution(item), 0);
 
   const rawDiscountAmount = getRawDiscountAmount(subTotal, settings);
   const profitBeforeDiscount = materialCostSummary.totals.profitCost;
@@ -1824,6 +1821,29 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                             </thead>
                             <tbody>
                                 {items.map((item, index) => {
+                                    if (item.kind === 'railing') {
+                                      const rl = item.railingLine;
+                                      return (
+                                        <tr
+                                          key={item.id}
+                                          className="border-b border-gray-300 print-item"
+                                          style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
+                                        >
+                                          <td className="p-2 align-top text-center">{index + 1}</td>
+                                          <td className="p-2 align-top" colSpan={5}>
+                                            <div className="wm-railing-quote-print text-[8pt] text-slate-900">
+                                              <RailingQuotationLinePrintBlock
+                                                line={rl}
+                                                index={index}
+                                                listRowTitle={item.title}
+                                                hidePricesForArchitect={isArchitecturalMode}
+                                              />
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      );
+                                    }
+
                                     const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
                                     const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
                                     const totalArea = singleArea * item.quantity;
