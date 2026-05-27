@@ -556,7 +556,9 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
   }
 
   return (
-    <div className={`app${activeDrawer ? ' drawer-open' : ''}${embedUnified ? ' railing-embed' : ''}`}>
+    <div
+      className={`app railing-designer${activeDrawer ? ' drawer-open' : ''}${embedUnified ? ' railing-embed' : ''}`}
+    >
       {embedUnified?.onPushLine && embedUnified?.onBackToWindows && (
         <div className="railing-embed-banner no-print">
           <button

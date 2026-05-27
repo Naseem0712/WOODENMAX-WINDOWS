@@ -3551,22 +3551,22 @@ body.quotation-capture-active .quotation-print-root.quotation-print-capture {
 }
 
 @media print {
-  .qdoc-link {
+  body:has(.railing-designer) .qdoc-link {
     color: #334155;
   }
 
-  .qdoc-header-panels {
+  body:has(.railing-designer) .qdoc-header-panels {
     grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
 
-  .qdoc-panel {
+  body:has(.railing-designer) .qdoc-panel {
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  .qdoc-info-label,
-  .qdoc-info-value {
+  body:has(.railing-designer) .qdoc-info-label,
+  body:has(.railing-designer) .qdoc-info-value {
     overflow: visible;
   }
 }
@@ -4137,35 +4137,30 @@ body.quotation-capture-active .quotation-print-root.quotation-print-capture {
   resize: vertical;
 }
 
+/* Scoped to railing designer only — do not override WoodenMax window PrintPreview @page/layout */
 @media print {
-  @page {
-    size: A4 portrait;
-    margin: 6mm;
-  }
-
-  /* Hide entire calculator workspace — only quotation document prints */
-  .qdoc-preview-close {
+  body:has(.railing-designer) .qdoc-preview-close {
     display: none !important;
   }
 
-  .no-print,
-  .layout-app,
-  .workspace-main,
-  .main-col,
-  .drawer-root,
-  .preview-wrap,
-  .form-panel,
-  .live-pricing-strip,
-  .toast {
+  body:has(.railing-designer) .no-print,
+  body:has(.railing-designer) .layout-app,
+  body:has(.railing-designer) .workspace-main,
+  body:has(.railing-designer) .main-col,
+  body:has(.railing-designer) .drawer-root,
+  body:has(.railing-designer) .preview-wrap,
+  body:has(.railing-designer) .form-panel,
+  body:has(.railing-designer) .live-pricing-strip,
+  body:has(.railing-designer) .toast {
     display: none !important;
     visibility: hidden !important;
   }
 
-  .print-only {
+  body:has(.railing-designer) .print-only {
     display: block !important;
   }
 
-  .quotation-print-root {
+  body:has(.railing-designer) .quotation-print-root {
     display: block !important;
     visibility: visible !important;
     position: relative !important;
@@ -4177,24 +4172,24 @@ body.quotation-capture-active .quotation-print-root.quotation-print-capture {
     margin: 0 !important;
   }
 
-  .quotation-print-root::before {
+  body:has(.railing-designer) .quotation-print-root::before {
     display: none !important;
   }
 
-  .quotation-print-root,
-  .quotation-print-root * {
+  body:has(.railing-designer) .quotation-print-root,
+  body:has(.railing-designer) .quotation-print-root * {
     visibility: visible !important;
   }
 
-  body {
+  body:has(.railing-designer) {
     background: white !important;
     color: #0f172a !important;
     margin: 0;
     padding: 0;
   }
 
-  #root,
-  .app {
+  body:has(.railing-designer) #root,
+  body:has(.railing-designer) .railing-designer.app {
     display: block !important;
     min-height: auto !important;
     max-height: none !important;
@@ -4203,13 +4198,13 @@ body.quotation-capture-active .quotation-print-root.quotation-print-capture {
     background: white !important;
   }
 
-  .railing-embed-scroll-host {
+  body:has(.railing-designer) .railing-embed-scroll-host {
     overflow: visible !important;
     max-height: none !important;
     height: auto !important;
   }
 
-  .quotation-doc {
+  body:has(.railing-designer) .quotation-doc {
     width: 100% !important;
     max-width: 100% !important;
     box-sizing: border-box;
@@ -4219,47 +4214,47 @@ body.quotation-capture-active .quotation-print-root.quotation-print-capture {
     font-size: 9pt;
   }
 
-  body.printing-quotation .quotation-print-root {
+  body:has(.railing-designer).printing-quotation .quotation-print-root {
     padding: 0 !important;
     margin: 0 !important;
   }
 
-  .qdoc-price-grid {
+  body:has(.railing-designer) .qdoc-price-grid {
     font-size: 7.5pt;
     grid-template-columns: minmax(0, 1fr) 4.5rem 2.2rem 5.75rem;
     column-gap: 6px;
   }
 
-  .qdoc-header-panels {
+  body:has(.railing-designer) .qdoc-header-panels {
     margin-bottom: 10px;
     padding-bottom: 8px;
   }
 
-  .qdoc-intro {
+  body:has(.railing-designer) .qdoc-intro {
     margin-bottom: 10px;
     padding: 6px 10px;
     font-size: 8.5pt;
   }
 
-  .qdoc-products-section .qdoc-section-title {
+  body:has(.railing-designer) .qdoc-products-section .qdoc-section-title {
     break-after: avoid;
     page-break-after: avoid;
   }
 
-  .qdoc-final-totals {
+  body:has(.railing-designer) .qdoc-final-totals {
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  body.printing-quotation .order-print-root {
+  body:has(.railing-designer).printing-quotation .order-print-root {
     display: none !important;
   }
 
-  body.printing-order .quotation-print-root {
+  body:has(.railing-designer).printing-order .quotation-print-root {
     display: none !important;
   }
 
-  body.printing-order .order-print-root {
+  body:has(.railing-designer).printing-order .order-print-root {
     display: block !important;
     visibility: visible !important;
     position: relative !important;
@@ -4269,24 +4264,24 @@ body.quotation-capture-active .quotation-print-root.quotation-print-capture {
     margin: 0 !important;
   }
 
-  body.printing-order .order-print-root,
-  body.printing-order .order-print-root * {
+  body:has(.railing-designer).printing-order .order-print-root,
+  body:has(.railing-designer).printing-order .order-print-root * {
     visibility: visible !important;
   }
 
-  .order-doc-glass {
+  body:has(.railing-designer) .order-doc-glass {
     page-break-before: always;
     break-before: page;
   }
 
-  .quote-item-block.quote-item-detail {
+  body:has(.railing-designer) .quote-item-block.quote-item-detail {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
     -webkit-column-break-inside: avoid !important;
     margin-bottom: 6px;
   }
 
-  .quote-item-pack {
+  body:has(.railing-designer) .quote-item-pack {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
     -webkit-column-break-inside: avoid !important;
@@ -4294,104 +4289,96 @@ body.quotation-capture-active .quotation-print-root.quotation-print-capture {
     page-break-before: auto !important;
   }
 
-  .quote-item-block {
+  body:has(.railing-designer) .quote-item-block {
     margin-bottom: 6px;
   }
 
-  .quote-item-head {
+  body:has(.railing-designer) .quote-item-head {
     padding: 6px 10px;
   }
 
-  .quote-item-head h3 {
+  body:has(.railing-designer) .quote-item-head h3 {
     font-size: 10pt;
   }
 
-  /* Print only — PDF/download keeps 54/46 via pdf-export-mode */
-  body.printing-quotation .quote-item-body,
-  .quote-item-body {
+  body:has(.railing-designer).printing-quotation .quote-item-body,
+  body:has(.railing-designer) .quote-item-body {
     grid-template-columns: minmax(0, 40%) minmax(0, 60%) !important;
   }
 
-  body.printing-quotation .quote-item-left {
+  body:has(.railing-designer).printing-quotation .quote-item-left,
+  body:has(.railing-designer) .quote-item-left {
     display: flex;
     flex-direction: column;
     padding: 5px 6px 3px !important;
   }
 
-  body.printing-quotation .quote-item-right {
+  body:has(.railing-designer).printing-quotation .quote-item-right,
+  body:has(.railing-designer) .quote-item-right {
     padding: 5px 6px 5px 4px !important;
   }
 
-  .quote-item-left {
-    padding: 5px 6px 3px !important;
-  }
-
-  .quote-item-right {
-    padding: 5px 6px 5px 4px !important;
-  }
-
-  body.printing-quotation .quote-mini-svg,
-  .quote-mini-svg {
+  body:has(.railing-designer).printing-quotation .quote-mini-svg,
+  body:has(.railing-designer) .quote-mini-svg {
     max-height: 105px;
     min-height: 0;
     margin-bottom: 2px;
     flex: 1 1 auto;
   }
 
-  body.printing-quotation .dim-box-compact {
+  body:has(.railing-designer).printing-quotation .dim-box-compact {
     flex: 0 0 auto;
     margin-top: 1px;
     padding-top: 2px;
     padding-bottom: 0;
   }
 
-  .spec-table {
+  body:has(.railing-designer) .spec-table {
     font-size: 7.5pt;
     table-layout: fixed;
   }
 
-  .spec-table td {
+  body:has(.railing-designer) .spec-table td {
     padding: 2px 0;
   }
 
-  .spec-label {
+  body:has(.railing-designer) .spec-label {
     width: 28% !important;
     max-width: 28% !important;
     padding-right: 3px !important;
     font-size: 7.5pt;
   }
 
-  .spec-value {
+  body:has(.railing-designer) .spec-value {
     width: 72% !important;
     font-size: 7.5pt;
   }
 
-  body.printing-quotation .dim-box-compact .dim-title,
-  body.printing-quotation .dim-box-compact .dim-lines,
-  body.printing-quotation .dim-box-compact .dim-height,
-  .dim-box-compact .dim-title,
-  .dim-box-compact .dim-lines,
-  .dim-box-compact .dim-height {
+  body:has(.railing-designer).printing-quotation .dim-box-compact .dim-title,
+  body:has(.railing-designer).printing-quotation .dim-box-compact .dim-lines,
+  body:has(.railing-designer).printing-quotation .dim-box-compact .dim-height,
+  body:has(.railing-designer) .dim-box-compact .dim-title,
+  body:has(.railing-designer) .dim-box-compact .dim-lines,
+  body:has(.railing-designer) .dim-box-compact .dim-height {
     font-size: 6pt;
     line-height: 1.1;
     margin: 0;
   }
 
-  body.printing-quotation .dim-box-compact .dim-title {
+  body:has(.railing-designer).printing-quotation .dim-box-compact .dim-title {
     margin-bottom: 1px !important;
   }
 
-  .item-notes {
+  body:has(.railing-designer) .item-notes {
     padding: 4px 8px;
     font-size: 7pt;
   }
 
-  /* CSS counter(page) shows "Page 0" in Chrome — page numbers come from PDF print/export */
-  .qdoc-print-footer {
+  body:has(.railing-designer) .qdoc-print-footer {
     display: none !important;
   }
 
-  .qdoc-terms-section {
+  body:has(.railing-designer) .qdoc-terms-section {
     break-inside: avoid;
     page-break-inside: avoid;
   }
