@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import type { ProfileSeries, WindowConfig, HardwareItem, QuotationItem, WindowQuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, PartitionPanelConfig, QuotationSettings, HandleConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig } from './types';
+import type { ProfileSeries, WindowConfig, HardwareItem, QuotationItem, WindowQuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, PartitionPanelConfig, QuotationSettings, HandleConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig, LouverBayCrossAlign } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType, MirrorShape } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
 import { WindowCanvas } from './components/WindowCanvas';
@@ -33,6 +33,13 @@ import { recalculateQuoteLine as recalculateRailingQuoteLine } from './railing/q
 import { displayDesignTitle as railingDisplayTitle } from './railing/utils';
 import type { QuotationLine } from './railing/types';
 import { isWindowQuotationItem } from './utils/quotationItemKinds';
+import {
+  getLouverBaySeparatorMm,
+  LOUVER_BAY_MAX,
+  getValidLouverBays,
+  getLouverCompoundOuterMm,
+  getWindowQuotationAreaMm2,
+} from './utils/louverBays';
 
 function normalizeQuotationItemFromStorage(raw: unknown): QuotationItem | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -59,6 +66,8 @@ const GuidesViewer = lazy(() => import('./components/GuidesViewer').then(module 
 const QuotationListModal = lazy(() =>
   import('./components/QuotationListModal').then((m) => ({ default: m.QuotationListModal }))
 );
+/** Loaded only when user opens 3D preview — zero impact on main designer bundle. */
+const Window3DPreviewModal = lazy(() => import('./window3d/Window3DPreviewModal'));
 
 interface BeforeInstallPromptEvent extends Event {
     readonly platforms: Array<string>;
@@ -82,6 +91,7 @@ type ConfigAction =
   | { type: 'REMOVE_VERTICAL_DIVIDER'; payload: { index: number, side: 'left' | 'right' | null } }
   | { type: 'REMOVE_HORIZONTAL_DIVIDER'; payload: { index: number, side: 'left' | 'right' | null } }
   | { type: 'UPDATE_HANDLE'; payload: { panelId: string; newConfig: HandleConfig | null, side: 'left' | 'right' | null } }
+  | { type: 'SET_SIDE_CONFIG'; payload: { side: 'left' | 'right'; config: Partial<CornerSideConfig> } }
   | { type: 'SET_WINDOW_TYPE'; payload: WindowType }
   | { type: 'SET_PARTITION_PANEL_COUNT'; payload: number }
   | { type: 'SET_PARTITION_PRESET'; payload: ConfigState['partitionPanels'] }
@@ -93,7 +103,11 @@ type ConfigAction =
   | { type: 'ADD_LOUVER_ITEM'; payload: { type: 'profile' | 'gap' } }
   | { type: 'REMOVE_LOUVER_ITEM'; payload: { id: string } }
   | { type: 'UPDATE_LOUVER_ITEM'; payload: { id: string; size: number | '' } }
-  | { type: 'SET_SIDE_CONFIG'; payload: { side: 'left' | 'right'; config: Partial<CornerSideConfig> } }
+  | { type: 'ADD_LOUVER_BAY'; payload: { separatorMm?: number } }
+  | { type: 'REMOVE_LOUVER_BAY'; payload: { id: string; separatorMm?: number } }
+  | { type: 'UPDATE_LOUVER_BAY'; payload: { id: string; width?: number | ''; height?: number | ''; crossAlign?: LouverBayCrossAlign; offsetMm?: number | ''; separatorMm?: number } }
+  | { type: 'SET_LOUVER_BAY_LAYOUT'; payload: { layout: 'vertical' | 'horizontal'; separatorMm?: number } }
+  | { type: 'CLEAR_LOUVER_BAYS' }
   | { type: 'UPDATE_LAMINATED_CONFIG'; payload: Partial<LaminatedGlassConfig> }
   | { type: 'UPDATE_DGU_CONFIG'; payload: Partial<DguGlassConfig> }
   | { type: 'UPDATE_MIRROR_CONFIG'; payload: Partial<WindowConfig['mirrorConfig']> }
@@ -782,6 +796,8 @@ const initialConfig: ConfigState = {
     partitionPanels: { count: 2, types: [{ type: 'fixed' }, { type: 'sliding' }], hasTopChannel: true },
     louverPattern: [{ id: uuidv4(), type: 'profile', size: 50 }, { id: uuidv4(), type: 'gap', size: 50 }],
     orientation: 'vertical',
+    louverBays: [],
+    louverBayLayout: 'vertical',
     leftWidth: 1200,
     rightWidth: 1200,
     cornerPostWidth: 100,
@@ -803,6 +819,20 @@ const SERIES_MAP: Record<WindowType, ProfileSeries> = {
     [WindowType.MIRROR]: DEFAULT_MIRROR_SERIES,
     [WindowType.LOUVERS]: DEFAULT_LOUVERS_SERIES,
 };
+
+function withLouverOuterSynced(state: ConfigState, separatorMm = 0): ConfigState {
+    if (state.windowType !== WindowType.LOUVERS) return state;
+    const wc = state as unknown as WindowConfig;
+    const bays = getValidLouverBays(wc);
+    const layout = state.louverBayLayout || 'vertical';
+    const sep = Number.isFinite(separatorMm) && separatorMm >= 0 ? separatorMm : 0;
+    if (bays.length === 0) return state;
+    if (bays.length === 1) {
+        return { ...state, width: bays[0].width, height: bays[0].height };
+    }
+    const outer = getLouverCompoundOuterMm(bays, layout, sep);
+    return { ...state, width: outer.width, height: outer.height };
+}
 
 function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
     const getSideConfig = (side: 'left' | 'right' | null): [keyof ConfigState | null, ConfigState | CornerSideConfig] => {
@@ -1097,6 +1127,69 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             return { ...state, louverPattern: state.louverPattern.filter(item => item.id !== action.payload.id) };
         case 'UPDATE_LOUVER_ITEM':
             return { ...state, louverPattern: state.louverPattern.map(item => item.id === action.payload.id ? { ...item, size: action.payload.size } : item) };
+        case 'ADD_LOUVER_BAY': {
+            const sep = action.payload.separatorMm ?? 0;
+            let bays = [...(state.louverBays ?? [])];
+            if (bays.length >= LOUVER_BAY_MAX) return state;
+            if (bays.length === 0) {
+                const w = Number(state.width) || 1500;
+                const h = Number(state.height) || 1200;
+                bays = [
+                    { id: uuidv4(), width: w, height: h, crossAlign: 'top' },
+                    { id: uuidv4(), width: Math.round(w * 0.62) || 920, height: Math.round(h * 0.52) || 620, crossAlign: 'center' },
+                ];
+            } else {
+                const last = bays[bays.length - 1];
+                bays.push({
+                    id: uuidv4(),
+                    width: Number(last.width) || 900,
+                    height: Number(last.height) || 1200,
+                    crossAlign: 'center',
+                });
+            }
+            return withLouverOuterSynced({ ...state, louverBays: bays }, sep);
+        }
+        case 'REMOVE_LOUVER_BAY': {
+            const filtered = (state.louverBays ?? []).filter((b) => b.id !== action.payload.id);
+            const sep = action.payload.separatorMm ?? 0;
+            const temp = { ...state, louverBays: filtered } as WindowConfig;
+            const valid = getValidLouverBays(temp);
+            if (valid.length <= 1) {
+                const w = valid.length === 1 ? valid[0].width : Number(state.width) || 0;
+                const h = valid.length === 1 ? valid[0].height : Number(state.height) || 0;
+                return {
+                    ...state,
+                    louverBays: [],
+                    louverBayLayout: 'vertical',
+                    width: w,
+                    height: h,
+                };
+            }
+            return withLouverOuterSynced({ ...state, louverBays: filtered }, sep);
+        }
+        case 'UPDATE_LOUVER_BAY': {
+            const { id, separatorMm, width: bw, height: bh, crossAlign, offsetMm } = action.payload;
+            const louverBays = (state.louverBays ?? []).map((b) =>
+                b.id !== id
+                    ? b
+                    : {
+                          ...b,
+                          ...(bw !== undefined ? { width: bw } : {}),
+                          ...(bh !== undefined ? { height: bh } : {}),
+                          ...(crossAlign !== undefined ? { crossAlign } : {}),
+                          ...(offsetMm !== undefined ? { offsetMm } : {}),
+                      },
+            );
+            return withLouverOuterSynced({ ...state, louverBays }, separatorMm ?? 0);
+        }
+        case 'SET_LOUVER_BAY_LAYOUT': {
+            const { layout, separatorMm } = action.payload;
+            const next = { ...state, louverBayLayout: layout };
+            if (getValidLouverBays(next as unknown as WindowConfig).length < 2) return next;
+            return withLouverOuterSynced(next, separatorMm ?? 0);
+        }
+        case 'CLEAR_LOUVER_BAYS':
+            return { ...state, louverBays: [], louverBayLayout: 'vertical' };
         case 'UPDATE_LAMINATED_CONFIG':
             return { ...state, laminatedGlassConfig: { ...state.laminatedGlassConfig, ...action.payload } };
         case 'UPDATE_DGU_CONFIG':
@@ -1119,6 +1212,9 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
               rightConfig: { ...defaultCornerSideConfig, ...(parsed.rightConfig || {}) },
               louverPattern: parsed.louverPattern || initialConfig.louverPattern,
               orientation: parsed.orientation || initialConfig.orientation,
+              louverBays: Array.isArray(parsed.louverBays) ? parsed.louverBays : initialConfig.louverBays,
+              louverBayLayout:
+                parsed.louverBayLayout === 'horizontal' ? 'horizontal' : 'vertical',
             };
             finalConfig.partitionPanels.types = finalConfig.partitionPanels.types || [];
             if (finalConfig.leftConfig) {
@@ -1131,7 +1227,7 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
                 finalConfig.rightConfig.doorPositions = finalConfig.rightConfig.doorPositions || [];
                 finalConfig.rightConfig.ventilatorGrid = finalConfig.rightConfig.ventilatorGrid || [];
             }
-            return finalConfig;
+            return withLouverOuterSynced(finalConfig, 50);
         }
         case 'RESET_DESIGN': {
              return {
@@ -1183,6 +1279,8 @@ const getInitialConfig = (): ConfigState => {
           rightConfig: { ...defaultCornerSideConfig, ...(parsed.rightConfig || {}) },
           louverPattern: parsed.louverPattern || initialConfig.louverPattern,
           orientation: parsed.orientation || initialConfig.orientation,
+          louverBays: Array.isArray(parsed.louverBays) ? parsed.louverBays : initialConfig.louverBays,
+          louverBayLayout: parsed.louverBayLayout === 'horizontal' ? 'horizontal' : 'vertical',
       };
 
       // Ensure critical arrays inside nested objects are present
@@ -1208,7 +1306,7 @@ const getInitialConfig = (): ConfigState => {
           });
       }
 
-      return finalConfig;
+      return withLouverOuterSynced(finalConfig, 50);
     }
   } catch (error) {
     console.error("Could not load current config from localStorage", error);
@@ -1259,6 +1357,7 @@ interface DesignerViewProps {
 
 const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
   const canvasViewportRef = useRef<HTMLDivElement>(null);
+  const [show3DPreview, setShow3DPreview] = useState(false);
   const {
     onOpenGuides,
     installPrompt, handleInstallClick, panelRef, isDesktopPanelOpen, setIsDesktopPanelOpen,
@@ -1272,7 +1371,10 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
     onOpenShortcuts
   } = props;
 
+  const quotationOpeningMm2 = useMemo(() => getWindowQuotationAreaMm2(windowConfig), [windowConfig]);
+
   return (
+    <>
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* One flex child for app shell; keeps fixed mobile layers from breaking flex-1 on this scroller. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden">
@@ -1301,12 +1403,28 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
                 Keyboard
               </Button>
               <Button
+                onClick={() => setShow3DPreview(true)}
+                variant="secondary"
+                className="hidden px-2.5 py-1 text-xs sm:inline-flex"
+                title="Optional 3D preview — does not affect quotation or 2D canvas"
+              >
+                3D Preview
+              </Button>
+              <Button
                 onClick={onOpenGuides}
                 variant="secondary"
                 className="inline-flex min-h-10 min-w-10 items-center justify-center p-0 sm:hidden"
                 aria-label="Features and guides"
               >
                 <DocumentTextIcon className="h-5 w-5" />
+              </Button>
+              <Button
+                onClick={() => setShow3DPreview(true)}
+                variant="secondary"
+                className="inline-flex min-h-10 min-w-10 items-center justify-center p-0 sm:hidden"
+                aria-label="3D preview"
+              >
+                <span className="text-[10px] font-bold">3D</span>
               </Button>
               {installPrompt && (
                 <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse whitespace-nowrap px-2 py-1 text-[11px] sm:text-xs">
@@ -1348,6 +1466,7 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
                   idPrefix="desktop-"
                   width={Number(windowConfig.width) || 0}
                   height={Number(windowConfig.height) || 0}
+                  quotationOpeningMm2={quotationOpeningMm2}
                   quantity={quantity}
                   setQuantity={setQuantity}
                   areaType={areaType}
@@ -1399,10 +1518,24 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
               <div className="h-1.5 w-12 rounded-full bg-slate-600" />
             </div>
             <SpringScrollArea className="min-h-0 flex-1 overflow-y-auto custom-scrollbar touch-pan-y">
-              <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} onClose={handleCloseMobilePanels} bulkCorrectionLineCount={bulkCorrectionLineCount} onApplyBulkCorrection={onApplyBulkCorrection} />
+              <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quotationOpeningMm2={quotationOpeningMm2} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} onClose={handleCloseMobilePanels} bulkCorrectionLineCount={bulkCorrectionLineCount} onApplyBulkCorrection={onApplyBulkCorrection} />
             </SpringScrollArea>
         </div>
     </div>
+    {show3DPreview && (
+      <Suspense
+        fallback={
+          <div className="no-print fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 text-white">
+            Loading 3D preview…
+          </div>
+        }
+      >
+        <ErrorBoundary title="3D preview failed">
+          <Window3DPreviewModal config={windowConfig} onClose={() => setShow3DPreview(false)} />
+        </ErrorBoundary>
+      </Suspense>
+    )}
+    </>
   );
 });
 
@@ -1623,6 +1756,29 @@ const App: React.FC = () => {
     },
     [applySlidingBasicRateProtection],
   );
+
+  const unifiedRailingLines = useMemo(
+    () =>
+      quotationItems
+        .filter((i): i is Extract<QuotationItem, { kind: 'railing' }> => i.kind === 'railing')
+        .map((i) => i.railingLine),
+    [quotationItems],
+  );
+
+  const handleRemoveUnifiedRailingLine = useCallback(
+    (id: string) => {
+      setQuotationItems((prev) =>
+        applySlidingBasicRateProtection(prev.filter((i) => !(i.kind === 'railing' && i.id === id))),
+      );
+    },
+    [applySlidingBasicRateProtection],
+  );
+
+  const handleClearUnifiedRailingLines = useCallback(() => {
+    setQuotationItems((prev) =>
+      applySlidingBasicRateProtection(prev.filter(isWindowQuotationItem)),
+    );
+  }, [applySlidingBasicRateProtection]);
 
   const panelRef = useRef<HTMLDivElement>(null);
   const lastAppliedSearchRef = useRef<string>('');
@@ -2140,6 +2296,40 @@ const App: React.FC = () => {
   const onRemoveLouverItem = useCallback((id: string) => dispatch({ type: 'REMOVE_LOUVER_ITEM', payload: { id } }), []);
   const onUpdateLouverItem = useCallback((id: string, size: number | '') => dispatch({ type: 'UPDATE_LOUVER_ITEM', payload: { id, size } }), []);
 
+  const louverSepMm = useMemo(() => getLouverBaySeparatorMm(series.dimensions), [series.dimensions]);
+  const onAddLouverBay = useCallback(
+    () => dispatch({ type: 'ADD_LOUVER_BAY', payload: { separatorMm: louverSepMm } }),
+    [louverSepMm],
+  );
+  const onRemoveLouverBay = useCallback(
+    (id: string) => dispatch({ type: 'REMOVE_LOUVER_BAY', payload: { id, separatorMm: louverSepMm } }),
+    [louverSepMm],
+  );
+  const onUpdateLouverBayDim = useCallback(
+    (id: string, field: 'width' | 'height', value: number | '') => {
+      dispatch({
+        type: 'UPDATE_LOUVER_BAY',
+        payload:
+          field === 'width'
+            ? { id, width: value, separatorMm: louverSepMm }
+            : { id, height: value, separatorMm: louverSepMm },
+      });
+    },
+    [louverSepMm],
+  );
+  const onUpdateLouverBayPosition = useCallback(
+    (id: string, partial: { crossAlign?: LouverBayCrossAlign; offsetMm?: number | '' }) => {
+      dispatch({ type: 'UPDATE_LOUVER_BAY', payload: { id, ...partial, separatorMm: louverSepMm } });
+    },
+    [louverSepMm],
+  );
+  const onSetLouverBayLayout = useCallback(
+    (layout: 'vertical' | 'horizontal') =>
+      dispatch({ type: 'SET_LOUVER_BAY_LAYOUT', payload: { layout, separatorMm: louverSepMm } }),
+    [louverSepMm],
+  );
+  const onClearLouverBays = useCallback(() => dispatch({ type: 'CLEAR_LOUVER_BAYS' }), []);
+
   const handleLaminatedConfigChange = useCallback((payload: Partial<LaminatedGlassConfig>) => {
     dispatch({ type: 'UPDATE_LAMINATED_CONFIG', payload });
   }, []);
@@ -2191,6 +2381,10 @@ const App: React.FC = () => {
         const itemConfig = JSON.parse(JSON.stringify(baseConfigForQuotation));
         itemConfig.width = Number(item.width);
         itemConfig.height = Number(item.height);
+        if (itemConfig.windowType === WindowType.LOUVERS) {
+          itemConfig.louverBays = [];
+          itemConfig.louverBayLayout = 'vertical';
+        }
         
         return {
           id: uuidv4(),
@@ -2316,7 +2510,7 @@ const App: React.FC = () => {
       return;
     }
     if (selectedInOrder.some((i) => i.kind === 'railing')) {
-      alert('Bulk correction: railing lines ko edit karne ke liye Glass railing designer par jao (Edit).');
+      alert('Bulk correction: edit railing lines in the Glass railing designer (Edit).');
       return;
     }
     const windowRows = selectedInOrder.filter(isWindowQuotationItem);
@@ -2417,13 +2611,19 @@ const App: React.FC = () => {
     onAddLouverItem,
     onRemoveLouverItem,
     onUpdateLouverItem,
+    onAddLouverBay,
+    onRemoveLouverBay,
+    onUpdateLouverBayDim,
+    onUpdateLouverBayPosition,
+    onSetLouverBayLayout,
+    onClearLouverBays,
     onLaminatedConfigChange: handleLaminatedConfigChange,
     onDguConfigChange: handleDguConfigChange,
     onUpdateMirrorConfig: handleUpdateMirrorConfig,
     onResetDesign: handleResetDesign,
     activeCornerSide,
     setActiveCornerSide
-  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onSetPartitionPreset, onSetPartitionWidthFractions, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onUpdatePartitionPanel, onAddLouverItem, onRemoveLouverItem, onUpdateLouverItem, handleLaminatedConfigChange, handleDguConfigChange, handleUpdateMirrorConfig, handleResetDesign, activeCornerSide]);
+  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onSetPartitionPreset, onSetPartitionWidthFractions, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onUpdatePartitionPanel, onAddLouverItem, onRemoveLouverItem, onUpdateLouverItem, onAddLouverBay, onRemoveLouverBay, onUpdateLouverBayDim, onUpdateLouverBayPosition, onSetLouverBayLayout, onClearLouverBays, handleLaminatedConfigChange, handleDguConfigChange, handleUpdateMirrorConfig, handleResetDesign, activeCornerSide]);
 
   const handleOpenConfigure = () => setActiveMobilePanel('configure');
   const handleOpenQuote = () => setActiveMobilePanel('quotation');
@@ -2614,12 +2814,15 @@ const App: React.FC = () => {
         <Suspense fallback={null}>
             {appView === 'railing' ? (
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                  <div className="custom-scrollbar min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
+                  <div className="railing-embed-scroll-host custom-scrollbar min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
                     <RailingDesignerApp
                       embedUnified={{
                         onPushLine: handleUpsertUnifiedRailingLine,
                         onBackToWindows: () => navigate(`/design/${windowType}`),
                         onReplaceUnifiedRailingLines: handleReplaceUnifiedRailingLines,
+                        onRemoveLine: handleRemoveUnifiedRailingLine,
+                        onClearLines: handleClearUnifiedRailingLines,
+                        unifiedLines: unifiedRailingLines,
                       }}
                     />
                   </div>

@@ -1,4 +1,11 @@
 import { DEFAULT_PACKAGE_RATES } from './packagePricing'
+import {
+  defaultBottomRailSpec,
+  defaultHandrailSpec,
+  defaultPillarSpec,
+  defaultStudSpec,
+  normalizeFinishSpecs,
+} from './hardwareDefaults'
 import type { ModePreset, QuotationPresets } from './modePreset'
 import type {
   CostingRates,
@@ -8,9 +15,13 @@ import type {
   RateDisplayUnit,
 } from './types'
 
+/** True when Staircase preset/mode is active (any design type). */
+export function isStaircaseDraft(draft: DesignDraft): boolean {
+  return (draft.hardwareMode ?? 'normal') === 'staircase'
+}
+
 export function resolveDraftMode(draft: DesignDraft): HardwareMode {
-  if (draft.designType === 'custom') return draft.hardwareMode ?? 'normal'
-  return 'normal'
+  return draft.hardwareMode ?? 'normal'
 }
 
 export function ratesForMode(
@@ -27,21 +38,29 @@ export function presetForMode(presets: QuotationPresets, mode: HardwareMode): Mo
 
 export function presetFromDraft(draft: DesignDraft): ModePreset {
   const firstCfg = draft.segmentConfigs[0]
+  const finish = normalizeFinishSpecs(draft.finish)
   return {
     glassId: draft.glassId,
     customGlassComposition: draft.customGlassComposition,
     bottomFixing: draft.bottomFixing,
     includeHandrail: draft.includeHandrail,
-    finish: { ...draft.finish },
+    handrailMaterial: finish.handrailMaterial ?? (draft.includeHandrail ? 'ss' : 'none'),
+    finish,
     defaultGlassCount: firstCfg?.glassCount ?? 2,
     defaultGapMm: firstCfg?.gapMm ?? 12,
     defaultPillarsPerGlass: firstCfg?.pillarsPerGlass ?? 2,
+    defaultStudsPerGlass: firstCfg?.studsPerGlass ?? firstCfg?.pillarsPerGlass ?? 2,
     defaultPillarInsetMm: firstCfg?.pillarInsetMm ?? 150,
     uniformHeight: draft.uniformHeight,
     heightMode: draft.heightMode,
     packageRates: { ...(draft.packageRates ?? DEFAULT_PACKAGE_RATES) },
     packageQuoteUnit: draft.packageQuoteUnit ?? 'rft',
     customCharges: [...(draft.customCharges ?? [])],
+    hardwareColorSameAsHandrail: finish.hardwareColorSameAsHandrail !== false,
+    bottomRailSpec: finish.bottomRailSpec ?? defaultBottomRailSpec(),
+    pillarSpec: finish.pillarSpec ?? defaultPillarSpec(),
+    studSpec: finish.studSpec ?? defaultStudSpec(),
+    handrailSpec: finish.handrailSpec ?? defaultHandrailSpec(finish.handrailMaterial ?? 'ss'),
   }
 }
 
@@ -56,14 +75,23 @@ export function applyPresetToDraft(
   options: ApplyPresetOptions = {},
 ): DesignDraft {
   const applyExtras = options.applyPresetExtras === true
+  const finish = normalizeFinishSpecs({
+    ...preset.finish,
+    bottomRailSpec: preset.bottomRailSpec,
+    pillarSpec: preset.pillarSpec,
+    studSpec: preset.studSpec,
+    handrailSpec: preset.handrailSpec,
+    hardwareColorSameAsHandrail: preset.hardwareColorSameAsHandrail,
+  })
+  const includeHandrail = preset.handrailMaterial !== 'none' && preset.includeHandrail
   return {
     ...draft,
     glassId: preset.glassId,
     customGlassComposition: preset.customGlassComposition,
     bottomFixing: preset.bottomFixing,
-    includeHandrail: preset.includeHandrail,
+    includeHandrail,
     hardwareMode: mode,
-    finish: { ...preset.finish },
+    finish,
     uniformHeight: preset.uniformHeight,
     heightMode: preset.heightMode,
     packageRates: { ...preset.packageRates },
@@ -76,9 +104,10 @@ export function applyPresetToDraft(
       glassCount: c.glassCount || preset.defaultGlassCount,
       gapMm: c.gapMm || preset.defaultGapMm,
       pillarsPerGlass: c.pillarsPerGlass || preset.defaultPillarsPerGlass,
+      studsPerGlass: c.studsPerGlass || preset.defaultStudsPerGlass,
       pillarInsetMm: c.pillarInsetMm || preset.defaultPillarInsetMm,
-      handrailProfile: preset.finish.handrailProfile,
-      bottomRailProfile: preset.finish.bottomRailProfile,
+      handrailProfile: finish.handrailProfile,
+      bottomRailProfile: finish.bottomRailProfile,
     })),
   }
 }

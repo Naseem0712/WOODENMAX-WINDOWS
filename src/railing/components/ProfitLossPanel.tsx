@@ -132,7 +132,7 @@ export function ProfitLossPanel({
         onToggle={() => setOpen((o) => !o)}
         title={
           <>
-            Cost vs Quote · Profit <span className="hi">लाभ / हानि</span>
+            Cost vs Quote · Profit / loss
           </>
         }
         subtitle={

@@ -8,27 +8,41 @@
   font-size: 8pt;
 }
 
-.wm-railing-quote-print .qdoc-item-price-table {
+.wm-railing-quote-print .qdoc-price-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4.75rem 2.35rem 6rem;
+  column-gap: 8px;
   width: 100%;
-  border-collapse: collapse;
-  font-size: 8.5pt;
+  max-width: 100%;
+  font-size: 7.5pt;
   margin: 0 0 8px;
 }
 
-.wm-railing-quote-print .qdoc-item-price-table th {
-  background: #fff;
-  color: #0f172a;
-  padding: 5px 6px;
+.wm-railing-quote-print .qdoc-price-grid .qdoc-col-basis {
   text-align: left;
-  font-size: 8pt;
-  font-weight: 700;
-  border-bottom: 2px solid #cbd5e1;
 }
 
-.wm-railing-quote-print .qdoc-item-price-table td {
-  padding: 6px;
-  border-bottom: 1px solid #e2e8f0;
-  vertical-align: top;
+.wm-railing-quote-print .qdoc-price-grid .qdoc-col-rate {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.wm-railing-quote-print .qdoc-price-grid .qdoc-col-sets {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.wm-railing-quote-print .qdoc-price-grid .qdoc-col-amount {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.wm-railing-quote-print .qdoc-price-grid .qdoc-price-h {
+  font-weight: 700;
+  border-bottom: 2px solid #cbd5e1;
+  padding-bottom: 4px;
 }
 
 .wm-railing-quote-print .qdoc-item-extras {
@@ -57,13 +71,15 @@
   break-inside: avoid;
   page-break-inside: avoid;
   -webkit-column-break-inside: avoid;
+  break-before: auto;
+  page-break-before: auto;
 }
 
 .wm-railing-quote-print .quote-item-pack {
   display: block;
 }
 
-.wm-railing-quote-print .quote-item-detail .qdoc-item-price-table,
+.wm-railing-quote-print .quote-item-detail .qdoc-price-grid,
 .wm-railing-quote-print .quote-item-detail .quote-item-body,
 .wm-railing-quote-print .quote-item-detail .qdoc-item-extras,
 .wm-railing-quote-print .quote-item-detail .item-notes,
@@ -108,44 +124,66 @@
 
 .wm-railing-quote-print .quote-item-body {
   display: grid;
-  grid-template-columns: 42% 58%;
+  grid-template-columns: minmax(0, 54%) minmax(0, 46%);
   gap: 0;
   border-bottom: 1px solid #e2e8f0;
+  max-width: 100%;
 }
 
 .wm-railing-quote-print .quote-item-left {
-  padding: 10px;
+  padding: 8px 10px 6px;
   border-right: 1px solid #e2e8f0;
   background: #fafafa;
 }
 
 .wm-railing-quote-print .quote-mini-svg {
   width: 100%;
-  max-height: 165px;
+  max-height: 200px;
+  min-height: 120px;
   height: auto;
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   border: 1px solid #e2e8f0;
   border-radius: 4px;
   overflow: visible;
 }
 
 .wm-railing-quote-print .dim-box {
-  font-size: 8pt;
+  font-size: 7.5pt;
   color: #334155;
+  line-height: 1.25;
 }
 
 .wm-railing-quote-print .dim-box p {
-  margin: 2px 0;
+  margin: 1px 0;
+}
+
+.wm-railing-quote-print .dim-box-compact {
+  margin-top: 2px;
+  padding-top: 3px;
+  border-top: 1px dotted #e2e8f0;
+}
+
+.wm-railing-quote-print .dim-box-compact .dim-title {
+  margin: 0 0 2px !important;
+  font-size: 6.5pt;
+  line-height: 1.2;
+}
+
+.wm-railing-quote-print .dim-box-compact .dim-lines,
+.wm-railing-quote-print .dim-box-compact .dim-height {
+  margin: 0;
+  font-size: 6.5pt;
+  line-height: 1.2;
 }
 
 .wm-railing-quote-print .dim-title {
   font-weight: 700;
   color: #475569;
-  margin-top: 6px !important;
-  font-size: 7.5pt;
+  margin-top: 4px !important;
+  font-size: 7pt;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
 }
 
 .wm-railing-quote-print .glass-cut {
@@ -155,30 +193,40 @@
 }
 
 .wm-railing-quote-print .quote-item-right {
-  padding: 10px 12px;
+  padding: 8px 6px 8px 4px;
 }
 
 .wm-railing-quote-print .spec-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
-  font-size: 8.5pt;
+  font-size: 8pt;
 }
 
 .wm-railing-quote-print .spec-table td {
-  padding: 4px 0;
+  padding: 2px 0;
   vertical-align: top;
   border-bottom: 1px dotted #e2e8f0;
 }
 
 .wm-railing-quote-print .spec-label {
   color: #64748b;
-  width: 48%;
-  padding-right: 8px !important;
+  width: 32%;
+  max-width: 32%;
+  padding-right: 4px !important;
+  font-size: 7.5pt;
+  line-height: 1.25;
 }
 
 .wm-railing-quote-print .spec-value {
+  width: 68%;
   font-weight: 600;
   color: #0f172a;
+  font-size: 7.5pt;
+  line-height: 1.25;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  padding-left: 0 !important;
 }
 
 .wm-railing-quote-print .item-notes {
@@ -196,6 +244,8 @@
     break-inside: avoid !important;
     page-break-inside: avoid !important;
     -webkit-column-break-inside: avoid !important;
+    break-before: auto !important;
+    page-break-before: auto !important;
   }
 
   .wm-railing-quote-print .quote-item-block {
@@ -211,6 +261,46 @@
   }
 
   .wm-railing-quote-print .quote-item-body {
-    grid-template-columns: 36% 64%;
+    grid-template-columns: minmax(0, 40%) minmax(0, 60%) !important;
+  }
+
+  .wm-railing-quote-print .quote-item-left {
+    display: flex;
+    flex-direction: column;
+    padding: 5px 6px 3px !important;
+  }
+
+  .wm-railing-quote-print .quote-mini-svg {
+    max-height: 105px;
+    min-height: 0;
+    margin-bottom: 2px;
+    flex: 1 1 auto;
+  }
+
+  .wm-railing-quote-print .dim-box-compact {
+    flex: 0 0 auto;
+    margin-top: 1px;
+    padding-top: 2px;
+    padding-bottom: 0;
+  }
+
+  .wm-railing-quote-print .spec-label {
+    width: 28% !important;
+    max-width: 28% !important;
+    padding-right: 3px !important;
+    font-size: 7.5pt;
+  }
+
+  .wm-railing-quote-print .spec-value {
+    width: 72% !important;
+    font-size: 7.5pt;
+  }
+
+  .wm-railing-quote-print .dim-box-compact .dim-title,
+  .wm-railing-quote-print .dim-box-compact .dim-lines,
+  .wm-railing-quote-print .dim-box-compact .dim-height {
+    font-size: 6pt;
+    line-height: 1.1;
+    margin: 0;
   }
 }

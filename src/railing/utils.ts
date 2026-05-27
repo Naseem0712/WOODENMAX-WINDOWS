@@ -17,11 +17,23 @@ export function displayDesignTitle(draft: DesignDraft): string {
 }
 
 export function formatCurrency(n: number): string {
+  if (!Number.isFinite(n)) return '—'
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
     maximumFractionDigits: 2,
   }).format(n)
+}
+
+/** Compact ₹ for quotation tables (print/PDF) — no trailing .00 when whole rupees. */
+export function formatQuoteMoney(n: number): string {
+  if (!Number.isFinite(n)) return '—'
+  const rounded = Math.round(n * 100) / 100
+  const frac = Math.round((rounded % 1) * 100)
+  return `₹${rounded.toLocaleString('en-IN', {
+    maximumFractionDigits: frac === 0 ? 0 : 2,
+    minimumFractionDigits: 0,
+  })}`
 }
 
 export function formatMm(n: number): string {
@@ -42,13 +54,34 @@ export function formatHeights(draft: DesignDraft): string {
   return draft.segmentHeights.map((h) => `${h.label}: ${h.value} mm`).join(' · ')
 }
 
+function glassOptionLabel(name: string, composition: string): string {
+  const n = name.trim()
+  const c = composition.trim()
+  if (!c || c === 'User defined') return n
+  const nL = n.toLowerCase()
+  const cL = c.toLowerCase()
+  if (nL === cL || nL.includes(cL) || cL.includes(nL)) return n
+  // e.g. name "12 mm Toughened (Single)" + composition "12 mm toughened glass"
+  if (nL.includes('toughened') && cL.includes('toughened')) return n
+  return `${n} (${c})`
+}
+
 export function glassLabel(draft: DesignDraft): string {
   const g = GLASS_OPTIONS.find((x) => x.id === draft.glassId)
   if (!g) return '—'
   if (draft.glassId === 'custom' && draft.customGlassComposition.trim()) {
     return draft.customGlassComposition.trim()
   }
-  return `${g.name} (${g.composition})`
+  return glassOptionLabel(g.name, g.composition)
+}
+
+/** Glass line on quotation print/PDF — fresh label + colour, no duplicate text. */
+export function glassDisplayForQuote(line: QuotationLine): string {
+  const label = glassLabel(line.draftSnapshot)
+  const color = line.finish.glassColor?.trim()
+  if (!color) return label
+  if (label.toLowerCase().includes(color.toLowerCase())) return label
+  return `${label} · ${color}`
 }
 
 export function hardwareSummary(calc: ReturnType<typeof calculateDesign>): string {
@@ -103,15 +136,36 @@ export function buildSummary(draft: DesignDraft): string {
 }
 
 function packageCostingItems(pq: PackageQuote): CostLineItem[] {
-  return [
-    {
-      label: `Railing package (per ${pq.unit.toUpperCase()})`,
+  const u = pq.unit.toUpperCase()
+  const items: CostLineItem[] = []
+  if (pq.materialRate > 0) {
+    items.push({
+      label: `Material (per ${u})`,
       qty: pq.basisQty,
-      unit: pq.unit.toUpperCase(),
+      unit: u,
+      rate: pq.materialRate,
+      amount: Math.round(pq.basisQty * pq.materialRate * 100) / 100,
+    })
+  }
+  if (pq.installationRate > 0) {
+    items.push({
+      label: `Installation (per ${u})`,
+      qty: pq.basisQty,
+      unit: u,
+      rate: pq.installationRate,
+      amount: Math.round(pq.basisQty * pq.installationRate * 100) / 100,
+    })
+  }
+  if (items.length === 0) {
+    items.push({
+      label: `Railing package (per ${u})`,
+      qty: pq.basisQty,
+      unit: u,
       rate: pq.rate,
       amount: pq.amountPerSet,
-    },
-  ]
+    })
+  }
+  return items
 }
 
 export function draftToLine(

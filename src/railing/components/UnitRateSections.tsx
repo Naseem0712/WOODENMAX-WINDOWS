@@ -1,4 +1,4 @@
-import type { CostingRates, CostRateField } from '../types'
+import type { CostingRates, CostRateField, HardwareMode } from '../types'
 import {
   displayRateForUnit,
   setStoredRate,
@@ -15,6 +15,13 @@ interface Props {
   handrailRft: number
   glassAreaSft: number
   perimeterRmt: number
+  hardwareMode?: HardwareMode
+  connector90?: number
+  connector180?: number
+  wallConnectors?: number
+  endCaps?: number
+  totalPillars?: number
+  totalStuds?: number
 }
 
 function RateInput({
@@ -54,6 +61,13 @@ export function UnitRateSections({
   handrailRft,
   glassAreaSft,
   perimeterRmt,
+  hardwareMode = 'normal',
+  connector90 = 0,
+  connector180 = 0,
+  wallConnectors = 0,
+  endCaps = 0,
+  totalPillars = 0,
+  totalStuds = 0,
 }: Props) {
   const set = (patch: Partial<CostingRates>) => onRatesChange({ ...rates, ...patch })
 
@@ -68,7 +82,7 @@ export function UnitRateSections({
   return (
     <div className="unit-rate-sections">
       <p className="section-desc unit-rate-intro">
-        Rates alag units mein — jahan chahe rate daalo, amount auto sync. Is design:{' '}
+        Rates in separate units — enter any column (SFT / RFT / RMT / pcs); amount stays in sync. This design:{' '}
         <strong>{glassAreaSft} SFT</strong> glass · <strong>{runRft} RFT</strong> perimeter run
         ({runRmt} RMT)
         {materialRailRft > runRft && (
@@ -87,12 +101,22 @@ export function UnitRateSections({
           unit="SFT"
           value={rates.glassPerSft}
           onChange={(n) => set({ glassPerSft: n })}
-          hint={`This design: ${glassAreaSft} SFT`}
+          hint={
+            hardwareMode === 'staircase'
+              ? `Staircase billed: ${glassAreaSft} SFT — (panel W + H) × H per piece`
+              : `This design: ${glassAreaSft} SFT`
+          }
         />
+        {hardwareMode === 'staircase' && (
+          <p className="ref">
+            Each glass: (run width ÷ panels + height) × height. Glass ₹/RFT = glass cost ÷
+            actual run length (mm→RFT).
+          </p>
+        )}
       </div>
       <p className="ref install-note">
-        Installation / labour: include only in <strong>package rate</strong> (Add to quote), not
-        here.
+        Material rates here are supply-only. Add <strong>installation / labour</strong> in the
+        package rate section (Add to quote) or under Rates → Package defaults.
       </p>
 
       <div className="unit-rate-block unit-rft">
@@ -172,30 +196,53 @@ export function UnitRateSections({
 
       <div className="unit-rate-block unit-pcs">
         <h4>Per piece (PCS)</h4>
+        {hardwareMode === 'staircase' && (
+          <p className="ref">Staircase: 180° connectors not used on this type.</p>
+        )}
         <div className="unit-rate-grid">
           <RateInput
             label="Pillar"
             unit="pcs"
             value={rates.pillarPerPcs}
             onChange={(n) => set({ pillarPerPcs: n })}
+            hint={totalPillars > 0 ? `${totalPillars} pcs on this design` : undefined}
+          />
+          <RateInput
+            label="Stud"
+            unit="pcs"
+            value={rates.studPerPcs}
+            onChange={(n) => set({ studPerPcs: n })}
+            hint={totalStuds > 0 ? `${totalStuds} pcs on this design` : undefined}
           />
           <RateInput
             label="90° connector"
             unit="pcs"
             value={rates.connector90PerPcs}
             onChange={(n) => set({ connector90PerPcs: n })}
+            hint={connector90 > 0 ? `${connector90} pcs` : undefined}
           />
-          <RateInput
-            label="180° joint"
-            unit="pcs"
-            value={rates.connector180PerPcs}
-            onChange={(n) => set({ connector180PerPcs: n })}
-          />
+          {hardwareMode !== 'staircase' && (
+            <RateInput
+              label="180° connector"
+              unit="pcs"
+              value={rates.connector180PerPcs}
+              onChange={(n) => set({ connector180PerPcs: n })}
+              hint={connector180 > 0 ? `${connector180} pcs (rail splice)` : undefined}
+            />
+          )}
           <RateInput
             label="Wall connector"
             unit="pcs"
             value={rates.wallConnectorPerPcs}
             onChange={(n) => set({ wallConnectorPerPcs: n })}
+            hint={wallConnectors > 0 ? `${wallConnectors} pcs` : undefined}
+          />
+          <RateInput
+            label="End cap"
+            unit="pcs"
+            value={rates.endCapPerPcs}
+            onChange={(n) => set({ endCapPerPcs: n })}
+            hint={endCaps > 0 ? `${endCaps} pcs` : undefined}
           />
           <RateInput
             label="Anchor"
@@ -203,6 +250,15 @@ export function UnitRateSections({
             value={rates.anchorPerPcs}
             onChange={(n) => set({ anchorPerPcs: n })}
           />
+          {(totalPillars > 0 || totalStuds > 0) && (
+            <RateInput
+              label="Hole drilling (per pillar/stud)"
+              unit="hole"
+              value={rates.holePerPcs}
+              onChange={(n) => set({ holePerPcs: n })}
+              hint={`${totalPillars + totalStuds} holes when “Add hole charges” is ticked on design`}
+            />
+          )}
         </div>
       </div>
     </div>

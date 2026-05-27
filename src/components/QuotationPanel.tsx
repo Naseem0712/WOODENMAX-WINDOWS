@@ -10,6 +10,8 @@ interface QuotationPanelProps {
     idPrefix?: string;
     width: number;
     height: number;
+    /** Physical opening area in mm² (for joint louver modules = sum of bay areas). */
+    quotationOpeningMm2: number;
     windowTitle: string;
     setWindowTitle: (title: string) => void;
     quantity: number | '';
@@ -43,14 +45,15 @@ const CostDisplay: React.FC<{label:string, value: number, isTotal?: boolean}> = 
 
 
 export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
-    idPrefix = '', width, height, quantity, setQuantity, areaType, setAreaType, rate, setRate, onSave, onUpdate, onCancelEdit, editingItemId, onBatchAdd, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount,     onViewQuotation, onClose, bulkCorrectionLineCount = 0, onApplyBulkCorrection
+    idPrefix = '', width, height, quotationOpeningMm2, quantity, setQuantity, areaType, setAreaType, rate, setRate, onSave, onUpdate, onCancelEdit, editingItemId, onBatchAdd, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount,     onViewQuotation, onClose, bulkCorrectionLineCount = 0, onApplyBulkCorrection
 }) => {
 
     const numQuantity = Number(quantity) || 0;
     const numRate = Number(rate) || 0;
 
     const conversionFactor = areaType === AreaType.SQFT ? 304.8 : 1000;
-    const singleArea = (width / conversionFactor) * (height / conversionFactor);
+    const mm2Raw = quotationOpeningMm2 > 0 ? quotationOpeningMm2 : (Number(width) || 0) * (Number(height) || 0);
+    const singleArea = mm2Raw / (conversionFactor * conversionFactor);
     const totalArea = singleArea * numQuantity;
     const baseCost = totalArea * numRate;
     const totalHardwareCost = hardwareCostPerWindow * numQuantity;

@@ -12,6 +12,7 @@ import { DrawerPanel } from './components/DrawerPanel'
 import { MaterialOrderPanel } from './components/MaterialOrderPanel'
 import { ProfitLossPanel } from './components/ProfitLossPanel'
 import { QuotationPanel } from './components/QuotationPanel'
+import { QuotationQuickActions } from './components/QuotationQuickActions'
 import { QuotationDocument } from './components/QuotationDocument'
 import { QuotationRatesPanel } from './components/QuotationRatesPanel'
 import { calculateCosting } from './costing'
@@ -21,7 +22,7 @@ import {
   defaultSegmentConfigs,
   segmentHeightKeys,
 } from './constants'
-import { migrateBackup, type AppBackup } from './backup'
+import { buildBackup, downloadBackupJson, migrateBackup, parseBackupJson, type AppBackup } from './backup'
 import { normalizeDraft } from './draftMigrate'
 import type { QuotationPresets } from './modePreset'
 import { loadProjectSettings, saveProjectSettings } from './projectStorage'
@@ -41,6 +42,8 @@ import {
   resolveDraftMode,
 } from './presets'
 import { displayDesignTitle, draftToLine, formatCurrency } from './utils'
+import { exportRailingQuotationPdf, printRailingQuotationPdf } from './exportQuotationPdf'
+import { isMobileOrPrintUnavailable, waitForQuotationPrintRoot } from './railingPrint'
 import './index.css'
 
 export interface RailingEmbedUnifiedHandlers {
@@ -49,6 +52,12 @@ export interface RailingEmbedUnifiedHandlers {
   onBackToWindows?: () => void
   /** After backup restore: replace railing rows in View Quotation with these lines (windows unchanged). */
   onReplaceUnifiedRailingLines?: (lines: QuotationLine[]) => void
+  /** Remove one line from main quotation (keep railing drawer in sync). */
+  onRemoveLine?: (id: string) => void
+  /** Remove all railing lines from main quotation. */
+  onClearLines?: () => void
+  /** Current railing rows from main quotation — hydrates drawer on load & after main-list edits. */
+  unifiedLines?: QuotationLine[]
 }
 
 export interface RailingDesignerAppProps {
@@ -72,6 +81,7 @@ function createInitialDraft(presets: QuotationPresets, mode: HardwareMode = 'nor
       glassCount: preset.defaultGlassCount,
       gapMm: preset.defaultGapMm,
       pillarsPerGlass: preset.defaultPillarsPerGlass,
+      studsPerGlass: preset.defaultStudsPerGlass,
       pillarInsetMm: preset.defaultPillarInsetMm,
       handrailProfile: preset.finish.handrailProfile,
       bottomRailProfile: preset.finish.bottomRailProfile,
@@ -95,6 +105,7 @@ function defaultMeta(): QuotationMeta {
   return {
     clientName: '',
     clientPhone: '',
+    clientGstin: '',
     clientAddress: '',
     projectName: '',
     quoteNumber: `WM-${Date.now().toString(36).toUpperCase().slice(-6)}`,
@@ -135,18 +146,37 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
     canUndo,
     canRedo,
   } = useDraftHistory(initialDraft)
-  const [lines, setLines] = useState<QuotationLine[]>(() =>
-    (initialSession?.lines ?? []).map(recalculateQuoteLine),
-  )
+  const [lines, setLines] = useState<QuotationLine[]>(() => {
+    if (embedUnified?.unifiedLines?.length) {
+      return embedUnified.unifiedLines.map(recalculateQuoteLine)
+    }
+    return (initialSession?.lines ?? []).map(recalculateQuoteLine)
+  })
   const [meta, setMeta] = useState<QuotationMeta>(() =>
     normalizeQuotationMeta(initialSession?.meta ?? defaultMeta()),
   )
   const [editingLineId, setEditingLineId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const importJsonRef = useRef<HTMLInputElement>(null)
   const [showQuotePreview, setShowQuotePreview] = useState(false)
   const [activeDrawer, setActiveDrawer] = useState<HeaderDrawer>(null)
 
+  useEffect(() => {
+    if (showQuotePreview) {
+      document.body.classList.add('quotation-preview-open')
+    } else {
+      document.body.classList.remove('quotation-preview-open')
+    }
+    return () => document.body.classList.remove('quotation-preview-open')
+  }, [showQuotePreview])
+
   const restoredUnifiedDraftRef = useRef(false)
+  const [unifiedBootstrapDone, setUnifiedBootstrapDone] = useState(
+    () =>
+      !embedUnified?.onReplaceUnifiedRailingLines ||
+      (embedUnified?.unifiedLines?.length ?? 0) > 0 ||
+      (initialSession?.lines?.length ?? 0) === 0,
+  )
 
   useEffect(() => {
     if (!embedUnified?.onPushLine || restoredUnifiedDraftRef.current) return
@@ -164,6 +194,35 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
       /* ignore */
     }
   }, [embedUnified?.onPushLine, replaceDraft])
+
+  useEffect(() => {
+    if (unifiedBootstrapDone || !embedUnified?.onReplaceUnifiedRailingLines) return
+    if ((embedUnified.unifiedLines?.length ?? 0) > 0) {
+      setUnifiedBootstrapDone(true)
+      return
+    }
+    const sessionLines = (initialSession?.lines ?? []).map(recalculateQuoteLine)
+    if (sessionLines.length === 0) {
+      setUnifiedBootstrapDone(true)
+      return
+    }
+    embedUnified.onReplaceUnifiedRailingLines(sessionLines)
+    setUnifiedBootstrapDone(true)
+  }, [
+    unifiedBootstrapDone,
+    embedUnified?.onReplaceUnifiedRailingLines,
+    embedUnified?.unifiedLines,
+    initialSession,
+  ])
+
+  const unifiedLinesSig = embedUnified?.unifiedLines
+    ?.map((l) => `${l.id}:${l.amount}:${l.quantity}`)
+    .join('|')
+
+  useEffect(() => {
+    if (!unifiedBootstrapDone || embedUnified?.unifiedLines === undefined) return
+    setLines(embedUnified.unifiedLines.map(recalculateQuoteLine))
+  }, [unifiedBootstrapDone, unifiedLinesSig, embedUnified?.unifiedLines])
 
   const draftMode = resolveDraftMode(draft)
   const activeRates = useMemo(
@@ -218,6 +277,20 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
   }, [])
 
   useEffect(() => {
+    if (!activeDrawer) return
+    const prevBody = document.body.style.overflow
+    const prevHtml = document.documentElement.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+    document.body.classList.add('railing-drawer-open')
+    return () => {
+      document.body.style.overflow = prevBody
+      document.documentElement.style.overflow = prevHtml
+      document.body.classList.remove('railing-drawer-open')
+    }
+  }, [activeDrawer])
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setActiveDrawer(null)
       const mod = e.ctrlKey || e.metaKey
@@ -259,9 +332,11 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
     })
     setPrefsSaved(true)
     setDraft((d) => applyDefaultsToDraft(d, presets))
-    setLines((prev) =>
-      applyPresetsToMatchingLines(prev, presets, ratesNormal, ratesStaircase),
-    )
+    setLines((prev) => {
+      const next = applyPresetsToMatchingLines(prev, presets, ratesNormal, ratesStaircase)
+      next.forEach((l) => embedUnified?.onPushLine?.(structuredClone(l)))
+      return next
+    })
     showToast('Normal + Staircase presets saved — matching items updated.')
   }
 
@@ -316,6 +391,25 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
         ? `Imported ${migrated.lines.length} quotation item(s) — open Quotation panel`
         : 'Imported settings (no quotation lines in file)',
     )
+  }
+
+  const handleExportJson = useCallback(() => {
+    const backup = buildBackup(meta, lines, presets, ratesNormal, ratesStaircase, draft)
+    downloadBackupJson(backup)
+    showToast('Quotation backup exported (JSON).')
+  }, [meta, lines, presets, ratesNormal, ratesStaircase, draft])
+
+  const handleImportJsonFile = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const raw = parseBackupJson(reader.result as string)
+        handleRestore(raw)
+      } catch {
+        showToast('Could not read JSON — check backup file format.')
+      }
+    }
+    reader.readAsText(file)
   }
 
   const handleEditLine = (id: string) => {
@@ -397,36 +491,84 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
     }, 300)
   }
 
-  const handlePrint = () => {
+  const runQuotationPdfJob = async (
+    job: (docEl: HTMLElement) => Promise<void>,
+    successToast: string,
+    failToast: string,
+  ) => {
     if (lines.length === 0) {
-      showToast('Add at least one item to the quotation before printing.')
+      showToast('Add at least one item to the quotation first.')
       return
     }
-    setShowQuotePreview(true)
-    document.body.classList.add('printing-quotation')
-    window.setTimeout(() => {
-      window.print()
-      window.setTimeout(() => document.body.classList.remove('printing-quotation'), 500)
-    }, 300)
+    setActiveDrawer(null)
+    let root: HTMLElement
+    try {
+      root = await waitForQuotationPrintRoot()
+    } catch {
+      showToast('Quotation not ready — try again.')
+      return
+    }
+    const docEl = root.querySelector('.quotation-doc') as HTMLElement | null
+    if (!docEl) {
+      showToast('Quotation layout not found.')
+      return
+    }
+    root.classList.add('quotation-print-capture', 'pdf-export-mode')
+    document.body.classList.add('quotation-capture-active', 'pdf-export-active')
+    try {
+      await new Promise<void>((r) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => r()))
+      })
+      await job(docEl)
+      showToast(successToast)
+    } catch (err) {
+      console.error(err)
+      showToast(failToast)
+    } finally {
+      root.classList.remove('quotation-print-capture', 'pdf-export-mode')
+      document.body.classList.remove('quotation-capture-active', 'pdf-export-active')
+    }
+  }
+
+  const handlePrint = async () => {
+    if (isMobileOrPrintUnavailable()) {
+      await runQuotationPdfJob(
+        (docEl) => exportRailingQuotationPdf(docEl, `${(meta.quoteNumber || 'quote').replace(/[^\w.-]+/g, '_')}.pdf`),
+        'PDF downloaded (use Share → Print on mobile).',
+        'Print failed — try PDF.',
+      )
+      return
+    }
+    await runQuotationPdfJob(
+      (docEl) => printRailingQuotationPdf(docEl),
+      'Print dialog opened.',
+      'Print failed — try PDF.',
+    )
+  }
+
+  const handleExportPdf = async () => {
+    const safeName = (meta.quoteNumber || 'railing-quote').replace(/[^\w.-]+/g, '_')
+    await runQuotationPdfJob(
+      (docEl) => exportRailingQuotationPdf(docEl, `${safeName}.pdf`),
+      'PDF downloaded.',
+      'PDF export failed — check logo / connection.',
+    )
   }
 
   return (
-    <div className={embedUnified ? 'app railing-embed' : 'app'}>
+    <div className={`app${activeDrawer ? ' drawer-open' : ''}${embedUnified ? ' railing-embed' : ''}`}>
       {embedUnified?.onPushLine && embedUnified?.onBackToWindows && (
-        <div className="no-print border-b border-slate-700 bg-slate-900/95 px-3 py-2 text-[12px] text-sky-100">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3">
-            <button
-              type="button"
-              className="rounded-lg border border-slate-500 bg-slate-800 px-2 py-1 font-semibold text-white hover:bg-slate-700"
-              onClick={embedUnified.onBackToWindows}
-            >
-              ← Windows &amp; doors
-            </button>
-            <span className="opacity-95">
-              <strong className="text-sky-200">Combined quote:</strong> Har baar &quot;Add to quotation&quot; yahan + main list dono jagah sync
-              ho jata hai — View Quotation se windows ke saath ek hi PDF/total mein railing bhi shamil karein.
-            </span>
-          </div>
+        <div className="railing-embed-banner no-print">
+          <button
+            type="button"
+            className="embed-back-btn"
+            onClick={embedUnified.onBackToWindows}
+          >
+            ← Windows
+          </button>
+          <span className="embed-banner-text">
+            Combined quote — items sync to main list
+          </span>
         </div>
       )}
       <AppHeader
@@ -442,6 +584,15 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
         canRedo={canRedo}
         onUndo={() => undo() && showToast('Undo')}
         onRedo={() => redo() && showToast('Redo')}
+        quickActions={
+          <QuotationQuickActions
+            quoteDisabled={lines.length === 0}
+            onImportJson={() => importJsonRef.current?.click()}
+            onExportJson={handleExportJson}
+            onPrint={handlePrint}
+            onExportPdf={handleExportPdf}
+          />
+        }
       />
 
       <main className="workspace-main no-print">
@@ -474,7 +625,22 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
             />
           </div>
         </div>
+
       </main>
+
+      <input
+        ref={importJsonRef}
+        type="file"
+        accept=".json,application/json"
+        className="sr-only"
+        aria-hidden
+        tabIndex={-1}
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) handleImportJsonFile(f)
+          e.target.value = ''
+        }}
+      />
 
       <DrawerPanel
         open={activeDrawer === 'quotation'}
@@ -493,22 +659,19 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
           onRemove={(id) => {
             setLines((p) => p.filter((l) => l.id !== id))
             if (editingLineId === id) setEditingLineId(null)
+            embedUnified?.onRemoveLine?.(id)
           }}
           onClear={() => {
             setLines([])
             setEditingLineId(null)
+            embedUnified?.onClearLines?.()
           }}
-          onPrint={handlePrint}
           onPreview={() => {
             setShowQuotePreview(true)
             setActiveDrawer(null)
-            window.setTimeout(
-              () =>
-                document
-                  .getElementById('quotation-preview')
-                  ?.scrollIntoView({ behavior: 'smooth' }),
-              100,
-            )
+            window.setTimeout(() => {
+              document.getElementById('quotation-print-root')?.scrollTo({ top: 0, behavior: 'smooth' })
+            }, 80)
           }}
         />
       </DrawerPanel>
@@ -603,9 +766,20 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
 
       {lines.length > 0 && (
         <div
-          id="quotation-preview"
+          id="quotation-print-root"
           className={`quotation-print-root ${showQuotePreview ? 'on-screen-preview' : ''}`}
+          role={showQuotePreview ? 'dialog' : undefined}
+          aria-label={showQuotePreview ? 'Quotation preview' : undefined}
         >
+          {showQuotePreview && (
+            <button
+              type="button"
+              className="qdoc-preview-close no-print"
+              onClick={() => setShowQuotePreview(false)}
+            >
+              Close preview
+            </button>
+          )}
           <QuotationDocument meta={meta} lines={lines} />
         </div>
       )}

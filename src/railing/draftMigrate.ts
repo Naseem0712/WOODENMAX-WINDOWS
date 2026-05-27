@@ -1,7 +1,18 @@
 import { migrateZigzagTypeToCustom } from './customSegments'
-import { DEFAULT_PACKAGE_RATES } from './packagePricing'
+import { normalizeFinishSpecs } from './hardwareDefaults'
+import { normalizePackageRates } from './packagePricing'
 import { ensureOTypeFourSides } from './oTypeMigrate'
 import type { DesignDraft } from './types'
+
+function ensureSegmentSupportFields(draft: DesignDraft): DesignDraft {
+  return {
+    ...draft,
+    segmentConfigs: draft.segmentConfigs.map((c) => ({
+      ...c,
+      studsPerGlass: c.studsPerGlass ?? c.pillarsPerGlass ?? 2,
+    })),
+  }
+}
 
 export function normalizeDraft(draft: DesignDraft): DesignDraft {
   let d = { ...draft }
@@ -18,12 +29,15 @@ export function normalizeDraft(draft: DesignDraft): DesignDraft {
   if (!d.hardwareMode) {
     d = { ...d, hardwareMode: 'normal' }
   }
+  d = ensureSegmentSupportFields(d)
   return ensureSegmentRailProfiles(
     ensureOTypeFourSides({
       ...d,
-      packageRates: d.packageRates ?? { ...DEFAULT_PACKAGE_RATES },
-      packageQuoteUnit: d.packageQuoteUnit ?? 'sft',
+      finish: normalizeFinishSpecs(d.finish),
+      packageRates: normalizePackageRates(d.packageRates),
+      packageQuoteUnit: d.packageQuoteUnit ?? 'rft',
       customCharges: d.customCharges ?? [],
+      applyHoleCharges: d.applyHoleCharges ?? false,
     }),
   )
 }

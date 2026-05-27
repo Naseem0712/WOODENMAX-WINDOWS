@@ -14,6 +14,23 @@
   --mono: 'JetBrains Mono', monospace;
 }
 
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+.app.drawer-open {
+  overflow: hidden;
+}
+
+body.railing-drawer-open .railing-embed-scroll-host {
+  overflow: hidden !important;
+  touch-action: none;
+}
+
 .app-header {
   position: sticky;
   top: 0;
@@ -25,38 +42,155 @@
 }
 
 .app-header-slim {
-  padding: 0.45rem 0.85rem 0.5rem;
+  padding: 0.35rem 0.65rem 0.4rem;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
 }
 
-.hdr-row {
+.hdr-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 0.75rem;
+  gap: 0.35rem 0.45rem;
 }
 
-.brand-slim {
-  gap: 0.55rem;
+.hdr-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  order: 1;
+  min-width: 0;
 }
 
-.brand-slim h1 {
-  font-size: 0.95rem !important;
-  line-height: 1.2;
+.hdr-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  min-width: 0;
 }
 
-.hdr-sub {
-  margin: 0 !important;
-  font-size: 0.7rem !important;
+.hdr-brand-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.hdr-brand-tag {
+  font-size: 0.62rem;
   color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hdr-collapse-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.hdr-collapse-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.hdr-quick-actions {
+  flex-shrink: 0;
+}
+
+.hdr-quick-actions .quotation-quick-actions {
+  justify-content: flex-end;
+  gap: 0.25rem;
+  flex-wrap: nowrap;
+}
+
+/* Override global .btn-primary { width: 100% } inside header toolbar */
+.hdr-quick-actions .btn-primary,
+.hdr-quick-actions .btn-secondary {
+  width: auto !important;
+  flex: 0 0 auto;
+  min-height: 1.65rem;
+  max-height: 1.65rem;
+  padding: 0.22rem 0.5rem !important;
+  font-size: 0.7rem !important;
+  line-height: 1.15;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  white-space: nowrap;
+}
+
+.hdr-quick-actions .btn-primary {
+  background: linear-gradient(135deg, #0ea5e9, #6366f1);
+  color: #fff;
+  min-width: 2.35rem;
+  padding-inline: 0.55rem !important;
+}
+
+.hdr-quick-actions .qa-ico {
+  display: none;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.quotation-quick-actions--header .qa-txt {
+  font-weight: 600;
 }
 
 .hdr-live-totals {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem 0.6rem;
+  gap: 0.3rem 0.45rem;
   align-items: center;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.railing-embed-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.72rem;
+  color: #bae6fd;
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid #334155;
+}
+
+.embed-back-btn {
+  flex-shrink: 0;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid #475569;
+  background: #1e293b;
+  color: #fff;
+  cursor: pointer;
+}
+
+.embed-banner-text {
+  opacity: 0.9;
+  line-height: 1.25;
+}
+
+.hdr-total-design--optional {
+  display: none;
+}
+
+.hdr-expanded .hdr-total-design--optional {
+  display: inline-flex;
 }
 
 .hdr-total-chip {
@@ -82,10 +216,27 @@
 .hdr-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.4rem;
-  padding-top: 0.35rem;
+  gap: 0.28rem;
+  margin-top: 0.2rem;
+  padding-top: 0.25rem;
   border-top: 1px solid var(--border);
+}
+
+@media (min-width: 961px) {
+  .hdr-nav {
+    gap: 0.25rem;
+    margin-top: 0.15rem;
+    padding-top: 0.2rem;
+  }
+
+  .hdr-nav-btn {
+    padding: 0.28rem 0.55rem;
+    font-size: 0.68rem;
+  }
+}
+
+.hdr-nav:not(.is-open) {
+  display: none;
 }
 
 .hdr-nav-btn {
@@ -257,17 +408,27 @@
   position: relative;
   width: min(420px, 100vw);
   max-width: 100%;
-  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
   background: var(--surface);
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   box-shadow: -12px 0 40px rgba(0, 0, 0, 0.35);
   animation: drawer-in 0.2s ease;
+  overscroll-behavior: contain;
 }
 
 .drawer-wide {
-  width: min(520px, 100vw);
+  width: min(640px, 100vw);
+}
+
+@media (max-width: 960px) {
+  .drawer-panel,
+  .drawer-wide {
+    width: 100vw;
+    max-width: 100vw;
+  }
 }
 
 @keyframes drawer-in {
@@ -313,9 +474,12 @@
 
 .drawer-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0.85rem;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .drawer-divider {
@@ -329,6 +493,8 @@
   background: transparent;
   padding: 0;
   max-height: none;
+  min-height: 0;
+  height: auto;
 }
 
 .quote-drawer-hint {
@@ -337,12 +503,105 @@
 }
 
 .workspace-main {
-  min-height: calc(100vh - 72px);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.quotation-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.hdr-quick-actions .qa-btn-pdf {
+  min-width: 2.35rem;
+}
+
+.quote-panel-with-footer {
+  display: flex;
+  flex-direction: column;
+  min-height: min(70vh, calc(100dvh - 4rem));
+  margin: -0.85rem;
+  width: calc(100% + 1.7rem);
+}
+
+.quote-panel-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.85rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.quote-panel-footer {
+  flex-shrink: 0;
+  padding: 0.65rem 0.85rem;
+  padding-bottom: max(0.65rem, env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.quote-panel-footer--slim {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.65rem;
+  padding: 0.45rem 0.85rem;
+  padding-bottom: max(0.45rem, env(safe-area-inset-bottom, 0px));
+}
+
+.quote-panel-footer-hint {
+  margin: 0;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.quote-panel-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+@media (max-width: 960px) {
+  .quote-panel-footer-hint {
+    display: none;
+  }
+
+  .quote-panel-footer--slim {
+    justify-content: center;
+  }
+
+  .quote-panel-footer-actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Inside WoodenMax shell: scroll is on the outer flex child; drop 100vh min-height + sticky canvas quirks */
 .railing-embed .workspace-main {
   min-height: 0;
+  max-height: none;
 }
 
 .railing-embed .workspace-canvas {
@@ -397,38 +656,186 @@
 }
 
 @media (max-width: 960px) {
+  .app-header.hdr-collapsed {
+    padding-bottom: 0.3rem;
+  }
+
+  .app-header.hdr-collapsed .hdr-nav {
+    display: none;
+  }
+
+  .app-header.hdr-expanded .hdr-nav.is-open {
+    display: flex;
+  }
+
+  .hdr-bar {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.28rem;
+  }
+
+  .hdr-collapse-btn {
+    flex-shrink: 0;
+    order: 0;
+  }
+
+  .hdr-live-totals {
+    order: 1;
+  }
+
+  .hdr-quick-actions {
+    order: 2;
+  }
+
+  .hdr-brand {
+    flex-shrink: 0;
+    order: 3;
+    margin-left: 0.1rem;
+  }
+
+  .hdr-brand .company-logo-img {
+    width: 22px !important;
+    max-height: 22px !important;
+  }
+
+  .hdr-brand-text {
+    display: none;
+  }
+
+  .hdr-live-totals {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-left: 0;
+    justify-content: flex-start;
+    overflow: hidden;
+  }
+
+  .hdr-total-chip {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .hdr-total-chip strong {
+    font-size: 0.72rem;
+  }
+
+  .hdr-quick-actions {
+    flex-shrink: 0;
+    width: auto;
+  }
+
+  .hdr-quick-actions .quotation-quick-actions--header {
+    display: flex;
+    width: auto;
+    gap: 0.18rem;
+  }
+
+  .hdr-quick-actions .quotation-quick-actions--header .qa-btn {
+    flex: 0 0 auto;
+    width: 1.55rem;
+    min-width: 1.55rem;
+    padding: 0.18rem 0.15rem !important;
+    font-size: 0.62rem !important;
+  }
+
+  .hdr-quick-actions .quotation-quick-actions--header .qa-btn-pdf {
+    width: auto;
+    min-width: 1.85rem;
+    padding-inline: 0.35rem !important;
+  }
+
+  .hdr-quick-actions .quotation-quick-actions--header .qa-ico {
+    display: inline;
+  }
+
+  .hdr-quick-actions .quotation-quick-actions--header .qa-txt {
+    display: none;
+  }
+
+  .hdr-quick-actions .quotation-quick-actions--header .qa-btn-pdf .qa-txt {
+    display: inline;
+  }
+
+  .hdr-chip-k {
+    display: none;
+  }
+
   .workspace-grid {
     grid-template-columns: 1fr;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.75rem;
   }
 
   .workspace-canvas {
     position: static;
   }
+
+  .workspace-config {
+    min-height: 0;
+  }
 }
 
-.header-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem 1rem;
-}
+@media (min-width: 961px) {
+  .hdr-collapse-btn {
+    display: none;
+  }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
+  .hdr-bar {
+    flex-wrap: nowrap;
+    gap: 0.5rem 0.65rem;
+  }
 
-.logo {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #0ea5e9, #6366f1);
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 1rem;
+  .hdr-brand,
+  .hdr-live-totals,
+  .hdr-quick-actions,
+  .hdr-collapse-btn {
+    order: unset;
+  }
+
+  .hdr-live-totals {
+    margin-left: 0;
+    flex: 1;
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .hdr-quick-actions {
+    margin-left: auto;
+    padding: 0;
+    border: none;
+  }
+
+  .hdr-quick-actions .quotation-quick-actions--header {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .hdr-quick-actions .quotation-quick-actions--header .qa-ico {
+    display: none;
+  }
+
+  .hdr-quick-actions .quotation-quick-actions--header .qa-txt {
+    display: inline;
+  }
+
+  .hdr-total-design--optional {
+    display: inline-flex;
+  }
+
+  .hdr-nav {
+    display: flex !important;
+  }
+
+  .hdr-nav:not(.is-open) {
+    display: flex !important;
+  }
 }
 
 .app-header h1 {
@@ -441,25 +848,6 @@
   margin: 0.15rem 0 0;
   color: var(--muted);
   font-size: 0.875rem;
-}
-
-.company-meta {
-  margin-top: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  font-size: 0.8rem;
-  color: var(--muted);
-  max-width: 52rem;
-}
-
-.company-meta a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.company-meta a:hover {
-  text-decoration: underline;
 }
 
 .company-logo-img {
@@ -586,12 +974,26 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.65rem;
+}
+
+.preview-wrap.cad {
+  margin-bottom: 0.5rem;
 }
 
 .preview-header-cad {
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.72rem;
+}
+
+.cad-title-long {
+  display: inline;
+}
+
+.cad-title-short {
+  display: none;
 }
 
 .cad-toolbar {
@@ -630,17 +1032,14 @@
 }
 
 .cad-viewport {
-  height: min(52vh, 480px);
-  min-height: 280px;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  height: auto;
   cursor: grab;
   touch-action: none;
-}
-
-/* Phones / tablets: allow vertical page scroll over the CAD band; pinch still works · one-finger pan is reduced for Y (use drag mostly on X or open panel to scroll). */
-@media (hover: none) and (pointer: coarse) {
-  .cad-viewport {
-    touch-action: pan-y pinch-zoom;
-  }
+  overflow: hidden;
+  background: #0f172a;
 }
 
 .cad-viewport:active {
@@ -686,16 +1085,84 @@
 .cad-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  padding: 0.6rem 1rem;
-  font-size: 0.8rem;
+  gap: 0.5rem 0.85rem;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.72rem;
   border-top: 1px solid var(--border);
   background: #0f172a;
+}
+
+.cad-stat em {
+  font-style: normal;
+  color: var(--muted);
+  margin-right: 0.2rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cad-stat-sub {
+  color: var(--muted);
+  font-size: 0.68rem;
+  margin-left: 0.15rem;
 }
 
 .cad-stats strong {
   color: var(--accent);
   font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 960px) {
+  .cad-title-long {
+    display: none;
+  }
+
+  .cad-title-short {
+    display: inline;
+  }
+
+  .cad-hint,
+  .cad-tool-undo,
+  .cad-tool-redo {
+    display: none !important;
+  }
+
+  .cad-legend-svg {
+    display: none;
+  }
+
+  .preview-header-cad {
+    padding: 0.32rem 0.45rem;
+  }
+
+  .cad-toolbar {
+    gap: 0.25rem;
+    margin-left: auto;
+  }
+
+  .cad-tool-btn {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.65rem;
+  }
+
+  .cad-zoom-label {
+    min-width: 2rem;
+    font-size: 0.65rem;
+  }
+
+  .workspace-grid {
+    padding: 0.45rem 0.55rem 0.65rem;
+    gap: 0.5rem;
+  }
+}
+
+@media (min-width: 961px) {
+  .workspace-canvas .cad-viewport {
+    width: min(100%, 400px);
+    max-width: 400px;
+    margin-inline: auto;
+  }
 }
 
 .bom-wrap {
@@ -945,6 +1412,32 @@
   font-size: 1.15rem;
 }
 
+.package-section-label {
+  margin: 0.85rem 0 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.package-rate-install {
+  border-left: 2px solid rgba(52, 211, 153, 0.35);
+  padding-left: 0.5rem;
+}
+
+.field-basis {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+
+.package-rate-breakdown {
+  margin: 0.35rem 0 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
 .add-to-quote-section {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1185,6 +1678,265 @@
 .set-rate-chip-active {
   border-color: var(--accent);
   background: rgba(56, 189, 248, 0.12);
+}
+
+.set-rate-chip-clickable {
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+
+.set-rate-chip-clickable:hover {
+  border-color: var(--accent);
+}
+
+.product-spec-block {
+  margin: 0.65rem 0 0.85rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.product-spec-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.product-spec-grid {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.budget-breakdown-panel {
+  margin-bottom: 1rem;
+}
+
+.budget-breakdown-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.budget-hw-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  margin: 0.65rem 0 0.85rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.glass-suggest-hint.in-range {
+  color: var(--success);
+}
+
+.hardware-color-sync {
+  margin: 0.5rem 0 0.75rem;
+}
+
+.staircase-hw-hint {
+  margin-top: 0.5rem;
+}
+
+.size-divide-leg-card {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.leg-divide-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.segment-divide-block {
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed var(--border);
+}
+
+.segment-divide-fields {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.calc-readout {
+  padding: 0.45rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--border);
+}
+
+.calc-readout small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.divide-option-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.5rem 0;
+}
+
+.divide-chips-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-right: 0.25rem;
+}
+
+.divide-chip {
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.divide-chip:hover,
+.divide-chip.active {
+  border-color: var(--accent);
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.divide-chip.in-range {
+  border-color: rgba(52, 211, 153, 0.45);
+}
+
+.divide-range-note {
+  margin: 0.25rem 0 0;
+  font-size: 0.72rem;
+}
+
+.railing-height-block {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+.home-support-row {
+  margin-top: 0.65rem;
+}
+
+.global-support-field {
+  max-width: 280px;
+}
+
+.hint-inline {
+  font-weight: normal;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.package-install-preset {
+  margin: 0.35rem 0 0.75rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid var(--border);
+}
+
+.budget-summary-strip {
+  margin-bottom: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.budget-quote-line {
+  margin: 0.5rem 0 0;
+  font-size: 0.88rem;
+}
+
+.budget-collapse-panel {
+  margin-top: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.25);
+}
+
+.budget-collapse-panel .collapse-panel-body {
+  padding: 0.75rem 0.85rem 1rem;
+}
+
+.costing-summary-strip {
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.costing-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  padding: 0.35rem 0;
+  font-size: 0.85rem;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+}
+
+.costing-summary-row:last-child {
+  border-bottom: none;
+}
+
+.costing-summary-label {
+  color: var(--muted);
+}
+
+.costing-glass-row {
+  color: var(--text);
+}
+
+.costing-quote-row {
+  padding-top: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.costing-total-amount {
+  color: var(--success);
+}
+
+.costing-summary-sub {
+  font-weight: normal;
+  font-size: 0.8em;
+  color: var(--muted);
+}
+
+.design-quote-rate-panel {
+  margin-bottom: 0.75rem;
+}
+
+.quote-rate-inputs {
+  margin-top: 0.65rem;
+}
+
+.budget-install-row td {
+  color: var(--muted);
+}
+
+.budget-combined-row td {
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.budget-effective-rates {
+  margin: 0.75rem 0;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.budget-effective-rates p {
+  margin: 0.35rem 0;
 }
 
 .set-rate-chip-label {
@@ -2444,32 +3196,228 @@
   page-break-inside: avoid;
 }
 
+body.quotation-preview-open {
+  overflow: hidden !important;
+}
+
 .quotation-print-root.on-screen-preview {
   display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: #94a3b8;
-  padding: 1.5rem 1rem 3rem;
+  padding: 1rem 0.75rem 2.5rem;
 }
 
 .quotation-print-root.on-screen-preview::before {
-  content: 'Quotation preview — use PDF / Print for final document';
+  content: 'Quotation preview — scroll to review · Print or Download PDF';
   display: block;
+  position: sticky;
+  top: 0;
+  z-index: 2;
   text-align: center;
   color: #1e293b;
   font-size: 0.85rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
   font-weight: 600;
+  background: #94a3b8;
+}
+
+.qdoc-preview-close {
+  display: block;
+  position: sticky;
+  top: 2.25rem;
+  z-index: 3;
+  margin: 0 auto 0.75rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #0f172a;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.qdoc-preview-close:hover {
+  background: #f1f5f9;
+}
+
+/* Off-screen capture — PDF/print without opening preview overlay */
+.quotation-print-root.quotation-print-capture {
+  display: block !important;
+  position: fixed !important;
+  left: -12000px !important;
+  top: 0 !important;
+  width: 210mm !important;
+  max-width: 210mm !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  z-index: -1 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: #fff !important;
+}
+
+.quotation-print-root.quotation-print-capture::before {
+  display: none !important;
+}
+
+body.quotation-capture-active {
+  overflow: auto !important;
+}
+
+/* Full-screen only when user opens Preview (not during silent PDF capture) */
+.quotation-print-root.pdf-export-mode:not(.quotation-print-capture) {
+  display: flex !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 100000 !important;
+  overflow: auto !important;
+  background: #94a3b8 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  max-height: none !important;
+  justify-content: center !important;
+  align-items: flex-start !important;
+}
+
+.quotation-print-root.pdf-export-mode::before {
+  display: none !important;
+}
+
+.quotation-print-root.pdf-export-mode .quotation-doc,
+.quotation-print-root.quotation-print-capture .quotation-doc {
+  width: 198mm;
+  max-width: 198mm;
+  min-width: 0;
+  margin: 0;
+  box-sizing: border-box;
+  padding: 2mm 3mm;
+  overflow-x: hidden;
+  box-shadow: none;
+}
+
+.quotation-print-root.pdf-export-mode:not(.quotation-print-capture) .quotation-doc {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+/* PDF export — same compact layout as browser print */
+body.pdf-export-active .quotation-print-root.pdf-export-mode .quote-item-block.quote-item-detail,
+body.pdf-export-active .quotation-print-root.pdf-export-mode .quote-item-pack {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  break-before: auto;
+  page-break-before: auto;
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode .quote-item-block {
+  margin-bottom: 6px;
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode .quote-mini-svg {
+  max-height: 118px;
+  min-height: 90px;
+  margin-bottom: 3px;
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode .quote-item-head {
+  padding: 6px 10px;
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode .quote-item-head h3 {
+  font-size: 10pt;
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode .quote-item-body {
+  grid-template-columns: minmax(0, 54%) minmax(0, 46%);
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode .quote-item-left {
+  padding: 5px 8px 4px;
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode .quote-item-right {
+  padding: 5px 4px 5px 2px;
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode .spec-label {
+  width: 30% !important;
+  max-width: 30% !important;
+  padding-right: 3px !important;
+  font-size: 7pt;
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode .spec-value {
+  width: 70% !important;
+  font-size: 7pt;
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode .dim-box-compact .dim-title,
+body.pdf-export-active .quotation-print-root.pdf-export-mode .dim-box-compact .dim-lines,
+body.pdf-export-active .quotation-print-root.pdf-export-mode .dim-box-compact .dim-height {
+  font-size: 6pt;
+  line-height: 1.15;
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode .qdoc-price-grid {
+  font-size: 7.5pt;
+  grid-template-columns: minmax(0, 1fr) 4.5rem 2.2rem 5.75rem;
+  column-gap: 6px;
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode .qdoc-price-grid .qdoc-price-h,
+body.pdf-export-active .quotation-print-root.pdf-export-mode .qdoc-price-grid .qdoc-price-v {
+  padding-top: 2px;
+  padding-bottom: 4px;
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode .spec-table {
+  font-size: 7.5pt;
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode .qdoc-header-panels {
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+}
+
+.quotation-print-root.pdf-export-mode .qdoc-print-footer {
+  display: none !important;
+}
+
+body.pdf-export-active:not(.quotation-capture-active) .no-print,
+body.pdf-export-active:not(.quotation-capture-active) .workspace-main,
+body.pdf-export-active:not(.quotation-capture-active) .drawer-root {
+  visibility: hidden !important;
+}
+
+body.pdf-export-active .quotation-print-root.pdf-export-mode,
+body.quotation-capture-active .quotation-print-root.quotation-print-capture {
+  visibility: visible !important;
 }
 
 /* ─── Professional quotation (print / PDF) ─── */
 .quotation-doc {
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  color: #0f172a;
+  font-family: Georgia, 'Times New Roman', 'Palatino Linotype', Times, serif;
+  color: #1a2332;
   background: #fff;
-  max-width: 210mm;
+  width: 198mm;
+  max-width: 198mm;
+  box-sizing: border-box;
   margin: 0 auto;
-  padding: 12mm 14mm;
-  font-size: 10pt;
-  line-height: 1.45;
+  padding: 2mm 3mm;
+  font-size: 9.75pt;
+  line-height: 1.42;
+  overflow-x: hidden;
+  letter-spacing: 0.01em;
 }
 
 /* Equal-width company + client panels — no overlap on print */
@@ -2505,32 +3453,43 @@
   margin: 0 0 8px;
   padding-bottom: 5px;
   border-bottom: 1px solid #e2e8f0;
-  font-size: 9.5pt;
+  font-size: 9pt;
   font-weight: 700;
   color: #334155;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.06em;
   line-height: 1.3;
 }
 
-.qdoc-brand-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 8px;
-  min-width: 0;
+.qdoc-panel-company .qdoc-panel-title {
+  display: none;
 }
 
-.qdoc-brand-text {
-  flex: 1;
-  min-width: 0;
+.qdoc-company-logo-bar {
+  margin: 0 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.qdoc-logo-head {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 64px;
+  height: auto;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.qdoc-company-intro {
+  margin-bottom: 8px;
 }
 
 .qdoc-brand-name {
   margin: 0 0 3px;
   font-size: 10.5pt;
   font-weight: 700;
-  color: #334155;
+  color: #1e293b;
   line-height: 1.35;
   word-wrap: break-word;
   overflow-wrap: break-word;
@@ -2543,13 +3502,6 @@
   font-style: italic;
   line-height: 1.35;
   word-wrap: break-word;
-}
-
-.qdoc-logo {
-  flex-shrink: 0;
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
 }
 
 .qdoc-info-table {
@@ -2630,10 +3582,13 @@
 
 .qdoc-section-title {
   margin: 0 0 10px;
-  font-size: 11pt;
+  font-size: 10.5pt;
+  font-weight: 700;
   color: #334155;
   border-bottom: 2px solid #e2e8f0;
   padding-bottom: 4px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .qdoc-line-type {
@@ -2645,27 +3600,85 @@
   margin-bottom: 16px;
 }
 
-.qdoc-item-price-table {
+/* Price row — CSS grid so PDF/print columns stay aligned (tables misalign in html2canvas) */
+.qdoc-price-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4.75rem 2.35rem 6rem;
+  column-gap: 8px;
+  row-gap: 2px;
   width: 100%;
-  border-collapse: collapse;
-  font-size: 8.5pt;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-size: 7.5pt;
   margin: 0 0 8px;
+  align-items: start;
 }
 
-.qdoc-item-price-table th {
-  background: #fff;
-  color: #0f172a;
-  padding: 5px 6px;
-  text-align: left;
-  font-size: 8pt;
+.qdoc-price-grid .qdoc-price-h {
   font-weight: 700;
+  color: #0f172a;
+  padding: 4px 0 5px;
   border-bottom: 2px solid #cbd5e1;
+  background: #fff;
 }
 
-.qdoc-item-price-table td {
-  padding: 6px;
+.qdoc-price-grid .qdoc-price-v {
+  padding: 4px 0 6px;
   border-bottom: 1px solid #e2e8f0;
-  vertical-align: top;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.qdoc-price-grid .qdoc-col-basis {
+  text-align: left;
+  min-width: 0;
+}
+
+.qdoc-price-grid .qdoc-col-rate {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.qdoc-price-grid .qdoc-col-sets {
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.qdoc-price-grid .qdoc-col-amount {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  padding-right: 0;
+}
+
+.quote-bank-details {
+  margin: 0.75rem 0 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.65rem;
+  background: var(--surface2);
+}
+
+.quote-bank-details summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  list-style: none;
+}
+
+.quote-bank-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.quote-bank-details[open] summary {
+  margin-bottom: 0.5rem;
+}
+
+.quote-bank-details .meta-fields {
+  margin-top: 0.35rem;
 }
 
 .qdoc-item-extras {
@@ -2684,8 +3697,8 @@
 
 .qdoc-totals-table {
   width: 100%;
-  max-width: 280px;
-  margin-left: auto;
+  max-width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 10pt;
 }
@@ -2694,10 +3707,20 @@
   text-align: left;
   padding: 6px 8px;
   font-weight: 600;
+  width: 58%;
 }
 
 .qdoc-totals-table td {
   padding: 6px 8px;
+  width: 42%;
+}
+
+.qdoc-totals-table .qdoc-col-amount {
+  width: auto;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  padding-right: 2px !important;
 }
 
 .qdoc-totals-table .grand-row th,
@@ -2768,33 +3791,29 @@
   margin-bottom: 14px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
-  overflow: visible;
+  overflow: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
-/* Keep each quotation item on one page — never split across pages */
-.quote-item-block.quote-item-detail,
-.quote-item-pack {
+/* Keep each product on one page chunk — flow multiple items per sheet when space allows */
+.quote-item-block.quote-item-detail {
   break-inside: avoid;
   page-break-inside: avoid;
-  -webkit-column-break-inside: avoid;
+  margin-bottom: 10px;
 }
 
 .quote-item-pack {
   display: block;
-}
-
-.quote-item-detail .qdoc-item-price-table,
-.quote-item-detail .quote-item-body,
-.quote-item-detail .qdoc-item-extras,
-.quote-item-detail .item-notes,
-.quote-item-detail .spec-table {
   break-inside: avoid;
   page-break-inside: avoid;
+  break-before: auto;
+  page-break-before: auto;
 }
 
-.quote-item-detail .spec-table tr {
-  break-inside: avoid;
-  page-break-inside: avoid;
+.quote-item-detail .quote-item-head {
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
 .quote-item-head {
@@ -2828,44 +3847,66 @@
 
 .quote-item-body {
   display: grid;
-  grid-template-columns: 42% 58%;
+  grid-template-columns: minmax(0, 54%) minmax(0, 46%);
   gap: 0;
   border-bottom: 1px solid #e2e8f0;
+  max-width: 100%;
 }
 
 .quote-item-left {
-  padding: 10px;
+  padding: 8px 10px 6px;
   border-right: 1px solid #e2e8f0;
   background: #fafafa;
 }
 
 .quote-mini-svg {
   width: 100%;
-  max-height: 165px;
+  max-height: 200px;
+  min-height: 120px;
   height: auto;
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   border: 1px solid #e2e8f0;
   border-radius: 4px;
   overflow: visible;
 }
 
 .dim-box {
-  font-size: 8pt;
+  font-size: 7.5pt;
   color: #334155;
+  line-height: 1.25;
 }
 
 .dim-box p {
-  margin: 2px 0;
+  margin: 1px 0;
+}
+
+.dim-box-compact {
+  margin-top: 2px;
+  padding-top: 3px;
+  border-top: 1px dotted #e2e8f0;
+}
+
+.dim-box-compact .dim-title {
+  margin: 0 0 2px !important;
+  font-size: 6.5pt;
+  line-height: 1.2;
+}
+
+.dim-box-compact .dim-lines,
+.dim-box-compact .dim-height {
+  margin: 0;
+  font-size: 6.5pt;
+  line-height: 1.2;
 }
 
 .dim-title {
   font-weight: 700;
-  color: #334155;
-  margin-top: 6px !important;
-  font-size: 7.5pt;
+  color: #475569;
+  margin-top: 4px !important;
+  font-size: 7pt;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
 }
 
 .glass-cut {
@@ -2875,30 +3916,41 @@
 }
 
 .quote-item-right {
-  padding: 10px 12px;
+  padding: 8px 6px 8px 4px;
 }
 
 .spec-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
-  font-size: 8.5pt;
+  font-size: 8pt;
 }
 
 .spec-table td {
-  padding: 4px 0;
+  padding: 2px 0;
   vertical-align: top;
   border-bottom: 1px dotted #e2e8f0;
 }
 
 .spec-label {
   color: #64748b;
-  width: 48%;
-  padding-right: 8px !important;
+  width: 32%;
+  max-width: 32%;
+  padding-right: 4px !important;
+  font-size: 7.5pt;
+  line-height: 1.25;
+  vertical-align: top;
 }
 
 .spec-value {
+  width: 68%;
   font-weight: 600;
   color: #0f172a;
+  font-size: 7.5pt;
+  line-height: 1.25;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  padding-left: 0 !important;
 }
 
 .item-cost-table {
@@ -3087,11 +4139,15 @@
 
 @media print {
   @page {
-    size: A4;
-    margin: 10mm 12mm 14mm;
+    size: A4 portrait;
+    margin: 6mm;
   }
 
   /* Hide entire calculator workspace — only quotation document prints */
+  .qdoc-preview-close {
+    display: none !important;
+  }
+
   .no-print,
   .layout-app,
   .workspace-main,
@@ -3141,12 +4197,37 @@
   .app {
     display: block !important;
     min-height: auto !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
     background: white !important;
   }
 
+  .railing-embed-scroll-host {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+
   .quotation-doc {
-    max-width: none;
-    padding: 0 0 10mm;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+    padding: 2mm 3mm !important;
+    margin: 0 !important;
+    overflow-x: hidden !important;
+    font-size: 9pt;
+  }
+
+  body.printing-quotation .quotation-print-root {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .qdoc-price-grid {
+    font-size: 7.5pt;
+    grid-template-columns: minmax(0, 1fr) 4.5rem 2.2rem 5.75rem;
+    column-gap: 6px;
   }
 
   .qdoc-header-panels {
@@ -3198,15 +4279,23 @@
     break-before: page;
   }
 
-  .quote-item-block.quote-item-detail,
+  .quote-item-block.quote-item-detail {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
+    margin-bottom: 6px;
+  }
+
   .quote-item-pack {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
     -webkit-column-break-inside: avoid !important;
+    break-before: auto !important;
+    page-break-before: auto !important;
   }
 
   .quote-item-block {
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
 
   .quote-item-head {
@@ -3217,39 +4306,79 @@
     font-size: 10pt;
   }
 
+  /* Print only — PDF/download keeps 54/46 via pdf-export-mode */
+  body.printing-quotation .quote-item-body,
   .quote-item-body {
-    grid-template-columns: 36% 64%;
+    grid-template-columns: minmax(0, 40%) minmax(0, 60%) !important;
   }
 
-  .quote-item-left,
+  body.printing-quotation .quote-item-left {
+    display: flex;
+    flex-direction: column;
+    padding: 5px 6px 3px !important;
+  }
+
+  body.printing-quotation .quote-item-right {
+    padding: 5px 6px 5px 4px !important;
+  }
+
+  .quote-item-left {
+    padding: 5px 6px 3px !important;
+  }
+
   .quote-item-right {
-    padding: 6px 8px;
+    padding: 5px 6px 5px 4px !important;
   }
 
+  body.printing-quotation .quote-mini-svg,
   .quote-mini-svg {
-    max-height: 95px;
-    margin-bottom: 4px;
+    max-height: 105px;
+    min-height: 0;
+    margin-bottom: 2px;
+    flex: 1 1 auto;
   }
 
-  .qdoc-item-price-table {
-    font-size: 8pt;
-  }
-
-  .qdoc-item-price-table th,
-  .qdoc-item-price-table td {
-    padding: 4px 5px;
+  body.printing-quotation .dim-box-compact {
+    flex: 0 0 auto;
+    margin-top: 1px;
+    padding-top: 2px;
+    padding-bottom: 0;
   }
 
   .spec-table {
     font-size: 7.5pt;
+    table-layout: fixed;
   }
 
   .spec-table td {
-    padding: 3px 5px;
+    padding: 2px 0;
   }
 
-  .dim-box {
-    font-size: 7pt;
+  .spec-label {
+    width: 28% !important;
+    max-width: 28% !important;
+    padding-right: 3px !important;
+    font-size: 7.5pt;
+  }
+
+  .spec-value {
+    width: 72% !important;
+    font-size: 7.5pt;
+  }
+
+  body.printing-quotation .dim-box-compact .dim-title,
+  body.printing-quotation .dim-box-compact .dim-lines,
+  body.printing-quotation .dim-box-compact .dim-height,
+  .dim-box-compact .dim-title,
+  .dim-box-compact .dim-lines,
+  .dim-box-compact .dim-height {
+    font-size: 6pt;
+    line-height: 1.1;
+    margin: 0;
+  }
+
+  body.printing-quotation .dim-box-compact .dim-title {
+    margin-bottom: 1px !important;
   }
 
   .item-notes {
@@ -3257,21 +4386,9 @@
     font-size: 7pt;
   }
 
+  /* CSS counter(page) shows "Page 0" in Chrome — page numbers come from PDF print/export */
   .qdoc-print-footer {
-    display: block;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    text-align: center;
-    font-size: 8pt;
-    color: #64748b;
-    padding: 2mm 0;
-    z-index: 9999;
-  }
-
-  .qdoc-page-num::after {
-    content: 'Page ' counter(page);
+    display: none !important;
   }
 
   .qdoc-terms-section {

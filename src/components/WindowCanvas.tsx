@@ -26,6 +26,11 @@ import {
 import { effectiveFourGlassMeetingMm } from '../utils/slidingGeometry';
 import { getFixedPanelVerticalDivisionsMm } from '../utils/fixedPanelDivisions';
 import { resolveFoldFrameEdges } from '../utils/foldDoorFrame';
+import {
+  getEffectiveLouverBays,
+  getLouverBaySeparatorMm,
+  layoutLouverBayRects,
+} from '../utils/louverBays';
 import { FoldDoorOpeningGraphic } from './FoldDoorOpeningVisual';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
@@ -666,56 +671,117 @@ const createWindowElements = (
        switch (windowType) {
             case WindowType.LOUVERS: {
                 const { louverPattern, orientation } = config;
-                if (orientation === 'vertical') {
-                    const patternHeight = louverPattern.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
-                    if (patternHeight > 0) {
-                        let currentY = 0;
-                        while (currentY < innerAreaHeight) {
+                const sep = getLouverBaySeparatorMm(config.series.dimensions);
+                const baysEff = getEffectiveLouverBays(config);
+                const layoutDir = config.louverBayLayout || 'vertical';
+                const rects =
+                    baysEff.length <= 1
+                        ? [{ x: 0, y: 0, width: innerAreaWidth, height: innerAreaHeight }]
+                        : layoutLouverBayRects(innerAreaWidth, innerAreaHeight, baysEff, layoutDir, sep);
+
+                const renderLouverProfilesInRect = (
+                    rect: { x: number; y: number; width: number; height: number },
+                    keyPrefix: string,
+                ): void => {
+                    if (orientation === 'vertical') {
+                        const patternHeight = louverPattern.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+                        if (patternHeight <= 0) return;
+                        let currentY = rect.y;
+                        while (currentY < rect.y + rect.height) {
                             for (const item of louverPattern) {
                                 const itemSize = Number(item.size) || 0;
-                                if (currentY >= innerAreaHeight) break;
-                                
-                                const remainingHeight = innerAreaHeight - currentY;
+                                if (currentY >= rect.y + rect.height) break;
+                                const remainingHeight = rect.y + rect.height - currentY;
                                 const h = Math.min(itemSize, remainingHeight);
 
                                 if (item.type === 'profile') {
                                     innerContent.push(
                                         <ProfilePiece
-                                            key={`louver-v-${currentY}`}
+                                            key={`${keyPrefix}-louver-v-${currentY}`}
                                             color={profileColor}
                                             texture={pt}
-                                            style={{ top: currentY * scale, left: 0, width: innerAreaWidth * scale, height: h * scale }}
-                                        />
+                                            style={{
+                                                top: currentY * scale,
+                                                left: rect.x * scale,
+                                                width: rect.width * scale,
+                                                height: h * scale,
+                                            }}
+                                        />,
                                     );
                                 }
                                 currentY += itemSize;
                             }
                         }
-                    }
-                } else { // Horizontal orientation
-                    const patternWidth = louverPattern.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
-                    if (patternWidth > 0) {
-                        let currentX = 0;
-                        while (currentX < innerAreaWidth) {
+                    } else {
+                        const patternWidth = louverPattern.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+                        if (patternWidth <= 0) return;
+                        let currentX = rect.x;
+                        while (currentX < rect.x + rect.width) {
                             for (const item of louverPattern) {
                                 const itemSize = Number(item.size) || 0;
-                                if (currentX >= innerAreaWidth) break;
+                                if (currentX >= rect.x + rect.width) break;
 
-                                const remainingWidth = innerAreaWidth - currentX;
+                                const remainingWidth = rect.x + rect.width - currentX;
                                 const w = Math.min(itemSize, remainingWidth);
 
                                 if (item.type === 'profile') {
                                     innerContent.push(
                                         <ProfilePiece
-                                            key={`louver-h-${currentX}`}
+                                            key={`${keyPrefix}-louver-h-${currentX}`}
                                             color={profileColor}
                                             texture={pt}
-                                            style={{ top: 0, left: currentX * scale, width: w * scale, height: innerAreaHeight * scale }}
-                                        />
+                                            style={{
+                                                top: rect.y * scale,
+                                                left: currentX * scale,
+                                                width: w * scale,
+                                                height: rect.height * scale,
+                                            }}
+                                        />,
                                     );
                                 }
                                 currentX += itemSize;
                             }
+                        }
+                    }
+                };
+
+                rects.forEach((rect, idx) => renderLouverProfilesInRect(rect, `bay-${idx}`));
+
+                if (baysEff.length > 1 && sep > 0) {
+                    for (let i = 0; i < rects.length - 1; i++) {
+                        const r = rects[i];
+                        if (layoutDir === 'vertical') {
+                            const ySep = r.y + r.height;
+                            innerContent.push(
+                                <ProfilePiece
+                                    key={`louver-sep-${i}`}
+                                    color={profileColor}
+                                    texture={pt}
+                                    style={{
+                                        left: 0,
+                                        top: ySep * scale,
+                                        width: innerAreaWidth * scale,
+                                        height: sep * scale,
+                                        zIndex: 4,
+                                    }}
+                                />,
+                            );
+                        } else {
+                            const xSep = r.x + r.width;
+                            innerContent.push(
+                                <ProfilePiece
+                                    key={`louver-sep-${i}`}
+                                    color={profileColor}
+                                    texture={pt}
+                                    style={{
+                                        left: xSep * scale,
+                                        top: 0,
+                                        width: sep * scale,
+                                        height: innerAreaHeight * scale,
+                                        zIndex: 4,
+                                    }}
+                                />,
+                            );
                         }
                     }
                 }
@@ -1188,7 +1254,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const renderedWindowRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
-  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+  const [viewportSize, setViewportSize] = useState({ w: 0, h: 0 });
   const [isExporting, setIsExporting] = useState(false);
   const [viewportEl, setViewportEl] = useState<HTMLElement | null>(null);
 
@@ -1197,6 +1263,10 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     : Number(width) || 0;
   const numHeight = Number(height) || 0;
 
+  /** px reserved for dimension labels drawn outside the frame bbox */
+  const LABEL_LEFT_PX = 72;
+  const LABEL_TOP_PX = 40;
+  const CANVAS_PAD_PX = 24;
 
   const dims = useMemo(() => ({
     outerFrame: Number(series.dimensions.outerFrame) || 0, outerFrameVertical: Number(series.dimensions.outerFrameVertical) || 0, fixedFrame: Number(series.dimensions.fixedFrame) || 0, shutterHandle: Number(series.dimensions.shutterHandle) || 0, shutterInterlock: Number(series.dimensions.shutterInterlock) || 0, shutterTop: Number(series.dimensions.shutterTop) || 0, shutterBottom: Number(series.dimensions.shutterBottom) || 0, shutterMeeting: Number(series.dimensions.shutterMeeting) || 0, casementShutter: Number(series.dimensions.casementShutter) || 0, mullion: Number(series.dimensions.mullion) || 0, louverBlade: Number(series.dimensions.louverBlade) || 0, topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0
@@ -1207,7 +1277,10 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     const measure = () => {
       const el = pickTarget();
       if (!el) return;
-      setContainerSize({ w: el.clientWidth, h: el.clientHeight });
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w <= 0 || h <= 0) return;
+      setViewportSize({ w, h });
     };
     setViewportEl(fitViewportRef?.current ?? null);
     measure();
@@ -1229,22 +1302,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
 
   useEffect(() => {
     setZoom(1);
-  }, [numWidth, numHeight]);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el || numWidth <= 0 || numHeight <= 0) return;
-
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      setContainerSize({ w: r.width, h: r.height });
-    };
-
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [numWidth, numHeight]);
+  }, [numWidth, numHeight, windowType]);
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
@@ -1253,32 +1311,32 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
             setZoom((prev) => clamp(prev - e.deltaY * 0.001, ZOOM_MIN, ZOOM_MAX));
         }
     };
-    const currentRef = containerRef.current;
+    const currentRef = fitViewportRef?.current ?? containerRef.current;
     currentRef?.addEventListener('wheel', handleWheel, { passive: false });
     return () => currentRef?.removeEventListener('wheel', handleWheel);
-  }, []);
+  }, [fitViewportRef]);
 
-  const scale = useMemo(() => {
+  const fitScale = useMemo(() => {
     if (numWidth <= 0 || numHeight <= 0) return 1;
     const vpH = window.visualViewport?.height ?? window.innerHeight;
     const cw = Math.max(
       160,
-      containerSize.w ||
+      viewportSize.w ||
         fitViewportRef?.current?.clientWidth ||
-        containerRef.current?.clientWidth ||
-        Math.min(window.innerWidth, 1400) * 0.45
+        Math.min(window.innerWidth, 1400) * 0.45,
     );
-    const vhObserved =
-      containerSize.h > 80
-        ? containerSize.h
-        : Math.max(240, fitViewportRef?.current?.clientHeight || vpH * 0.52);
-    /** Room for dimension labels + padding so the drawing fits in one viewport band. */
-    const labelReservePx = 72;
-    /** Quotation bar is outside the scrollport on desktop; fitViewportRef height is already canvas-only. */
-    const chDraw = Math.max(140, vhObserved * 0.94 - labelReservePx);
-    const fitScale = Math.min((cw * 0.88) / numWidth, (chDraw * 0.86) / numHeight, 10);
-    return fitScale * zoom;
-  }, [numWidth, numHeight, zoom, containerSize.w, containerSize.h, fitViewportRef]);
+    const ch = Math.max(
+      180,
+      viewportSize.h ||
+        fitViewportRef?.current?.clientHeight ||
+        vpH * 0.52,
+    );
+    const drawW = Math.max(80, cw - CANVAS_PAD_PX * 2 - LABEL_LEFT_PX);
+    const drawH = Math.max(80, ch - CANVAS_PAD_PX * 2 - LABEL_TOP_PX);
+    return Math.min(drawW / numWidth, drawH / numHeight);
+  }, [numWidth, numHeight, viewportSize.w, viewportSize.h, fitViewportRef]);
+
+  const scale = fitScale * zoom;
 
   const canvasCallbacks = useMemo(() => ({
     onRemoveHorizontalDivider,
@@ -1382,10 +1440,15 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   return (
     <div
       ref={containerRef}
-      className="relative flex min-w-0 w-full flex-col items-center justify-center overflow-x-auto overflow-y-visible bg-transparent px-4 py-6"
+      className="relative flex min-h-full w-full min-w-0 flex-1 flex-col items-center justify-center overflow-visible bg-transparent px-4 py-4"
+      style={
+        viewportSize.h > 0
+          ? { minHeight: viewportSize.h }
+          : undefined
+      }
     >
       <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none"> WoodenMax </div>
-       <div ref={renderedWindowRef} className="flex flex-col items-center" style={{ margin: 'auto' }}>
+       <div ref={renderedWindowRef} className="flex shrink-0 flex-col items-center justify-center">
             {windowType === WindowType.CORNER && config.leftConfig && config.rightConfig ? (
                 (() => {
                     const leftW = Number(config.leftWidth) || 0;

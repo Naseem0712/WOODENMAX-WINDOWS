@@ -2,6 +2,7 @@ import type { MaterialRateSettings, ProfileDimensions, QuotationItem, WindowConf
 import { ShutterConfigType, WindowType } from '../types';
 import { calculateUsageForConfig, packPieces } from './materialCalculator';
 import { computeHardwareCostForQuotation } from './quotationHardwareCost';
+import { getWindowQuotationAreaMm2 } from './louverBays';
 import { SLIDING_CUT_CONSTANTS } from './slidingCutFormula';
 import { resolveSeriesNumeric } from './profileDimensionKeys';
 
@@ -200,7 +201,7 @@ const ensureItem = (
 ): MaterialCostPerItem => {
   if (!result[item.id]) {
     const qty = Number(item.quantity) || 0;
-    const areaSqFtPerWindow = ((Number(item.config.width) || 0) * (Number(item.config.height) || 0)) / SQFT_TO_SQMM;
+    const areaSqFtPerWindow = getWindowQuotationAreaMm2(item.config) / SQFT_TO_SQMM;
     result[item.id] = {
       itemId: item.id,
       title: item.title,

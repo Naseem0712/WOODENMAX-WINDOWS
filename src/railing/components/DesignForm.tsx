@@ -6,9 +6,11 @@ import {
   segmentHeightKeys,
 } from '../constants'
 import { syncSegmentConfigs } from '../calculations'
-import { calculateCosting } from '../costing'
-import type { QuotationPresets } from '../modePreset'
-import type { ModePreset } from '../modePreset'
+import { calculateCosting, supportHoleCount } from '../costing'
+import { staircaseGlassBillLengthMm } from '../staircaseGlass'
+import { MM_PER_FT } from '../units'
+import { suggestGlassPanelCount } from '../glassDivision'
+import type { ModePreset, QuotationPresets } from '../modePreset'
 import { resolveDraftMode, presetForMode } from '../presets'
 import type {
   CostingRates,
@@ -20,11 +22,17 @@ import type {
 } from '../types'
 import { calculateDesign } from '../calculations'
 import { packageLineTotal } from '../packagePricing'
-import { glassLabel, displayDesignTitle, formatCurrency, hardwareProfilesLabel } from '../utils'
+import { displayDesignTitle, formatCurrency } from '../utils'
 import { CustomChargesEditor } from './CustomChargesEditor'
 import { CustomSegmentFields } from './CustomSegmentFields'
-import { PackageRatesEditor } from './PackageRatesEditor'
-import { SetRatesDisplay } from './SetRatesDisplay'
+import { CostingSummaryStrip } from './CostingSummaryStrip'
+import { DesignBudgetPanel } from './DesignBudgetPanel'
+import { DesignQuoteRatePanel } from './DesignQuoteRatePanel'
+import {
+  GlobalSupportPerGlass,
+  RailingHeightFields,
+  SegmentDivideEditor,
+} from './SegmentDivideEditor'
 import { RailProfilesSection } from './RailProfilesSection'
 import { CollapsiblePanel } from './CollapsiblePanel'
 import { selectOnFocus } from '../inputUtils'
@@ -59,6 +67,7 @@ function mergeSegmentConfigs(
       glassCount: preset.defaultGlassCount,
       gapMm: preset.defaultGapMm,
       pillarsPerGlass: preset.defaultPillarsPerGlass,
+      studsPerGlass: preset.defaultStudsPerGlass,
       pillarInsetMm: preset.defaultPillarInsetMm,
       handrailProfile: preset.finish.handrailProfile,
       bottomRailProfile: preset.finish.bottomRailProfile,
@@ -97,12 +106,15 @@ export function DesignForm({
   const activePreset = presetForMode(presets, draftMode)
   const calc = calculateDesign(draft)
   const liveCost = calculateCosting(draft, rates)
+  const holeCount = supportHoleCount(calc.hardware)
   const set = (patch: Partial<DesignDraft>) =>
     onChange(patchDraft(draft, patch, activePreset))
   const [applyExtrasOnMode, setApplyExtrasOnMode] = useState(false)
   const showHardwareSections = !prefsSaved || !!draft.customizeHardware
 
   const [designTypesOpen, setDesignTypesOpen] = useState(true)
+  const [ratesOpen, setRatesOpen] = useState(true)
+  const [budgetOpen, setBudgetOpen] = useState(false)
   const hasMeasurements = draft.dimensions.some(
     (d) => d.unit === 'mm' && d.value > 0,
   )
@@ -120,6 +132,7 @@ export function DesignForm({
         glassCount: activePreset.defaultGlassCount,
         gapMm: activePreset.defaultGapMm,
         pillarsPerGlass: activePreset.defaultPillarsPerGlass,
+        studsPerGlass: activePreset.defaultStudsPerGlass,
         pillarInsetMm: activePreset.defaultPillarInsetMm,
         handrailProfile: activePreset.finish.handrailProfile,
         bottomRailProfile: activePreset.finish.bottomRailProfile,
@@ -147,9 +160,15 @@ export function DesignForm({
   }
 
   const updateDim = (key: string, value: number) => {
+    const cfg = draft.segmentConfigs.find((c) => c.key === key)
+    const gap = cfg?.gapMm ?? activePreset.defaultGapMm
+    const suggestion = suggestGlassPanelCount(value, gap)
     set({
       dimensions: draft.dimensions.map((d) =>
         d.key === key ? { ...d, value: Math.max(0, value) } : d,
+      ),
+      segmentConfigs: draft.segmentConfigs.map((c) =>
+        c.key === key ? { ...c, glassCount: suggestion.count } : c,
       ),
     })
   }
@@ -163,6 +182,17 @@ export function DesignForm({
       segmentConfigs: draft.segmentConfigs.map((c) =>
         c.key === key ? { ...c, ...patch } : c,
       ),
+    })
+  }
+
+  const applySupportPerGlass = (value: PillarsPerGlass) => {
+    onChange({
+      ...draft,
+      segmentConfigs: draft.segmentConfigs.map((c) => ({
+        ...c,
+        pillarsPerGlass: value,
+        studsPerGlass: value,
+      })),
     })
   }
 
@@ -185,6 +215,14 @@ export function DesignForm({
     const dim = draft.dimensions.find((d) => d.key === c.key)
     return dim && dim.unit === 'mm' && dim.value > 0
   })
+
+  const globalSupportPerGlass =
+    draft.bottomFixing === 'studs'
+      ? (activeConfigs[0]?.studsPerGlass ?? activeConfigs[0]?.pillarsPerGlass ?? 2)
+      : (activeConfigs[0]?.pillarsPerGlass ?? 2)
+
+  const quoteUnit = draft.packageQuoteUnit ?? 'rft'
+  const quoteTotal = packageLineTotal(draft, liveCost)
 
   return (
     <div className="form-panel no-print">
@@ -221,7 +259,7 @@ export function DesignForm({
       )}
       <section className="form-section">
         <h2>
-          1. Design name & type <span className="hi">नाम</span>
+          1. Design name & type
         </h2>
         <label className="field full">
           <span>Design name (on quotation)</span>
@@ -241,13 +279,13 @@ export function DesignForm({
           onToggle={() => setDesignTypesOpen((o) => !o)}
           title={
             <>
-              Shape type <span className="hi">टाइप</span>
+              Shape type
             </>
           }
           subtitle={
             activeType ? (
               <span className="collapse-active-type">
-                {activeType.label} · {activeType.labelHi}
+                {activeType.label}
               </span>
             ) : null
           }
@@ -265,7 +303,6 @@ export function DesignForm({
                 }}
               >
                 <strong>{t.label}</strong>
-                <span className="hi-sm">{t.labelHi}</span>
                 <small>{t.description}</small>
               </button>
             ))}
@@ -275,7 +312,7 @@ export function DesignForm({
 
       <section className="form-section">
         <h2>
-          2. Sizes (mm) <span className="hi">माप</span>
+          2. Sizes · height · divide
         </h2>
         {draft.designType === 'custom' && (
           <div className="toggle-row custom-path-row">
@@ -302,36 +339,104 @@ export function DesignForm({
             onChange={setCustomDimensions}
           />
         ) : (
-          <div className="field-grid">
-            {draft.dimensions.map((d) => (
-              <label key={d.key} className="field">
-                <span>
-                  {d.label} <span className="hi-sm">({d.labelHi})</span>
-                </span>
-                <div className="input-row">
-                  <input
-                    type="number"
-                    min={0}
-                    step={d.unit === 'deg' ? 1 : 50}
-                    value={d.value}
-                    onFocus={selectOnFocus}
-                    onChange={(e) => updateDim(d.key, Number(e.target.value))}
-                  />
-                  <span className="unit">{d.unit}</span>
+          <>
+            {draft.dimensions
+              .filter((d) => d.unit === 'deg')
+              .map((d) => (
+                <label key={d.key} className="field">
+                  <span>{d.label}</span>
+                  <div className="input-row">
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={d.value}
+                      onFocus={selectOnFocus}
+                      onChange={(e) => updateDim(d.key, Number(e.target.value))}
+                    />
+                    <span className="unit">{d.unit}</span>
+                  </div>
+                </label>
+              ))}
+            {draft.segmentConfigs.map((cfg) => {
+              const dim = draft.dimensions.find((d) => d.key === cfg.key)
+              if (!dim || dim.unit !== 'mm') return null
+              const seg = calc.segments.find((s) => s.key === cfg.key)
+              return (
+                <div key={cfg.key} className="size-divide-leg-card">
+                  <label className="field">
+                    <span>{cfg.label} — run length</span>
+                    <div className="input-row">
+                      <input
+                        type="number"
+                        min={0}
+                        step={50}
+                        value={dim.value}
+                        onFocus={selectOnFocus}
+                        onChange={(e) => updateDim(cfg.key, Number(e.target.value))}
+                      />
+                      <span className="unit">mm</span>
+                    </div>
+                  </label>
+                  {dim.value > 0 && (
+                    <SegmentDivideEditor
+                      draft={draft}
+                      cfg={cfg}
+                      dimValue={dim.value}
+                      seg={seg}
+                      onUpdate={(patch) => updateSegConfig(cfg.key, patch)}
+                    />
+                  )}
                 </div>
-              </label>
-            ))}
-          </div>
+              )
+            })}
+          </>
         )}
+
+        {draft.designType === 'custom' &&
+          draft.segmentConfigs.map((cfg) => {
+            const dim = draft.dimensions.find((d) => d.key === cfg.key)
+            if (!dim || dim.unit !== 'mm' || dim.value <= 0) return null
+            const seg = calc.segments.find((s) => s.key === cfg.key)
+            return (
+              <div key={`divide-${cfg.key}`} className="size-divide-leg-card">
+                <h4 className="leg-divide-title">
+                  {cfg.label} — {dim.value} mm
+                </h4>
+                <SegmentDivideEditor
+                  draft={draft}
+                  cfg={cfg}
+                  dimValue={dim.value}
+                  seg={seg}
+                  onUpdate={(patch) => updateSegConfig(cfg.key, patch)}
+                />
+              </div>
+            )
+          })}
+
+        {hasMeasurements && (
+          <>
+            <RailingHeightFields draft={draft} onChange={set} />
+            <div className="field-grid home-support-row">
+              <GlobalSupportPerGlass
+                bottomFixing={draft.bottomFixing}
+                value={globalSupportPerGlass}
+                onChange={applySupportPerGlass}
+              />
+            </div>
+          </>
+        )}
+
         {draft.designType === 'o-type' && (
           <p className="hint o-type-hint">
-            O-type: enter all four sides — front, right, back, left. Set one height for all sides
-            or different height per side in section 5.
+            O-type: enter all four sides — front, right, back, left.
           </p>
         )}
-        <p className="hint">
-          Run: <strong>{calc.perimeterRunMm.toLocaleString('en-IN')} mm</strong>
-        </p>
+        {hasMeasurements && (
+          <p className="hint">
+            Run: <strong>{calc.perimeterRunMm.toLocaleString('en-IN')} mm</strong>
+          </p>
+        )}
       </section>
 
       {!hasMeasurements && (
@@ -356,6 +461,7 @@ export function DesignForm({
               type="button"
               className={draftMode === 'staircase' ? 'toggle active' : 'toggle'}
               onClick={() => onApplyMode('staircase', applyExtrasOnMode)}
+              title="Staircase glass: (panel width + height) × height — more SFT than normal W×H"
             >
               Staircase
             </button>
@@ -379,55 +485,11 @@ export function DesignForm({
             )}
           </div>
 
-          {prefsSaved && (
-            <div className="auto-applied-banner saved-config-banner">
-              <p>
-                <strong>✓ Saved — {draftMode === 'staircase' ? 'Staircase' : 'Normal'}</strong>{' '}
-                preset for this design type
-              </p>
-              <ul className="saved-config-list">
-                <li>
-                  {glassLabel({
-                    ...draft,
-                    glassId: activePreset.glassId,
-                    customGlassComposition: activePreset.customGlassComposition,
-                  })}
-                </li>
-                <li>
-                  {activePreset.bottomFixing === 'pillars' ? 'Pillars' : 'Bottom rail'} ·{' '}
-                  {activePreset.includeHandrail ? 'Handrail on' : 'No handrail'}
-                </li>
-                <li>
-                  {hardwareProfilesLabel({
-                    ...draft,
-                    finish: activePreset.finish,
-                    bottomFixing: activePreset.bottomFixing,
-                    includeHandrail: activePreset.includeHandrail,
-                  })}
-                </li>
-                <li>
-                  Package: ₹
-                  {activePreset.packageRates[
-                    activePreset.packageQuoteUnit === 'sft'
-                      ? 'perSft'
-                      : activePreset.packageQuoteUnit === 'rmt'
-                        ? 'perRmt'
-                        : 'perRft'
-                  ]}{' '}
-                  / {activePreset.packageQuoteUnit.toUpperCase()}
-                </li>
-              </ul>
-              <p className="hint">
-                Edit both presets in <strong>Rates</strong> → Save both.
-              </p>
-            </div>
-          )}
-
           {showHardwareSections && (
           <>
           <section className="form-section">
             <h2>
-              3. Bottom fixing <span className="hi">नीचे</span>
+              3. Bottom fixing
             </h2>
             <div className="toggle-row">
               <button
@@ -446,6 +508,13 @@ export function DesignForm({
               >
                 Pillars per glass
               </button>
+              <button
+                type="button"
+                className={draft.bottomFixing === 'studs' ? 'toggle active' : 'toggle'}
+                onClick={() => set({ bottomFixing: 'studs' as BottomFixing })}
+              >
+                Studs per glass
+              </button>
             </div>
             {draft.bottomFixing === 'continuous-rail' && (
               <p className="calc-result">
@@ -454,49 +523,57 @@ export function DesignForm({
               </p>
             )}
             {draft.bottomFixing === 'pillars' && (
-              <div className="pillar-config">
-                <p className="section-desc">
-                  Customise pillars per side (saved default:{' '}
-                  {activePreset.defaultPillarsPerGlass} per glass)
-                </p>
-                {activeConfigs.map((cfg) => (
-                  <div key={cfg.key} className="field-grid pillar-row">
-                    <label className="field">
-                      <span>{cfg.label} — pillars/glass</span>
-                      <select
-                        value={cfg.pillarsPerGlass}
-                        onChange={(e) =>
-                          updateSegConfig(cfg.key, {
-                            pillarsPerGlass: Number(e.target.value) as PillarsPerGlass,
-                          })
-                        }
-                      >
-                        <option value={2}>2</option>
-                        <option value={3}>3</option>
-                        <option value={4}>4</option>
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Edge inset (mm)</span>
-                      <input
-                        type="number"
-                        min={50}
-                        max={300}
-                        value={cfg.pillarInsetMm}
-                        onFocus={selectOnFocus}
-                        onChange={(e) =>
-                          updateSegConfig(cfg.key, {
-                            pillarInsetMm: Number(e.target.value),
-                          })
-                        }
-                      />
-                    </label>
-                  </div>
-                ))}
-                <p className="calc-result">
-                  Total pillars: <strong>{calc.hardware.totalPillars} pcs</strong>
-                </p>
-              </div>
+              <p className="calc-result">
+                Total pillars: <strong>{calc.hardware.totalPillars} pcs</strong>
+                <span className="hint-inline"> — per glass count in section 2</span>
+              </p>
+            )}
+            {draft.bottomFixing === 'studs' && (
+              <p className="calc-result">
+                Total studs: <strong>{calc.hardware.totalStuds} pcs</strong>
+                <span className="hint-inline"> — per glass count in section 2</span>
+              </p>
+            )}
+            {holeCount > 0 && (
+              <label className="check-inline hole-charge-toggle">
+                <input
+                  type="checkbox"
+                  checked={!!draft.applyHoleCharges}
+                  onChange={(e) => set({ applyHoleCharges: e.target.checked })}
+                />
+                Add hole drilling charge — {holeCount} holes × ₹{rates.holePerPcs ?? 100}/hole
+                {draft.applyHoleCharges && (
+                  <span className="hint-inline">
+                    {' '}
+                    (= {formatCurrency(holeCount * (rates.holePerPcs ?? 100))} in BOM)
+                  </span>
+                )}
+              </label>
+            )}
+            {draftMode === 'staircase' && calc.segments.length > 0 && (
+              <p className="calc-result staircase-glass-hint">
+                Staircase glass: each panel <strong>(run width + H) × H</strong> for angle cut
+                {calc.totalGlassAreaSftActual != null && (
+                  <>
+                    {' '}
+                    — billed <strong>{calc.totalGlassAreaSft} SFT</strong> (actual W×H{' '}
+                    {calc.totalGlassAreaSftActual} SFT). Glass ₹/RFT = glass cost ÷{' '}
+                    {Math.round((calc.perimeterRunMm / MM_PER_FT) * 100) / 100} RFT run.
+                  </>
+                )}
+                {calc.segments[0]?.glasses[0] && (
+                  <>
+                    {' '}
+                    e.g. panel{' '}
+                    {calc.segments[0].glasses[0].widthMm}+{calc.segments[0].glasses[0].heightMm}=
+                    {staircaseGlassBillLengthMm(
+                      calc.segments[0].glasses[0].widthMm,
+                      calc.segments[0].glasses[0].heightMm,
+                    )}
+                    ×{calc.segments[0].glasses[0].heightMm} mm
+                  </>
+                )}
+              </p>
             )}
             <label className="check-inline">
               <input
@@ -516,126 +593,10 @@ export function DesignForm({
             />
           </section>
 
-          <section className="form-section">
-            <h2>
-              4. Glass panels <span className="hi">विभाजन</span>
-            </h2>
-            {activeConfigs.map((cfg) => {
-              const dim = draft.dimensions.find((d) => d.key === cfg.key)!
-              const seg = calc.segments.find((s) => s.key === cfg.key)
-              return (
-                <div key={cfg.key} className="seg-config-card">
-                  <h4>
-                    {cfg.label} — {dim.value} mm
-                  </h4>
-                  <div className="field-grid">
-                    <label className="field">
-                      <span>Panels</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={20}
-                        value={cfg.glassCount}
-                        onFocus={selectOnFocus}
-                        onChange={(e) =>
-                          updateSegConfig(cfg.key, {
-                            glassCount: Math.max(1, Number(e.target.value)),
-                          })
-                        }
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Gap (mm)</span>
-                      <input
-                        type="number"
-                        min={6}
-                        max={30}
-                        value={cfg.gapMm}
-                        onFocus={selectOnFocus}
-                        onChange={(e) =>
-                          updateSegConfig(cfg.key, { gapMm: Number(e.target.value) })
-                        }
-                      />
-                    </label>
-                  </div>
-                  {seg && (
-                    <p className="calc-result">
-                      Glass: <strong>{seg.glassWidthMm} × {seg.heightMm} mm</strong> each
-                    </p>
-                  )}
-                </div>
-              )
-            })}
-          </section>
-
           <section className="form-section compact-section">
             <h2>
-              5. Height · Glass · Finish <span className="hi">ऊँचाई</span>
+              4. Glass · Finish
             </h2>
-            <div className="toggle-row height-mode-row">
-              <button
-                type="button"
-                className={draft.heightMode === 'uniform' ? 'toggle active' : 'toggle'}
-                onClick={() => set({ heightMode: 'uniform' })}
-              >
-                Same height all sides
-              </button>
-              <button
-                type="button"
-                className={draft.heightMode === 'per-segment' ? 'toggle active' : 'toggle'}
-                onClick={() => set({ heightMode: 'per-segment' })}
-              >
-                Different per side
-              </button>
-            </div>
-            {draft.heightMode === 'uniform' ? (
-              <div className="field-grid">
-                <label className="field">
-                  <span>Height all sides (mm)</span>
-                  <input
-                    type="number"
-                    min={100}
-                    step={50}
-                    value={draft.uniformHeight}
-                    onFocus={selectOnFocus}
-                    onChange={(e) => {
-                      const v = Number(e.target.value)
-                      set({
-                        uniformHeight: v,
-                        segmentHeights: draft.segmentHeights.map((h) => ({
-                          ...h,
-                          value: v,
-                        })),
-                      })
-                    }}
-                  />
-                </label>
-              </div>
-            ) : (
-              <div className="field-grid">
-                {draft.segmentHeights.map((h) => (
-                  <label key={h.key} className="field">
-                    <span>{h.label} height (mm)</span>
-                    <input
-                      type="number"
-                      min={100}
-                      step={50}
-                      value={h.value}
-                      onFocus={selectOnFocus}
-                      onChange={(e) =>
-                        set({
-                          segmentHeights: draft.segmentHeights.map((x) =>
-                            x.key === h.key
-                              ? { ...x, value: Number(e.target.value) }
-                              : x,
-                          ),
-                        })
-                      }
-                    />
-                  </label>
-                ))}
-              </div>
-            )}
             <div className="glass-list compact-glass">
               {GLASS_OPTIONS.map((g) => (
                 <label
@@ -682,65 +643,77 @@ export function DesignForm({
               </label>
             </div>
             <p className="calc-result hw-auto">
-              90°×{calc.hardware.connector90} · 180°×{calc.hardware.connector180} · Wall×
-              {calc.hardware.wallConnectors} · Anchors×{calc.hardware.totalAnchors} ·{' '}
-              {calc.totalGlassAreaSft} SFT
+              90°×{calc.hardware.connector90}
+              {draftMode !== 'staircase' && <> · 180°×{calc.hardware.connector180}</>}
+              {' · '}
+              Wall×{calc.hardware.wallConnectors} · End cap×{calc.hardware.endCaps} · Anchors×
+              {calc.hardware.totalAnchors}
+              {calc.hardware.totalPillars > 0 && <> · Pillars×{calc.hardware.totalPillars}</>}
+              {calc.hardware.totalStuds > 0 && <> · Studs×{calc.hardware.totalStuds}</>}
+              {' · '}
+              Bottom {calc.hardware.bottomRailRft} RFT · Handrail {calc.hardware.handrailRft} RFT ·{' '}
+              {calc.totalGlassAreaSftActual ?? calc.totalGlassAreaSft} SFT
+              {draftMode === 'staircase' && calc.totalGlassAreaSftActual != null && (
+                <> · billed {calc.totalGlassAreaSft} SFT</>
+              )}
             </p>
           </section>
           </>
           )}
 
           <section className="form-section add-to-quote-section">
-            <h2>
-              6. Add to quote <span className="hi">पैकेज रेट</span>
-            </h2>
-            <SetRatesDisplay
-              breakdown={liveCost}
-              quantity={draft.quantity}
-              highlightUnit={rates.quoteDisplayUnit}
-            />
-            <PackageRatesEditor
-              draft={draft}
-              breakdown={liveCost}
-              onChange={(patch) => set(patch)}
-            />
-            <p className="hint">
-              <strong>Expected</strong> set rates upar — apna package rate neeche edit karo (
-              {draftMode} material rates).
-            </p>
-            <p className="calc-result add-quote-total">
-              Quotation amount:{' '}
-              <strong>{formatCurrency(packageLineTotal(draft, liveCost))}</strong>
-            </p>
-            <label className="field">
-              <span>Sets (qty)</span>
-              <input
-                type="number"
-                min={1}
-                value={draft.quantity}
-                onFocus={selectOnFocus}
-                onChange={(e) => set({ quantity: Math.max(1, Number(e.target.value)) })}
+            <CostingSummaryStrip draft={draft} breakdown={liveCost} />
+
+            <CollapsiblePanel
+              id="design-quote-rates"
+              className="budget-collapse-panel"
+              open={ratesOpen}
+              onToggle={() => setRatesOpen((o) => !o)}
+              title="5. Quotation rates"
+              subtitle={`${quoteUnit.toUpperCase()} · ${formatCurrency(quoteTotal)}`}
+            >
+              <DesignQuoteRatePanel
+                draft={draft}
+                breakdown={liveCost}
+                onChange={(patch) => set(patch)}
               />
-            </label>
-            <label className="field full">
-              <span>Notes</span>
-              <textarea
-                rows={2}
-                value={draft.notes}
-                onChange={(e) => set({ notes: e.target.value })}
+              <label className="field">
+                <span>Sets (qty)</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.quantity}
+                  onFocus={selectOnFocus}
+                  onChange={(e) => set({ quantity: Math.max(1, Number(e.target.value)) })}
+                />
+              </label>
+              <label className="field full">
+                <span>Notes</span>
+                <textarea
+                  rows={2}
+                  value={draft.notes}
+                  onChange={(e) => set({ notes: e.target.value })}
+                />
+              </label>
+              <CustomChargesEditor
+                charges={draft.customCharges ?? []}
+                onChange={(customCharges) => set({ customCharges })}
               />
-            </label>
-            <CustomChargesEditor
-              charges={draft.customCharges ?? []}
-              onChange={(customCharges) => set({ customCharges })}
-            />
-            <p className="hint">
-              Ye extras sirf is item par — doosri lines par nahi (preset extras alag se apply
-              karein).
-            </p>
-            <button type="button" className="btn-primary" onClick={onAdd}>
-              {editingLineId ? '✓ Update quotation line' : '+ Add to quotation'}
-            </button>
+              <button type="button" className="btn-primary" onClick={onAdd}>
+                {editingLineId ? '✓ Update quotation line' : '+ Add to quotation'}
+              </button>
+            </CollapsiblePanel>
+
+            <CollapsiblePanel
+              id="design-budget"
+              className="budget-collapse-panel"
+              open={budgetOpen}
+              onToggle={() => setBudgetOpen((o) => !o)}
+              title="Budget (material costing + installation)"
+              subtitle={formatCurrency(liveCost.subtotal)}
+            >
+              <DesignBudgetPanel draft={draft} breakdown={liveCost} />
+            </CollapsiblePanel>
           </section>
         </>
       )}

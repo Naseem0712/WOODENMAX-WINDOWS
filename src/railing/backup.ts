@@ -88,6 +88,7 @@ function tryParseWoodenMaxQuotationExport(raw: Record<string, unknown>): AppBack
   const meta = normalizeQuotationMeta({
     clientName: s.customer?.name ?? '',
     clientPhone: s.customer?.contactPerson ?? '',
+    clientGstin: s.customer?.gstNumber ?? '',
     clientAddress: s.customer?.address ?? '',
     projectName: s.title ?? '',
     quoteNumber: `WM-${Date.now().toString(36).toUpperCase().slice(-6)}`,
@@ -277,6 +278,7 @@ export function migrateBackup(data: AppBackup): AppBackup {
       ...data.meta,
       clientName: data.meta.clientName ?? '',
       clientPhone: data.meta.clientPhone ?? '',
+      clientGstin: data.meta.clientGstin ?? '',
       clientAddress: data.meta.clientAddress ?? '',
       projectName: data.meta.projectName ?? '',
       quoteNumber: data.meta.quoteNumber ?? `WM-${Date.now().toString(36).toUpperCase().slice(-6)}`,

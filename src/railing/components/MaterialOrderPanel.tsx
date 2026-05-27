@@ -68,7 +68,7 @@ export function MaterialOrderPanel({
       {!embedded && (
         <div className="order-panel-head">
           <h3>
-            Order materials <span className="hi">ऑर्डर</span>
+            Order materials
           </h3>
         </div>
       )}

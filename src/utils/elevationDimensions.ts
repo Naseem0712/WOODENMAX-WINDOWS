@@ -1,6 +1,7 @@
 import type { WindowConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, WindowType } from '../types';
 import { getPartitionPanelWidthsMm } from './partitionPanelGeometry';
+import { getEffectiveLouverBays } from './louverBays';
 
 export interface ElevationSegment {
   /** Width / height in mm */
@@ -148,8 +149,25 @@ export function getElevationDimensionsMm(config: WindowConfig | undefined): Elev
       rows.push({ sizeMm: numHeight });
       break;
     }
+    case WindowType.LOUVERS: {
+      const bays = getEffectiveLouverBays(config);
+      const layout = config.louverBayLayout || 'vertical';
+      if (bays.length <= 1) {
+        if (numWidth > 0) columns.push({ sizeMm: numWidth });
+        if (numHeight > 0) rows.push({ sizeMm: numHeight });
+        break;
+      }
+      if (layout === 'vertical') {
+        if (numWidth > 0) columns.push({ sizeMm: numWidth });
+        bays.forEach((b, i) => rows.push({ sizeMm: b.height, label: `L${i + 1}` }));
+      } else {
+        bays.forEach((b, i) => columns.push({ sizeMm: b.width, label: `L${i + 1}` }));
+        if (numHeight > 0) rows.push({ sizeMm: numHeight });
+      }
+      break;
+    }
     default: {
-      // Mirror / Louvers / Corner — single overall column and row, no per-segment.
+      // Mirror / Corner — single overall column and row, no per-segment.
       if (numWidth > 0) columns.push({ sizeMm: numWidth });
       if (numHeight > 0) rows.push({ sizeMm: numHeight });
       break;

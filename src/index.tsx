@@ -20,6 +20,14 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
+/** Fade out static HTML splash once React is ready (see #app-boot in index.html). */
+function dismissAppBoot() {
+  const boot = document.getElementById('app-boot');
+  if (!boot) return;
+  boot.classList.add('boot-exit');
+  window.setTimeout(() => boot.remove(), 520);
+}
+
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
@@ -64,3 +72,7 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+requestAnimationFrame(() => {
+  requestAnimationFrame(dismissAppBoot);
+});

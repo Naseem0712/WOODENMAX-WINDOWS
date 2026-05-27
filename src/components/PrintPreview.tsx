@@ -34,6 +34,7 @@ import { calculateMaterialCostSummary, formatItemWeightKg } from '../utils/mater
 import { getRawDiscountAmount } from '../utils/pricingSafety';
 import { DEFAULT_MATERIAL_RATES } from '../constants/materialRates';
 import { quotationItemSubtotalContribution } from '../utils/quotationTotals';
+import { getWindowQuotationAreaMm2 } from '../utils/louverBays';
 import { RailingQuotationLinePrintBlock } from '../railing/components/RailingQuotationLinePrintBlock';
 import '../railing/quotation-print-embed.css';
 
@@ -1845,7 +1846,9 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                     }
 
                                     const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
-                                    const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
+                                    const singleArea =
+                                      getWindowQuotationAreaMm2(item.config) /
+                                      (conversionFactor * conversionFactor);
                                     const totalArea = singleArea * item.quantity;
                                     const baseCost = totalArea * item.rate;
                                     const totalHardwareCost = item.hardwareCost * item.quantity;

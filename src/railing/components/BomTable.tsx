@@ -88,7 +88,7 @@ export function BomTable({
   return (
     <div className="bom-wrap">
       <p className="hint bom-unit-hint">
-        Rate kisi bhi column mein daalo (SFT / RFT / RMT / pcs) — amount same rahega
+        Enter a rate in any column (SFT / RFT / RMT / pcs) — the line amount stays consistent.
       </p>
 
       <div className="table-scroll">

@@ -1,6 +1,6 @@
 import { applyPresetToDraft, presetFromDraft, resolveDraftMode } from './presets'
 import { DEFAULT_FINISH } from './constants'
-import { DEFAULT_PACKAGE_RATES } from './packagePricing'
+import { DEFAULT_PACKAGE_RATES, normalizePackageRates } from './packagePricing'
 import { DEFAULT_RATES } from './rateStorage'
 import {
   DEFAULT_MODE_PRESET,
@@ -45,7 +45,7 @@ function modePresetFromLegacy(d?: Partial<DesignDefaults>): ModePreset {
     ...DEFAULT_MODE_PRESET,
     ...d,
     finish: { ...DEFAULT_FINISH, ...d.finish },
-    packageRates: { ...DEFAULT_PACKAGE_RATES, ...d.packageRates },
+    packageRates: normalizePackageRates(d.packageRates),
     customCharges: d.customCharges ?? [],
   }
 }
@@ -77,15 +77,25 @@ export function loadProjectSettings(): ProjectSettings {
             ...DEFAULT_MODE_PRESET,
             ...parsed.presets.normal,
             finish: { ...DEFAULT_FINISH, ...parsed.presets.normal?.finish },
-            packageRates: { ...DEFAULT_PACKAGE_RATES, ...parsed.presets.normal?.packageRates },
+            packageRates: normalizePackageRates(parsed.presets.normal?.packageRates),
             customCharges: parsed.presets.normal?.customCharges ?? [],
+            bottomRailSpec: parsed.presets.normal?.bottomRailSpec ?? DEFAULT_MODE_PRESET.bottomRailSpec,
+            pillarSpec: parsed.presets.normal?.pillarSpec ?? DEFAULT_MODE_PRESET.pillarSpec,
+            studSpec: parsed.presets.normal?.studSpec ?? DEFAULT_MODE_PRESET.studSpec,
+            handrailSpec: parsed.presets.normal?.handrailSpec ?? DEFAULT_MODE_PRESET.handrailSpec,
           },
           staircase: {
             ...DEFAULT_PRESETS.staircase,
             ...parsed.presets.staircase,
             finish: { ...DEFAULT_FINISH, ...parsed.presets.staircase?.finish },
-            packageRates: { ...DEFAULT_PACKAGE_RATES, ...parsed.presets.staircase?.packageRates },
+            packageRates: normalizePackageRates(parsed.presets.staircase?.packageRates),
             customCharges: parsed.presets.staircase?.customCharges ?? [],
+            bottomRailSpec:
+              parsed.presets.staircase?.bottomRailSpec ?? DEFAULT_PRESETS.staircase.bottomRailSpec,
+            pillarSpec: parsed.presets.staircase?.pillarSpec ?? DEFAULT_PRESETS.staircase.pillarSpec,
+            studSpec: parsed.presets.staircase?.studSpec ?? DEFAULT_PRESETS.staircase.studSpec,
+            handrailSpec:
+              parsed.presets.staircase?.handrailSpec ?? DEFAULT_PRESETS.staircase.handrailSpec,
           },
         }
       : {

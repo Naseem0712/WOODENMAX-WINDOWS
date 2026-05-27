@@ -15,6 +15,9 @@ dev-dist
 *.local
 *.zip
 
+# Standalone RailingQ copy (source of truth is src/railing/)
+RailingQ/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -48,7 +48,7 @@ export function CustomSegmentFields({
     <div className="custom-segments">
       <p className="hint zigzag-hint">
         <strong>Custom path:</strong> kitni bhi legs — har leg ka length, bend (90° / depth /
-        front / left…), alag glass division. Zigzag ke liye template load karo.
+        front / left…), with separate glass divisions. Use a template for zigzag layouts.
       </p>
       <div className="custom-seg-actions">
         <button type="button" className="btn-ghost" onClick={addLeg}>

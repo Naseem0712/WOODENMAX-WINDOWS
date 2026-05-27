@@ -1,6 +1,14 @@
 import { quoteLineAmount, quoteTotals, quoteUnitForLine } from '../quotationFormat'
+import { defaultBankDetails } from '../metaDefaults'
 import { formatCurrency } from '../utils'
-import type { CostingRates, QuotationLine, QuotationMeta } from '../types'
+import type { CostingRates, QuotationBankDetails, QuotationLine, QuotationMeta } from '../types'
+
+function patchBank(meta: QuotationMeta, patch: Partial<QuotationBankDetails>): QuotationMeta {
+  return {
+    ...meta,
+    bankDetails: { ...defaultBankDetails(), ...meta.bankDetails, ...patch },
+  }
+}
 
 interface Props {
   meta: QuotationMeta
@@ -12,7 +20,6 @@ interface Props {
   onEdit: (id: string) => void
   onRemove: (id: string) => void
   onClear: () => void
-  onPrint: () => void
   onPreview: () => void
 }
 
@@ -26,7 +33,6 @@ export function QuotationPanel({
   onEdit,
   onRemove,
   onClear,
-  onPrint,
   onPreview,
 }: Props) {
   const { subtotal, gst, grand } = quoteTotals(lines)
@@ -36,7 +42,8 @@ export function QuotationPanel({
       : `Normal ${ratesNormal.quoteDisplayUnit.toUpperCase()} · Staircase ${ratesStaircase.quoteDisplayUnit.toUpperCase()}`
 
   return (
-    <div className="quote-panel quote-panel-drawer">
+    <div className="quote-panel quote-panel-drawer quote-panel-with-footer">
+      <div className="quote-panel-scroll">
       <p className="hint quote-drawer-hint">
         Client details &amp; product list — print/PDF uses professional layout. Quote units:{' '}
         <strong>{unitLabel}</strong>
@@ -55,6 +62,14 @@ export function QuotationPanel({
           <input
             value={meta.clientPhone}
             onChange={(e) => onMetaChange({ ...meta, clientPhone: e.target.value })}
+          />
+        </label>
+        <label className="field">
+          <span>Client GSTIN (optional)</span>
+          <input
+            value={meta.clientGstin ?? ''}
+            placeholder="e.g. 36AAAAA0000A1Z5"
+            onChange={(e) => onMetaChange({ ...meta, clientGstin: e.target.value })}
           />
         </label>
         <label className="field">
@@ -106,6 +121,47 @@ export function QuotationPanel({
         </label>
       </div>
 
+      <details className="quote-bank-details">
+        <summary>Bank details (print / PDF)</summary>
+        <div className="meta-fields">
+          <label className="field">
+            <span>Account name</span>
+            <input
+              value={meta.bankDetails?.accountName ?? defaultBankDetails().accountName}
+              onChange={(e) => onMetaChange(patchBank(meta, { accountName: e.target.value }))}
+            />
+          </label>
+          <label className="field">
+            <span>Bank name</span>
+            <input
+              value={meta.bankDetails?.bankName ?? defaultBankDetails().bankName}
+              onChange={(e) => onMetaChange(patchBank(meta, { bankName: e.target.value }))}
+            />
+          </label>
+          <label className="field">
+            <span>Account no.</span>
+            <input
+              value={meta.bankDetails?.accountNo ?? defaultBankDetails().accountNo}
+              onChange={(e) => onMetaChange(patchBank(meta, { accountNo: e.target.value }))}
+            />
+          </label>
+          <label className="field">
+            <span>IFSC</span>
+            <input
+              value={meta.bankDetails?.ifsc ?? defaultBankDetails().ifsc}
+              onChange={(e) => onMetaChange(patchBank(meta, { ifsc: e.target.value }))}
+            />
+          </label>
+          <label className="field">
+            <span>Branch</span>
+            <input
+              value={meta.bankDetails?.branch ?? defaultBankDetails().branch}
+              onChange={(e) => onMetaChange(patchBank(meta, { branch: e.target.value }))}
+            />
+          </label>
+        </div>
+      </details>
+
       {lines.length === 0 ? (
         <p className="empty-quote">Add design with costing rates filled.</p>
       ) : (
@@ -146,6 +202,13 @@ export function QuotationPanel({
                   Package: {formatCurrency(line.packageQuote.rate)}/
                   {line.packageQuote.unit.toUpperCase()} × {line.packageQuote.basisQty}{' '}
                   {line.packageQuote.unit.toUpperCase()}
+                  {line.packageQuote.installationRate > 0 ? (
+                    <>
+                      {' '}
+                      (material {formatCurrency(line.packageQuote.materialRate)} + installation{' '}
+                      {formatCurrency(line.packageQuote.installationRate)})
+                    </>
+                  ) : null}
                 </p>
               ) : (
                 <div className="line-set-rates">
@@ -195,17 +258,29 @@ export function QuotationPanel({
         </div>
       </div>
 
-      <div className="quote-actions">
-        <button type="button" className="btn-secondary" onClick={onPreview} disabled={!lines.length}>
-          Preview
-        </button>
-        <button type="button" className="btn-secondary" onClick={onPrint} disabled={!lines.length}>
-          PDF / Print
-        </button>
-        <button type="button" className="btn-ghost" onClick={onClear} disabled={!lines.length}>
-          Clear
-        </button>
       </div>
+
+      <footer className="quote-panel-footer quote-panel-footer--slim no-print">
+        <p className="quote-panel-footer-hint">Import · Export · Print · PDF — header bar</p>
+        <div className="quote-panel-footer-actions">
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            onClick={onPreview}
+            disabled={lines.length === 0}
+          >
+            Preview
+          </button>
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            onClick={onClear}
+            disabled={lines.length === 0}
+          >
+            Clear list
+          </button>
+        </div>
+      </footer>
     </div>
   )
 }

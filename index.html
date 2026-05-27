@@ -292,193 +292,225 @@
         -webkit-overflow-scrolling: touch;
     }
 
-    /* Initial shell until React mounts (replaces #root children). */
+    /* Initial shell until React mounts (see dismissAppBoot in src/index.tsx). */
     #app-boot {
         position: fixed;
         inset: 0;
         z-index: 2147483000;
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 1rem;
-        padding: 1.5rem;
-        padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
-        text-align: center;
-        background: radial-gradient(ellipse 120% 80% at 50% 20%, rgba(99, 102, 241, 0.18), transparent 55%),
-            linear-gradient(165deg, #0c1222 0%, #1e293b 42%, #0f172a 100%);
+        padding: 1.25rem;
+        padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+        background:
+            radial-gradient(ellipse 90% 60% at 50% -10%, rgba(129, 140, 248, 0.22), transparent 50%),
+            radial-gradient(ellipse 70% 50% at 100% 100%, rgba(14, 165, 233, 0.08), transparent 45%),
+            linear-gradient(168deg, #070b14 0%, #0f172a 38%, #111827 100%);
         color: #e2e8f0;
-        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        font-family: "Segoe UI", ui-sans-serif, system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
         overflow: hidden;
+        transition: opacity 0.48s ease, visibility 0.48s ease;
+    }
+    #app-boot.boot-exit {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
     }
     #app-boot::before {
         content: "";
         position: absolute;
         inset: 0;
-        background-image: linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
-        background-size: 32px 32px;
-        animation: boot-grid-drift 24s linear infinite;
+        background-image:
+            linear-gradient(rgba(148, 163, 184, 0.045) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(148, 163, 184, 0.045) 1px, transparent 1px);
+        background-size: 40px 40px;
+        mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, black 20%, transparent 75%);
+        animation: boot-grid-drift 28s linear infinite;
         pointer-events: none;
-        opacity: 0.85;
+    }
+    #app-boot::after {
+        content: "";
+        position: absolute;
+        width: min(520px, 90vw);
+        height: min(520px, 90vw);
+        left: 50%;
+        top: 42%;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(99, 102, 241, 0.14) 0%, transparent 68%);
+        pointer-events: none;
     }
     @keyframes boot-grid-drift {
         from { transform: translate(0, 0); }
-        to { transform: translate(32px, 32px); }
+        to { transform: translate(40px, 40px); }
     }
-    #app-boot .boot-visual {
+    #app-boot .boot-card {
         position: relative;
-        width: 88px;
-        height: 88px;
-        margin-bottom: 0.25rem;
-        animation: boot-fade-in 0.6s ease-out both;
+        z-index: 1;
+        width: min(400px, 100%);
+        padding: 2rem 1.75rem 1.65rem;
+        border-radius: 1.25rem;
+        text-align: center;
+        background: linear-gradient(145deg, rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.55));
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        box-shadow:
+            0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+            0 24px 64px rgba(0, 0, 0, 0.45),
+            0 0 80px rgba(99, 102, 241, 0.12);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        animation: boot-fade-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
     }
-    #app-boot .boot-orbit {
-        position: absolute;
-        inset: 0;
-        border-radius: 50%;
-        border: 2px solid transparent;
+    #app-boot .boot-logo-wrap {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 0.85rem;
     }
-    #app-boot .boot-orbit--a {
-        border-top-color: rgba(165, 180, 252, 0.95);
-        border-right-color: rgba(99, 102, 241, 0.35);
-        animation: boot-spin 2.2s linear infinite;
-        box-shadow: 0 0 24px rgba(99, 102, 241, 0.25);
+    #app-boot .boot-logo {
+        width: min(200px, 72vw);
+        height: auto;
+        max-height: 52px;
+        object-fit: contain;
+        filter: drop-shadow(0 4px 20px rgba(0, 0, 0, 0.35));
+        animation: boot-fade-in 0.55s ease-out 0.08s both;
     }
-    #app-boot .boot-orbit--b {
-        inset: 10px;
-        border-bottom-color: rgba(129, 140, 248, 0.9);
-        border-left-color: rgba(67, 56, 202, 0.3);
-        animation: boot-spin-reverse 1.55s linear infinite;
-    }
-    #app-boot .boot-orbit--c {
-        inset: 22px;
-        border: 1px dashed rgba(148, 163, 184, 0.45);
-        animation: boot-spin 3.4s linear infinite;
-    }
-    #app-boot .boot-hub {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        width: 12px;
-        height: 12px;
-        margin: -6px 0 0 -6px;
-        border-radius: 50%;
-        background: radial-gradient(circle at 30% 30%, #e0e7ff, #6366f1 55%, #312e81);
-        box-shadow: 0 0 16px rgba(165, 180, 252, 0.8), 0 0 32px rgba(99, 102, 241, 0.45);
-        animation: boot-hub-pulse 1.8s ease-in-out infinite;
-    }
-    @keyframes boot-spin {
-        to { transform: rotate(360deg); }
-    }
-    @keyframes boot-spin-reverse {
-        to { transform: rotate(-360deg); }
-    }
-    @keyframes boot-hub-pulse {
-        0%, 100% { transform: scale(1); opacity: 1; }
-        50% { transform: scale(1.08); opacity: 0.92; }
-    }
-    #app-boot .boot-brand {
-        position: relative;
+    #app-boot .boot-logo-fallback {
+        display: none;
         margin: 0;
-        font-size: 0.7rem;
-        font-weight: 700;
-        letter-spacing: 0.28em;
+        font-size: 1.35rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: #94a3b8;
-        animation: boot-fade-in 0.5s ease-out 0.1s both;
-    }
-    #app-boot .boot-typewriter {
-        position: relative;
-        margin: 0.15rem 0 0;
-        min-height: 1.75rem;
-        font-family: ui-monospace, SFMono-Regular, "Cascadia Code", Menlo, Consolas, monospace;
-        font-size: clamp(0.95rem, 3.5vw, 1.15rem);
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        background: linear-gradient(105deg, #c7d2fe 0%, #a5b4fc 40%, #818cf8 100%);
+        background: linear-gradient(105deg, #f8fafc 0%, #c7d2fe 55%, #a5b4fc 100%);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
-        animation: boot-fade-in 0.55s ease-out 0.2s both;
+    }
+    #app-boot .boot-logo-wrap.logo-missing .boot-logo {
+        display: none;
+    }
+    #app-boot .boot-logo-wrap.logo-missing .boot-logo-fallback {
+        display: block;
+    }
+    #app-boot .boot-tagline {
+        margin: 0 0 1.1rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #94a3b8;
+        animation: boot-fade-in 0.5s ease-out 0.12s both;
+    }
+    #app-boot .boot-typewriter {
+        margin: 0 0 0.35rem;
+        min-height: 1.5rem;
+        font-size: clamp(0.9rem, 3.2vw, 1.02rem);
+        font-weight: 600;
+        color: #e0e7ff;
+        letter-spacing: 0.02em;
+        animation: boot-fade-in 0.5s ease-out 0.18s both;
     }
     #app-boot .boot-tw-caret {
         display: inline-block;
-        width: 0.5ch;
-        margin-left: 1px;
-        color: #a5b4fc;
-        animation: boot-caret-blink 0.85s step-end infinite;
-        -webkit-background-clip: initial;
-        background-clip: initial;
+        margin-left: 2px;
+        color: #818cf8;
+        animation: boot-caret-blink 0.9s step-end infinite;
     }
     @keyframes boot-caret-blink {
         0%, 100% { opacity: 1; }
         50% { opacity: 0; }
     }
-    #app-boot .boot-sub {
-        position: relative;
-        margin: 0;
-        font-size: 0.75rem;
-        color: #64748b;
-        max-width: 20rem;
-        line-height: 1.45;
-        animation: boot-fade-in 0.6s ease-out 0.35s both;
+    #app-boot .boot-pct-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        gap: 0.5rem;
+        margin: 0.5rem 0 0.65rem;
+        animation: boot-fade-in 0.5s ease-out 0.22s both;
     }
     #app-boot .boot-pct {
-        position: relative;
         margin: 0;
-        font-size: 1.65rem;
+        font-size: 2rem;
         font-weight: 800;
         font-variant-numeric: tabular-nums;
-        color: #a5b4fc;
-        letter-spacing: 0.06em;
-        animation: boot-fade-in 0.5s ease-out 0.15s both;
+        line-height: 1;
+        background: linear-gradient(120deg, #e0e7ff, #a5b4fc);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+    #app-boot .boot-pct-label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #64748b;
     }
     #app-boot .boot-bar-wrap {
-        position: relative;
-        width: min(260px, 88vw);
-        height: 5px;
+        width: 100%;
+        height: 6px;
         border-radius: 999px;
-        background: rgba(30, 41, 59, 0.9);
+        background: rgba(15, 23, 42, 0.85);
         overflow: hidden;
-        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
-        animation: boot-fade-in 0.55s ease-out 0.2s both;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
     }
     #app-boot .boot-bar-fill {
         height: 100%;
         width: 0%;
         border-radius: inherit;
-        background: linear-gradient(90deg, #4f46e5, #a5b4fc, #6366f1);
-        background-size: 200% 100%;
-        transition: width 0.32s ease-out;
-        animation: boot-bar-shimmer 1.1s ease-in-out infinite;
+        background: linear-gradient(90deg, #4338ca, #6366f1, #a5b4fc, #6366f1);
+        background-size: 220% 100%;
+        transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+        animation: boot-bar-shimmer 1.4s ease-in-out infinite;
+        box-shadow: 0 0 12px rgba(99, 102, 241, 0.55);
     }
     @keyframes boot-bar-shimmer {
         0% { background-position: 0% 50%; }
         100% { background-position: 200% 50%; }
     }
+    #app-boot .boot-sub {
+        margin: 1rem 0 0;
+        font-size: 0.78rem;
+        color: #94a3b8;
+        line-height: 1.5;
+        min-height: 2.4em;
+    }
+    #app-boot .boot-sub strong {
+        color: #cbd5e1;
+        font-weight: 600;
+    }
+    #app-boot .boot-chips {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.35rem;
+        margin-top: 1rem;
+        animation: boot-fade-in 0.55s ease-out 0.3s both;
+    }
+    #app-boot .boot-chip {
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        padding: 0.28rem 0.55rem;
+        border-radius: 999px;
+        color: #a5b4fc;
+        background: rgba(99, 102, 241, 0.12);
+        border: 1px solid rgba(129, 140, 248, 0.22);
+    }
     @keyframes boot-fade-in {
-        from { opacity: 0; transform: translateY(8px); }
+        from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
     }
     @media print {
-        #app-boot {
-            display: none !important;
-        }
+        #app-boot { display: none !important; }
     }
     @media (prefers-reduced-motion: reduce) {
         #app-boot::before,
-        #app-boot .boot-orbit--a,
-        #app-boot .boot-orbit--b,
-        #app-boot .boot-orbit--c,
-        #app-boot .boot-hub,
         #app-boot .boot-bar-fill,
         #app-boot .boot-tw-caret {
             animation: none !important;
         }
-        #app-boot .boot-tw-caret {
-            opacity: 0.55;
-        }
+        #app-boot.boot-exit { transition: none; }
     }
 
     select option {
@@ -664,22 +696,33 @@
 </head>
   <body class="bg-slate-900 text-slate-200">
     <div id="root">
-      <div id="app-boot" role="status" aria-live="polite" aria-busy="true" aria-label="Loading WoodenMax Designer Engine">
-        <div class="boot-visual" aria-hidden="true">
-          <div class="boot-orbit boot-orbit--a"></div>
-          <div class="boot-orbit boot-orbit--b"></div>
-          <div class="boot-orbit boot-orbit--c"></div>
-          <div class="boot-hub"></div>
+      <div id="app-boot" role="status" aria-live="polite" aria-busy="true" aria-label="Loading WoodenMax Designer">
+        <div class="boot-card">
+          <div class="boot-logo-wrap" id="boot-logo-wrap">
+            <img class="boot-logo" src="/logo.jpg" alt="WoodenMax" width="200" height="48" decoding="async" />
+            <p class="boot-logo-fallback" aria-hidden="true">WoodenMax</p>
+          </div>
+          <p class="boot-tagline">Window &amp; Railing Designer</p>
+          <p class="boot-typewriter" aria-label="Loading status">
+            <span id="boot-tw-text"></span><span class="boot-tw-caret" aria-hidden="true">▍</span>
+          </p>
+          <div class="boot-pct-row">
+            <p id="boot-pct" class="boot-pct" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</p>
+            <span class="boot-pct-label">ready</span>
+          </div>
+          <div class="boot-bar-wrap" aria-hidden="true">
+            <div id="boot-bar-fill" class="boot-bar-fill"></div>
+          </div>
+          <p class="boot-sub" id="boot-status">
+            <strong>Designer engine</strong> &mdash; quotations, PDF &amp; BOM. <span lang="hi">Bas ek lamha.</span>
+          </p>
+          <div class="boot-chips" aria-hidden="true">
+            <span class="boot-chip">Windows</span>
+            <span class="boot-chip">Railing</span>
+            <span class="boot-chip">PDF Quote</span>
+            <span class="boot-chip">BOM</span>
+          </div>
         </div>
-        <p class="boot-brand">WoodenMax</p>
-        <p class="boot-typewriter" aria-label="Designer Engine loading">
-          <span id="boot-tw-text"></span><span class="boot-tw-caret" aria-hidden="true">▍</span>
-        </p>
-        <p id="boot-pct" class="boot-pct" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</p>
-        <div class="boot-bar-wrap" aria-hidden="true">
-          <div id="boot-bar-fill" class="boot-bar-fill"></div>
-        </div>
-        <p class="boot-sub">Starting designer engine &mdash; PDF quotes &amp; BOM. <span lang="hi">Bas ek lamha.</span></p>
       </div>
     </div>
     <script>
@@ -687,40 +730,67 @@
         var pctEl = document.getElementById('boot-pct');
         var barEl = document.getElementById('boot-bar-fill');
         var twEl = document.getElementById('boot-tw-text');
+        var statusEl = document.getElementById('boot-status');
+        var logoWrap = document.getElementById('boot-logo-wrap');
+        var logoImg = logoWrap && logoWrap.querySelector('.boot-logo');
         if (!pctEl || !barEl) return;
 
-        var line = 'Designer Engine';
-        var ti = 0;
+        if (logoImg) {
+          logoImg.addEventListener('error', function () {
+            if (logoWrap) logoWrap.classList.add('logo-missing');
+          });
+        }
+
+        var lines = ['Loading modules…', 'Preparing canvas…', 'Rates & quotation engine…'];
+        var lineIdx = 0;
+        var charIdx = 0;
         function typeTick() {
           if (!twEl) return;
-          if (ti <= line.length) {
-            twEl.textContent = line.slice(0, ti);
-            ti++;
-            window.setTimeout(typeTick, 42 + Math.random() * 38);
+          var line = lines[lineIdx];
+          if (charIdx <= line.length) {
+            twEl.textContent = line.slice(0, charIdx);
+            charIdx++;
+            window.setTimeout(typeTick, 36 + Math.random() * 32);
+          } else if (lineIdx < lines.length - 1) {
+            window.setTimeout(function () {
+              lineIdx++;
+              charIdx = 0;
+              typeTick();
+            }, 520);
           }
         }
-        window.setTimeout(typeTick, 280);
+        window.setTimeout(typeTick, 200);
 
-        var pct = 2;
+        var statusSteps = [
+          '<strong>Designer engine</strong> &mdash; quotations, PDF &amp; BOM.',
+          '<strong>Profile optimiser</strong> &amp; material lists.',
+          '<strong>Almost ready</strong> &mdash; <span lang="hi">bas ek lamha.</span>',
+        ];
+        var pct = 3;
         function paint(v) {
           var n = Math.min(100, Math.max(0, Math.round(v)));
           pctEl.textContent = n + '%';
           pctEl.setAttribute('aria-valuenow', String(n));
           barEl.style.width = n + '%';
+          if (statusEl) {
+            var si = n < 40 ? 0 : n < 78 ? 1 : 2;
+            statusEl.innerHTML = statusSteps[si];
+          }
         }
         paint(pct);
         var tick = window.setInterval(function () {
-          var cap = document.readyState === 'complete' ? 100 : 92;
+          var cap = document.readyState === 'complete' ? 100 : 94;
           var room = cap - pct;
           if (room <= 0) return;
-          pct += Math.max(0.4, room * (0.05 + Math.random() * 0.08));
+          pct += Math.max(0.5, room * (0.06 + Math.random() * 0.07));
           paint(pct);
-        }, 280);
+        }, 260);
         function finish() {
           window.clearInterval(tick);
           paint(100);
-          if (twEl && ti <= line.length) {
-            twEl.textContent = line;
+          if (twEl) twEl.textContent = 'Ready';
+          if (statusEl) {
+            statusEl.innerHTML = '<strong>Welcome</strong> &mdash; design, quote &amp; export.';
           }
         }
         window.addEventListener('load', finish);

@@ -284,6 +284,13 @@ export function CadPreview({
   const [userZoom, setUserZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const dragRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
+  const pinchRef = useRef<{ distance: number; zoom: number } | null>(null)
+
+  const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
+
+  const zoomBy = useCallback((factor: number) => {
+    setUserZoom((z) => clampZoom(z * factor))
+  }, [])
 
   useEffect(() => {
     setUserZoom(1)
@@ -347,18 +354,44 @@ export function CadPreview({
     setPan({ x: 0, y: 0 })
   }
 
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      pinchRef.current = { distance: Math.hypot(dx, dy), zoom: userZoom }
+    }
+  }, [userZoom])
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length !== 2 || !pinchRef.current) return
+    e.preventDefault()
+    const dx = e.touches[0].clientX - e.touches[1].clientX
+    const dy = e.touches[0].clientY - e.touches[1].clientY
+    const dist = Math.hypot(dx, dy)
+    if (pinchRef.current.distance <= 0) return
+    const ratio = dist / pinchRef.current.distance
+    setUserZoom(clampZoom(pinchRef.current.zoom * ratio))
+  }, [])
+
+  const onTouchEnd = useCallback(() => {
+    pinchRef.current = null
+  }, [])
+
   const bottomRailPath = centerlinePolyline(layouts, GLASS_DEPTH * 0.65)
   const handrailPath = centerlinePolyline(layouts, -GLASS_DEPTH * 0.15)
 
   return (
     <div className="preview-wrap cad no-print">
       <div className="preview-header preview-header-cad">
-        <span>CAD plan — miter joints at true angle</span>
+        <span className="cad-title">
+          <span className="cad-title-long">CAD plan — miter joints</span>
+          <span className="cad-title-short">CAD</span>
+        </span>
         <div className="cad-toolbar">
           {onUndo && (
             <button
               type="button"
-              className="cad-tool-btn"
+              className="cad-tool-btn cad-tool-undo"
               onClick={onUndo}
               disabled={!canUndo}
               title="Undo (Ctrl+Z)"
@@ -369,7 +402,7 @@ export function CadPreview({
           {onRedo && (
             <button
               type="button"
-              className="cad-tool-btn"
+              className="cad-tool-btn cad-tool-redo"
               onClick={onRedo}
               disabled={!canRedo}
               title="Redo (Ctrl+Y)"
@@ -377,14 +410,26 @@ export function CadPreview({
               ↷
             </button>
           )}
-          <span className="cad-hint">Ctrl + scroll: zoom · drag: pan</span>
-          <button type="button" className="cad-tool-btn" onClick={resetView}>
-            Fit view
+          <span className="cad-hint">Pinch · drag to pan</span>
+          <button type="button" className="cad-tool-btn" onClick={() => zoomBy(1.15)} title="Zoom in" aria-label="Zoom in">
+            +
+          </button>
+          <button type="button" className="cad-tool-btn" onClick={() => zoomBy(1 / 1.15)} title="Zoom out" aria-label="Zoom out">
+            −
+          </button>
+          <button type="button" className="cad-tool-btn cad-tool-fit" onClick={resetView}>
+            Fit
           </button>
           <span className="cad-zoom-label">{Math.round(userZoom * 100)}%</span>
         </div>
       </div>
-      <div className="cad-viewport">
+      <div
+        className="cad-viewport"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
+      >
         <svg
           ref={svgRef}
           className="preview-svg cad-interactive"
@@ -441,28 +486,29 @@ export function CadPreview({
             {layouts.flatMap((l, i) => drawRun(l, scale, i, layouts))}
           </g>
 
-          <g className="cad-legend" transform={`translate(12, 12)`}>
+          <g className="cad-legend cad-legend-svg" transform={`translate(12, 12)`}>
             <rect x={0} y={0} width={14} height={10} fill={GLASS_FILL} stroke={GLASS_STROKE} />
             <text x={20} y={10} fill={DIM} fontSize={10}>
-              Glass (mitered)
+              Glass
             </text>
-            <line x1={108} y1={5} x2={132} y2={5} stroke={RAIL} strokeWidth={3} />
-            <text x={138} y={10} fill={DIM} fontSize={10}>
-              Bottom rail
+            <line x1={68} y1={5} x2={88} y2={5} stroke={RAIL} strokeWidth={3} />
+            <text x={94} y={10} fill={DIM} fontSize={10}>
+              Rail
             </text>
           </g>
         </svg>
       </div>
       <div className="cad-stats">
-        <span>
-          Perimeter: <strong>{calc.perimeterRunMm} mm</strong>
+        <span className="cad-stat">
+          <em>Run</em> <strong>{calc.perimeterRunMm} mm</strong>
         </span>
-        <span>
-          Glass: <strong>{calc.totalGlassPanels}</strong> panels ({calc.totalGlassAreaSqm} m²)
+        <span className="cad-stat">
+          <em>Glass</em> <strong>{calc.totalGlassPanels}</strong>
+          <span className="cad-stat-sub">({calc.totalGlassAreaSqm} m²)</span>
         </span>
         {calc.hardware.bottomRailMm > 0 && (
-          <span>
-            Bottom rail: <strong>{calc.hardware.bottomRailMm} mm</strong>
+          <span className="cad-stat">
+            <em>Rail</em> <strong>{calc.hardware.bottomRailMm} mm</strong>
           </span>
         )}
       </div>

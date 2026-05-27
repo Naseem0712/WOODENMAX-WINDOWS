@@ -23,6 +23,9 @@ export const QUOTATION_BANK = {
 export const DEFAULT_QUOTE_INTRO =
   'Thank you for your enquiry. We are pleased to submit our quotation for glass railing systems as per your requirements. All measurements are in millimetres unless stated otherwise.'
 
+/** Default ₹ per pillar/stud hole when “Add hole charges” is ticked. */
+export const DEFAULT_HOLE_CHARGE_PER_PCS = 100
+
 export const QUOTATION_TERMS = [
   'Rates are valid for 15 days from the date of this quotation unless otherwise agreed in writing.',
   'Prices are exclusive of civil work, core cutting, scaffolding, and statutory approvals unless specified.',

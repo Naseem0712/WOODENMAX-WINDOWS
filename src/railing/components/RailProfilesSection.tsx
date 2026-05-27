@@ -111,8 +111,8 @@ export function RailProfilesSection({
   return (
     <div className="rail-profiles-section">
       <p className="section-desc">
-        Default type neeche choose karein, phir <strong>Apply to all sides</strong> se ek click
-        mein sabhi legs par laga dein — ya har leg alag bhi set kar sakte hain.
+        Choose a default profile type below, then use <strong>Apply to all sides</strong> to set
+        every leg at once — or set each leg separately.
       </p>
 
       {showHandrail && (

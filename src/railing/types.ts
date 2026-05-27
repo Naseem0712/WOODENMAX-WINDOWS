@@ -11,8 +11,15 @@ export type DesignType =
 export type HeightMode = 'uniform' | 'per-segment'
 /** Quotation-wide: normal wall railing vs staircase hardware set. */
 export type HardwareMode = 'normal' | 'staircase'
-export type BottomFixing = 'continuous-rail' | 'pillars'
+export type BottomFixing = 'continuous-rail' | 'pillars' | 'studs'
 export type PillarsPerGlass = 2 | 3 | 4
+export type HandrailMaterial = 'aluminium' | 'ss' | 'none'
+
+export interface ProductSpec {
+  name: string
+  color: string
+  size: string
+}
 
 export type SegmentBendMode =
   | 'none'
@@ -50,6 +57,8 @@ export interface SegmentGlassConfig {
   gapMm: number
   pillarsPerGlass: PillarsPerGlass
   pillarInsetMm: number
+  /** Studs per glass when bottomFixing is studs. */
+  studsPerGlass: PillarsPerGlass
   /** Handrail profile on this leg (defaults from design finish). */
   handrailProfile: string
   /** Bottom rail / channel on this leg (defaults from design finish). */
@@ -71,6 +80,8 @@ export interface CalculatedGlass {
   widthMm: number
   heightMm: number
   pillarPositionsMm: number[]
+  /** Staircase costing: panel width + height (angle cut), mm */
+  staircaseBillLengthMm?: number
 }
 
 export interface CalculatedSegment {
@@ -98,6 +109,7 @@ export interface HardwareCounts {
   connector90: number
   connector180: number
   wallConnectors: number
+  endCaps: number
   bottomRailMm: number
   handrailMm: number
   bottomRailRft: number
@@ -105,6 +117,7 @@ export interface HardwareCounts {
   bottomRailStock: RailStockPlanSummary
   handrailStock: RailStockPlanSummary
   totalPillars: number
+  totalStuds: number
   totalAnchors: number
 }
 
@@ -114,9 +127,11 @@ export type RailRateMode = 'rft' | 'kg'
 export interface CostingRates {
   glassPerSft: number
   pillarPerPcs: number
+  studPerPcs: number
   connector90PerPcs: number
   connector180PerPcs: number
   wallConnectorPerPcs: number
+  endCapPerPcs: number
   bottomRailRate: number
   bottomRailRateMode: RailRateMode
   bottomRailKgPerRft: number
@@ -124,26 +139,34 @@ export interface CostingRates {
   handrailRateMode: RailRateMode
   handrailKgPerRft: number
   anchorPerPcs: number
+  /** Drilling / hole charge per pillar or stud (when applyHoleCharges on design). */
+  holePerPcs: number
   quoteDisplayUnit: RateDisplayUnit
   referenceGlassPerSft: number
   referenceBottomRailPerRft: number
   referenceHandrailPerRft: number
   referencePillarPerPcs: number
+  referenceStudPerPcs: number
   referenceConnector90: number
   referenceConnector180: number
   referenceWallConnector: number
+  referenceEndCap: number
   referenceAnchor: number
+  referenceHolePerPcs: number
 }
 
 export type CostRateField =
   | 'glassPerSft'
   | 'pillarPerPcs'
+  | 'studPerPcs'
   | 'connector90PerPcs'
   | 'connector180PerPcs'
   | 'wallConnectorPerPcs'
+  | 'endCapPerPcs'
   | 'bottomRailRate'
   | 'handrailRate'
   | 'anchorPerPcs'
+  | 'holePerPcs'
 
 export interface CostLineItem {
   label: string
@@ -168,7 +191,16 @@ export interface CostBreakdown {
   items: CostLineItem[]
   subtotal: number
   referenceSubtotal: number
+  /** SFT used in glass ₹ line (staircase: (W+H)×H billing). */
   glassAreaSft: number
+  /** Plain W×H glass area (for comparison on staircase). */
+  glassAreaSftActual?: number
+  /** Staircase uses (panel run width + height) × height per panel. */
+  staircaseGlassFormula?: boolean
+  /** Glass ₹ amount ÷ actual run length (RFT). */
+  staircaseGlassCostPerRft?: number | null
+  staircaseRunRft?: number
+  holeChargeQty?: number
   bottomRailRft: number
   handrailRft: number
   perimeterRmt: number
@@ -191,8 +223,12 @@ export interface DesignCalculation {
   hardware: HardwareCounts
   bom: BomLine[]
   totalGlassPanels: number
+  /** Glass area used in costing (staircase formula or actual W×H). */
   totalGlassAreaSqm: number
   totalGlassAreaSft: number
+  /** Plain W×H glass area before staircase billing formula. */
+  totalGlassAreaSqmActual?: number
+  totalGlassAreaSftActual?: number
   perimeterRunMm: number
 }
 
@@ -202,13 +238,22 @@ export interface FinishSpecs {
   anchorSize: string
   bottomRailProfile: string
   handrailProfile: string
+  handrailMaterial?: HandrailMaterial
+  hardwareColorSameAsHandrail?: boolean
+  bottomRailSpec?: ProductSpec
+  pillarSpec?: ProductSpec
+  studSpec?: ProductSpec
+  handrailSpec?: ProductSpec
 }
 
-/** Editable package rates in Add to quote (per SFT / RFT / RMT) */
+/** Editable package rates in Add to quote (per SFT / RFT / RMT + installation / labour) */
 export interface PackageRates {
   perSft: number
   perRft: number
   perRmt: number
+  installationPerSft: number
+  installationPerRft: number
+  installationPerRmt: number
 }
 
 /** Locked package line used on quotation & PDF */
@@ -220,7 +265,10 @@ export interface CustomCharge {
 
 export interface PackageQuote {
   unit: RateDisplayUnit
+  /** Total rate charged (material + installation) per unit. */
   rate: number
+  materialRate: number
+  installationRate: number
   basisQty: number
   basisLabel: string
   amountPerSet: number
@@ -247,6 +295,8 @@ export interface DesignDraft {
   customCharges: CustomCharge[]
   /** When saved presets exist: show per-item hardware/glass overrides without changing presets. */
   customizeHardware?: boolean
+  /** Add ₹/hole × (pillars + studs) to BOM costing when pillars or studs are used. */
+  applyHoleCharges?: boolean
 }
 
 export interface QuotationLine {
@@ -275,9 +325,19 @@ export interface QuotationLine {
   internalCosting?: CostBreakdown
 }
 
+export interface QuotationBankDetails {
+  accountName: string
+  bankName: string
+  accountNo: string
+  ifsc: string
+  branch: string
+}
+
 export interface QuotationMeta {
   clientName: string
   clientPhone: string
+  /** Optional — shown on print/PDF when filled */
+  clientGstin?: string
   clientAddress: string
   projectName: string
   quoteNumber: string
@@ -286,4 +346,6 @@ export interface QuotationMeta {
   introText?: string
   /** Terms & conditions (one line per bullet) */
   termsText?: string
+  /** Bank details on printed quotation */
+  bankDetails?: QuotationBankDetails
 }

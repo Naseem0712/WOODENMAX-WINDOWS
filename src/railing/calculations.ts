@@ -1,5 +1,10 @@
 import { countPathBends } from './segmentLayout'
 import { planRailStock } from './railStock'
+import { isStaircaseDraft } from './presets'
+import {
+  staircaseGlassBillLengthMm,
+  sumGlassAreasFromSegments,
+} from './staircaseGlass'
 import { mmToFt, sqmToSft } from './units'
 import type {
   DesignCalculation,
@@ -18,14 +23,26 @@ const DEFAULT_INSET = 150
 
 export function countAnchors(
   pillars: number,
+  studs: number,
   bottomRailRft: number,
   bottomFixing: DesignDraft['bottomFixing'],
 ): number {
-  let n = pillars * 2
+  let n = pillars * 2 + studs * 2
   if (bottomFixing === 'continuous-rail' && bottomRailRft > 0) {
     n += Math.ceil(bottomRailRft)
   }
   return n
+}
+
+function countEndCaps(
+  includeHandrail: boolean,
+  type: DesignType,
+  activeCount: number,
+  wallConnectors: number,
+): number {
+  if (!includeHandrail) return 0
+  if (type === 'o-type' && activeCount >= 4) return 0
+  return Math.max(2, wallConnectors)
 }
 
 /** Gaps = panels + 1 (both ends + between each glass) */
@@ -123,20 +140,24 @@ export function calculateDesign(draft: DesignDraft): DesignCalculation {
     const heightMm = segmentHeight(draft, dim.key)
     const pillarsPerGlass =
       draft.bottomFixing === 'pillars' ? cfg.pillarsPerGlass : 0
+    const studsPerGlass =
+      draft.bottomFixing === 'studs' ? (cfg.studsPerGlass ?? cfg.pillarsPerGlass ?? 2) : 0
+    const supportPerGlass = pillarsPerGlass || studsPerGlass
 
     const glasses: CalculatedGlass[] = []
     let pillarsInSegment = 0
 
     for (let i = 0; i < glassCount; i++) {
       const positions =
-        pillarsPerGlass > 0
+        supportPerGlass > 0
           ? pillarPositionsOnGlass(
               glassWidthMm,
-              cfg.pillarsPerGlass,
+              supportPerGlass as PillarsPerGlass,
               cfg.pillarInsetMm || DEFAULT_INSET,
             )
           : []
       pillarsInSegment += positions.length
+      const isStaircaseSeg = isStaircaseDraft(draft)
       glasses.push({
         segmentKey: dim.key,
         segmentLabel: dim.label,
@@ -144,6 +165,9 @@ export function calculateDesign(draft: DesignDraft): DesignCalculation {
         widthMm: glassWidthMm,
         heightMm,
         pillarPositionsMm: positions.map((p) => Math.round(p * 10) / 10),
+        staircaseBillLengthMm: isStaircaseSeg
+          ? staircaseGlassBillLengthMm(glassWidthMm, heightMm)
+          : undefined,
       })
     }
 
@@ -171,15 +195,29 @@ export function calculateDesign(draft: DesignDraft): DesignCalculation {
   const bottomRailMm =
     draft.bottomFixing === 'continuous-rail' ? perimeterRunMm : 0
   const handrailMm = draft.includeHandrail ? perimeterRunMm : 0
-  const totalPillars = segments.reduce((s, seg) => s + seg.pillarsInSegment, 0)
+  const totalPillars =
+    draft.bottomFixing === 'pillars'
+      ? segments.reduce((s, seg) => s + seg.pillarsInSegment, 0)
+      : 0
+  const totalStuds =
+    draft.bottomFixing === 'studs'
+      ? segments.reduce((s, seg) => s + seg.pillarsInSegment, 0)
+      : 0
 
   const bottomRailRft = mmToFt(bottomRailMm)
   const handrailRft = mmToFt(handrailMm)
   const bottomStock = planRailStock(bottomRailRft)
   const handrailStock = planRailStock(handrailRft)
 
-  // 180° splice connectors only when handrail stock bars are joined
-  const connector180 = draft.includeHandrail ? handrailStock.joints180 : 0
+  const isStaircase = isStaircaseDraft(draft)
+  const connector180 =
+    !isStaircase && draft.includeHandrail ? handrailStock.joints180 : 0
+  const endCaps = countEndCaps(
+    draft.includeHandrail,
+    draft.designType,
+    segments.length,
+    wallConnectors,
+  )
 
   const stockSummary = (p: ReturnType<typeof planRailStock>): RailStockPlanSummary => ({
     totalBars: p.totalBars,
@@ -193,6 +231,7 @@ export function calculateDesign(draft: DesignDraft): DesignCalculation {
     connector90: lConnectors,
     connector180,
     wallConnectors,
+    endCaps,
     bottomRailMm,
     handrailMm,
     bottomRailRft: Math.round(bottomRailRft * 100) / 100,
@@ -200,21 +239,23 @@ export function calculateDesign(draft: DesignDraft): DesignCalculation {
     bottomRailStock: stockSummary(bottomStock),
     handrailStock: stockSummary(handrailStock),
     totalPillars,
+    totalStuds,
     totalAnchors: countAnchors(
       totalPillars,
+      totalStuds,
       Math.round(bottomRailRft * 100) / 100,
       draft.bottomFixing,
     ),
   }
 
-  const bom = buildBom(draft, segments, hardware)
+  const bom = buildBom(draft, segments, hardware, isStaircase)
   const totalGlassPanels = segments.reduce((s, seg) => s + seg.glassCount, 0)
-  const totalGlassAreaSqm = segments.reduce(
-    (s, seg) =>
-      s + seg.glasses.reduce((a, g) => a + (g.widthMm * g.heightMm) / 1_000_000, 0),
-    0,
-  )
-  const totalGlassAreaSqmRounded = Math.round(totalGlassAreaSqm * 100) / 100
+  const glassAreas = sumGlassAreasFromSegments(segments)
+  const totalGlassAreaSqmActual = Math.round(glassAreas.actualSqm * 100) / 100
+  const totalGlassAreaSftActual =
+    Math.round(sqmToSft(glassAreas.actualSqm) * 100) / 100
+  const costingSqm = isStaircase ? glassAreas.staircaseCostingSqm : glassAreas.actualSqm
+  const totalGlassAreaSqmRounded = Math.round(costingSqm * 100) / 100
   const totalGlassAreaSft =
     Math.round(sqmToSft(totalGlassAreaSqmRounded) * 100) / 100
 
@@ -225,6 +266,8 @@ export function calculateDesign(draft: DesignDraft): DesignCalculation {
     totalGlassPanels,
     totalGlassAreaSqm: totalGlassAreaSqmRounded,
     totalGlassAreaSft,
+    totalGlassAreaSqmActual,
+    totalGlassAreaSftActual,
     perimeterRunMm,
   }
 }
@@ -233,24 +276,36 @@ function buildBom(
   draft: DesignDraft,
   segments: CalculatedSegment[],
   hw: HardwareCounts,
+  staircaseBilling = false,
 ): BomLine[] {
   const lines: BomLine[] = []
 
-  const glassMap = new Map<string, { w: number; h: number; qty: number }>()
+  const glassMap = new Map<string, { w: number; h: number; qty: number; bill?: number }>()
   for (const seg of segments) {
     for (const g of seg.glasses) {
-      const k = `${g.widthMm}×${g.heightMm}`
+      const bill = g.staircaseBillLengthMm
+      const k = staircaseBilling && bill != null ? `${bill}×${g.heightMm}` : `${g.widthMm}×${g.heightMm}`
       const prev = glassMap.get(k)
       if (prev) prev.qty += 1
-      else glassMap.set(k, { w: g.widthMm, h: g.heightMm, qty: 1 })
+      else
+        glassMap.set(k, {
+          w: staircaseBilling && bill != null ? bill : g.widthMm,
+          h: g.heightMm,
+          qty: 1,
+          bill,
+        })
     }
   }
 
   for (const [, v] of glassMap) {
+    const spec =
+      staircaseBilling && v.bill != null
+        ? `${v.bill} × ${v.h} mm (bill L×H; panel ${v.bill - v.h} + ${v.h})`
+        : `${v.w} × ${v.h} mm (W × H)`
     lines.push({
       category: 'glass',
       item: 'Toughened / Laminated glass panel',
-      specification: `${v.w} × ${v.h} mm (W × H)`,
+      specification: spec,
       qty: v.qty,
       unit: 'pcs',
     })
@@ -292,6 +347,26 @@ function buildBom(
       item: 'Floor pillars / posts',
       specification: `As per layout (${draft.segmentConfigs.map((c) => `${c.pillarsPerGlass}/glass`).join(', ')})`,
       qty: hw.totalPillars,
+      unit: 'pcs',
+    })
+  }
+
+  if (hw.totalStuds > 0) {
+    lines.push({
+      category: 'hardware',
+      item: 'Glass studs',
+      specification: `As per layout (${draft.segmentConfigs.map((c) => `${c.studsPerGlass ?? c.pillarsPerGlass}/glass`).join(', ')})`,
+      qty: hw.totalStuds,
+      unit: 'pcs',
+    })
+  }
+
+  if (hw.endCaps > 0) {
+    lines.push({
+      category: 'hardware',
+      item: 'Handrail end cap',
+      specification: 'Open handrail ends',
+      qty: hw.endCaps,
       unit: 'pcs',
     })
   }
@@ -345,6 +420,7 @@ export function defaultConfigFor(
     gapMm: DEFAULT_GAP,
     pillarsPerGlass: 2 as PillarsPerGlass,
     pillarInsetMm: DEFAULT_INSET,
+    studsPerGlass: 2 as PillarsPerGlass,
     handrailProfile: f.handrailProfile,
     bottomRailProfile: f.bottomRailProfile,
   }

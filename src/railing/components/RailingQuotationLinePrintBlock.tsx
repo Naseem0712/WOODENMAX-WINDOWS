@@ -1,4 +1,4 @@
-import { formatCurrency } from '../utils'
+import { formatQuoteMoney } from '../utils'
 import {
   buildItemSpecRows,
   quoteBasisForLine,
@@ -57,32 +57,36 @@ export function RailingQuotationLinePrintBlock({
         </header>
 
         <div className={priceWrapClass}>
-          <table className="qdoc-item-price-table">
-            <thead>
-              <tr>
-                <th>Basis</th>
-                <th>Rate (₹)</th>
-                <th>Sets</th>
-                <th className="text-right">Amount (₹)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  {basis.qty} {basis.unit}
-                  <br />
-                  <small className="qdoc-line-type">
-                    {line.designType.replace('-', ' ')} · per {unit.toUpperCase()}
-                  </small>
-                </td>
-                <td>{rate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
-                <td>{line.quantity}</td>
-                <td className="text-right">
-                  <strong>{formatCurrency(amount)}</strong>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div className="qdoc-price-grid" role="table" aria-label="Line pricing">
+            <div className="qdoc-col-basis qdoc-price-h" role="columnheader">
+              Basis
+            </div>
+            <div className="qdoc-col-rate qdoc-price-h" role="columnheader">
+              Rate (₹)
+            </div>
+            <div className="qdoc-col-sets qdoc-price-h" role="columnheader">
+              Sets
+            </div>
+            <div className="qdoc-col-amount qdoc-price-h" role="columnheader">
+              Amount (₹)
+            </div>
+            <div className="qdoc-col-basis qdoc-price-v" role="cell">
+              {basis.qty} {basis.unit}
+              <br />
+              <small className="qdoc-line-type">
+                {line.designType.replace('-', ' ')} · per {unit.toUpperCase()}
+              </small>
+            </div>
+            <div className="qdoc-col-rate qdoc-price-v" role="cell">
+              {formatQuoteMoney(rate)}
+            </div>
+            <div className="qdoc-col-sets qdoc-price-v" role="cell">
+              {line.quantity}
+            </div>
+            <div className="qdoc-col-amount qdoc-price-v" role="cell">
+              <strong>{formatQuoteMoney(amount)}</strong>
+            </div>
+          </div>
 
           {(line.customCharges ?? []).filter((c) => c.amount > 0 && c.label?.trim()).length >
             0 && (
@@ -91,7 +95,7 @@ export function RailingQuotationLinePrintBlock({
                 .filter((c) => c.amount > 0 && c.label?.trim())
                 .map((c, j) => (
                   <li key={j}>
-                    {c.label}: {formatCurrency(c.amount)}/set
+                    {c.label}: {formatQuoteMoney(c.amount)}/set
                   </li>
                 ))}
             </ul>
@@ -101,10 +105,10 @@ export function RailingQuotationLinePrintBlock({
         <div className="quote-item-body">
           <div className="quote-item-left">
             <QuoteMiniDiagram draft={draft} calc={line.calculation} />
-            <div className="dim-box">
+            <div className="dim-box dim-box-compact">
               <p className="dim-title">Measurements</p>
-              <p>{line.dimensionsText}</p>
-              <p>{line.heightText}</p>
+              <p className="dim-lines">{line.dimensionsText}</p>
+              {line.heightText?.trim() ? <p className="dim-height">{line.heightText}</p> : null}
             </div>
           </div>
 

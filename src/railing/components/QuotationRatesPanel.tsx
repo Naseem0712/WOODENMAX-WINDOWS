@@ -148,6 +148,13 @@ export function QuotationRatesPanel({
         bottomRailRft={breakdown.bottomRailRft}
         handrailRft={breakdown.handrailRft}
         perimeterRmt={breakdown.perimeterRmt}
+        hardwareMode={editMode}
+        connector90={breakdown.design.hardware.connector90}
+        connector180={breakdown.design.hardware.connector180}
+        wallConnectors={breakdown.design.hardware.wallConnectors}
+        endCaps={breakdown.design.hardware.endCaps}
+        totalPillars={breakdown.design.hardware.totalPillars}
+        totalStuds={breakdown.design.hardware.totalStuds}
       />
 
       <SetRatesDisplay

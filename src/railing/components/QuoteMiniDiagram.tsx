@@ -33,7 +33,7 @@ function dimAnnotation(
   const ty = my + oy + (horizontal ? 11 : 0)
 
   return (
-    <g key={`dim-${x1}-${y1}-${label}`}>
+    <g key={`dim-${x1}-${y1}-${x2}-${y2}-${label}`}>
       <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#94a3b8" strokeWidth={1.2} />
       <line
         x1={x1 + ox}
@@ -100,7 +100,13 @@ function drawMiteredRun(
     )
     const pts = quad.map((p) => p.join(',')).join(' ')
     els.push(
-      <polygon key={i} points={pts} fill="#dbeafe" stroke="#2563eb" strokeWidth={1.2} />,
+      <polygon
+        key={`glass-${segIndex}-${i}`}
+        points={pts}
+        fill="#dbeafe"
+        stroke="#2563eb"
+        strokeWidth={1.2}
+      />,
     )
     t += gw + gapS
   }

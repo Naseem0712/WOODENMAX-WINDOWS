@@ -249,6 +249,20 @@ export interface LouverPatternItem {
   size: number | '';
 }
 
+/** Cross-axis placement of a bay inside the outer module (horizontal row → vertical align; vertical stack → horizontal align). */
+export type LouverBayCrossAlign = 'top' | 'center' | 'bottom';
+
+/** One physical louver bay in a compound (joint) façade module — up to 5 bays. Empty list = legacy single opening using width×height only. */
+export interface LouverBaySegment {
+  id: string;
+  width: number | '';
+  height: number | '';
+  /** top = flush to top/left edge; bottom = flush to bottom/right; center = centred on cross axis. */
+  crossAlign?: LouverBayCrossAlign;
+  /** Optional mm from top (horizontal row) or from left (vertical stack). Overrides crossAlign when set. */
+  offsetMm?: number | '';
+}
+
 
 export interface WindowConfig {
   width: number | '';
@@ -299,6 +313,10 @@ export interface WindowConfig {
   // Louvers specific
   louverPattern: LouverPatternItem[];
   orientation: 'vertical' | 'horizontal';
+  /** Multi-size joint module: stacked or side‑by‑side bays; quotation area = sum of bay areas (see utils/louverBays). */
+  louverBays?: LouverBaySegment[];
+  /** How bays abut inside the outer module bbox. */
+  louverBayLayout?: 'vertical' | 'horizontal';
 
   // Mirror specific
   mirrorConfig: {

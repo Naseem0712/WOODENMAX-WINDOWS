@@ -27,6 +27,7 @@ import { quoteBasisForLine, quoteRateForLine, recalculateQuoteLine as recalculat
 import { migrateBackup, parseBackupJson } from '../railing/backup';
 import { displayDesignTitle as railingDisplayTitle } from '../railing/utils';
 import { isWindowQuotationItem } from '../utils/quotationItemKinds';
+import { getWindowQuotationAreaMm2 } from '../utils/louverBays';
 interface QuotationListModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -818,7 +819,9 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                               }
 
                               const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
-                              const singleArea = (Number(item.config.width) / conversionFactor) * (Number(item.config.height) / conversionFactor);
+                              const singleArea =
+                                getWindowQuotationAreaMm2(item.config) /
+                                (conversionFactor * conversionFactor);
                               const totalArea = singleArea * item.quantity;
                               const baseCost = totalArea * item.rate;
                               const totalHardwareCost = item.hardwareCost * item.quantity;

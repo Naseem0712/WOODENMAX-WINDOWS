@@ -46,7 +46,7 @@ export function BackupPanel({
   return (
     <div className="backup-panel">
       <h3>
-        Backup <span className="hi">JSON</span>
+        Backup JSON
       </h3>
       <p className="hint">
         Save quotation, rates, designs & current draft in one file.

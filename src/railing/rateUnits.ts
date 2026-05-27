@@ -20,9 +20,11 @@ export function itemRateUnits(rateField?: CostRateField): RateUnit[] {
     case 'handrailRate':
       return ['rft', 'rmt']
     case 'pillarPerPcs':
+    case 'studPerPcs':
     case 'connector90PerPcs':
     case 'connector180PerPcs':
     case 'wallConnectorPerPcs':
+    case 'endCapPerPcs':
     case 'anchorPerPcs':
       return ['pcs']
     default:

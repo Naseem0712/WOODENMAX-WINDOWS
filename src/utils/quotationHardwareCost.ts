@@ -1,5 +1,6 @@
 import type { CornerSideConfig, HardwareItem, WindowConfig } from '../types';
 import { ShutterConfigType, WindowType } from '../types';
+import { countLouverBladeProfiles } from './louverBays';
 
 /**
  * Hardware unit multiplier for quotation PDF rows and designer pricing — matches sliding /
@@ -44,26 +45,7 @@ function getQuotationHardwareUnitMultiplierForSlice(
     panelCount = 1;
   } else if (item.unit === 'per_shutter_or_door') {
     if (config.windowType === WindowType.LOUVERS) {
-      const { louverPattern, height, width, orientation } = config as WindowConfig;
-      const pattern = louverPattern;
-      const patternUnitSize = pattern.reduce((sum, p) => sum + (Number(p.size) || 0), 0);
-
-      if (patternUnitSize > 0) {
-        const totalDimension = orientation === 'vertical' ? (Number(height) || 0) : (Number(width) || 0);
-        const numProfilesInPattern = pattern.filter((p) => p.type === 'profile').length;
-        if (numProfilesInPattern > 0) {
-          const numCompletePatterns = Math.floor(totalDimension / patternUnitSize);
-          panelCount = numCompletePatterns * numProfilesInPattern;
-          const remainingDimension = totalDimension % patternUnitSize;
-          let currentSize = 0;
-          for (const p of pattern) {
-            if (currentSize < remainingDimension) {
-              if (p.type === 'profile') panelCount++;
-              currentSize += Number(p.size) || 0;
-            } else break;
-          }
-        }
-      }
+      panelCount = countLouverBladeProfiles(config as WindowConfig);
     } else if (config.windowType === WindowType.VENTILATOR) {
       const grid = config.ventilatorGrid ?? [];
       const doorCells = grid.flat().filter((c) => c.type === 'door').length;

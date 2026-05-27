@@ -4,6 +4,7 @@ import { computeSlidingCutLayout, isSlidingSeriesUnifiedOuter } from './slidingC
 import { hasResolvedSeriesValue, resolveSeriesNumeric } from './profileDimensionKeys';
 import { getQuotationHardwareUnitMultiplier } from './quotationHardwareCost';
 import { getFixedPanelVerticalDivisionsMm } from './fixedPanelDivisions';
+import { getEffectiveLouverBays, getLouverBaySeparatorMm } from './louverBays';
 
 const FEET_TO_MM = 304.8;
 const SQFT_TO_SQMM = 92903.04;
@@ -455,16 +456,16 @@ function calculateUsage(config: WindowConfig, options?: CalculateUsageOptions): 
         case WindowType.LOUVERS: {
             const pattern = config.louverPattern ?? [];
             const orientation = config.orientation ?? 'vertical';
-            const totalDim = orientation === 'vertical' ? h : w;
-            const spanDim = orientation === 'vertical' ? w : h;
-            const unitSize = pattern.reduce((sum, p) => sum + (Number(p.size) || 0), 0);
-            if (unitSize > 0 && totalDim > 0 && spanDim > 0) {
-                const numCompletePatterns = Math.floor(totalDim / unitSize);
+
+            function addLouversBladesForOpening(totalDimMm: number, spanDimMm: number): void {
+                const unitSize = pattern.reduce((sum, p) => sum + (Number(p.size) || 0), 0);
+                if (unitSize <= 0 || totalDimMm <= 0 || spanDimMm <= 0) return;
+                const numCompletePatterns = Math.floor(totalDimMm / unitSize);
                 let bladeCount = 0;
                 for (const p of pattern) {
                     if (p.type === 'profile') bladeCount += numCompletePatterns;
                 }
-                const remaining = totalDim - numCompletePatterns * unitSize;
+                const remaining = totalDimMm - numCompletePatterns * unitSize;
                 let used = 0;
                 for (const p of pattern) {
                     if (used >= remaining) break;
@@ -474,7 +475,29 @@ function calculateUsage(config: WindowConfig, options?: CalculateUsageOptions): 
                     used += Number(p.size) || 0;
                 }
                 if (bladeCount > 0) {
-                    addProfile('louverBlade', ...Array(bladeCount).fill(spanDim));
+                    addProfile('louverBlade', ...Array(bladeCount).fill(spanDimMm));
+                }
+            }
+
+            const bays = getEffectiveLouverBays(config);
+            for (const b of bays) {
+                const totalDim = orientation === 'vertical' ? b.height : b.width;
+                const spanDim = orientation === 'vertical' ? b.width : b.height;
+                addLouversBladesForOpening(totalDim, spanDim);
+            }
+
+            if (bays.length > 1) {
+                const layoutDirs = config.louverBayLayout || 'vertical';
+                const sep = getLouverBaySeparatorMm(dims);
+                if (sep > 0) {
+                    const joinProfile: keyof ProfileDimensions =
+                        Number(dims.louverProfile) > 0 ? 'louverProfile' : 'mullion';
+                    const joinCount = bays.length - 1;
+                    if (layoutDirs === 'vertical') {
+                        addProfile(joinProfile, ...Array(joinCount).fill(innerW));
+                    } else {
+                        addProfile(joinProfile, ...Array(joinCount).fill(innerH));
+                    }
                 }
             }
             break;

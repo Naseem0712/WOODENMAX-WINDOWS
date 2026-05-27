@@ -37,7 +37,7 @@ export function LivePricingStrip({ breakdown, quantity, designLabel }: Props) {
       </div>
       <SetRatesDisplay breakdown={breakdown} quantity={quantity} compact />
       <p className="live-pricing-hint">
-        Upar set rate = poora subtotal (glass + hardware) ÷ SFT / RFT / RMT
+        Set rate = full subtotal (glass + hardware) ÷ SFT / RFT / RMT
       </p>
     </div>
   )

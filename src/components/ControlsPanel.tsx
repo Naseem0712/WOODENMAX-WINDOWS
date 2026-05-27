@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, PartitionPanelConfig } from '../types';
+import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, PartitionPanelConfig, LouverBayCrossAlign } from '../types';
 import { getDefaultHandleConfig } from '../utils/handleDefaults';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType, MirrorShape } from '../types';
 import { Button } from './ui/Button';
@@ -22,6 +22,7 @@ import {
 import { DOOR_WINDOW_COMBO_PRESETS } from '../utils/doorWindowComboPresets';
 import { clampFoldLeafCount } from '../utils/partitionPanelGeometry';
 import { SLIDING_LAYOUT_PRESETS, type SlidingLayoutPreset } from '../utils/slidingLayoutPresets';
+import { isCompoundLouverConfig, LOUVER_BAY_MAX } from '../utils/louverBays';
 import { scrollNearestVerticalOverflowAncestor } from '../utils/scrollParentWheel';
 const PROFILE_QUICK_PRESETS: { name: string; value: string }[] = [
   { name: 'Grey', value: '#6b7280' },
@@ -70,6 +71,12 @@ interface ControlsPanelProps {
   onAddLouverItem: (type: 'profile' | 'gap') => void;
   onRemoveLouverItem: (id: string) => void;
   onUpdateLouverItem: (id: string, size: number | '') => void;
+  onAddLouverBay: () => void;
+  onRemoveLouverBay: (id: string) => void;
+  onUpdateLouverBayDim: (id: string, field: 'width' | 'height', value: number | '') => void;
+  onUpdateLouverBayPosition: (id: string, partial: { crossAlign?: LouverBayCrossAlign; offsetMm?: number | '' }) => void;
+  onSetLouverBayLayout: (layout: 'vertical' | 'horizontal') => void;
+  onClearLouverBays: () => void;
 
   onLaminatedConfigChange: (payload: Partial<LaminatedGlassConfig>) => void;
   onDguConfigChange: (payload: Partial<DguGlassConfig>) => void;
@@ -118,6 +125,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
     savedColors, setSavedColors, onUpdateHandle,
     onSetPartitionPanelCount, onSetPartitionPreset, onSetPartitionWidthFractions, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onUpdatePartitionPanel,
     onAddLouverItem, onRemoveLouverItem, onUpdateLouverItem,
+    onAddLouverBay, onRemoveLouverBay, onUpdateLouverBayDim, onUpdateLouverBayPosition, onSetLouverBayLayout, onClearLouverBays,
     onLaminatedConfigChange, onDguConfigChange, onUpdateMirrorConfig,
     onResetDesign,
     activeCornerSide, setActiveCornerSide
@@ -134,10 +142,12 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
   const profileTextureUploadRef = useRef<HTMLInputElement>(null);
   const profileOverlayUploadRef = useRef<HTMLInputElement>(null);
   const isCorner = windowType === WindowType.CORNER;
+  const compoundLouvers = windowType === WindowType.LOUVERS && isCompoundLouverConfig(config);
 
   // Georgian Bars Logic
   const [activeGeorgianPanelId, setActiveGeorgianPanelId] = useState('default');
   const [georgianUnit, setGeorgianUnit] = useState<Unit>('mm');
+  const [louverBayUnit, setLouverBayUnit] = useState<Unit>('mm');
   const [addDimNonce, setAddDimNonce] = useState(0);
 
   const availableGeorgianPanels = useMemo(() => {
@@ -416,10 +426,22 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
                 </div>
                  <DimensionInput id={`${idPrefix}corner-post-width`} name="corner-post-width" label="Corner Post Width" value_mm={config.cornerPostWidth} onChange_mm={v => setConfig('cornerPostWidth', v)} placeholder="e.g., 100" />
             </>
+        ) : compoundLouvers ? (
+            <div className="rounded-md border border-slate-600 bg-slate-900/50 p-3 text-sm text-slate-300">
+                <p className="font-semibold text-slate-100">Outer module (auto)</p>
+                <p className="mt-2 font-mono text-slate-200">
+                  {(Number(config.width) || 0)} × {(Number(config.height) || 0)} mm
+                </p>
+                <p className="mt-2 text-xs text-slate-500">
+                  Edited via joint bays below. Quotation totals use the <strong className="text-slate-300">sum of each bay&apos;s face area</strong>, not just this bounding size.
+                </p>
+            </div>
         ) : (
             <DimensionInput id={`${idPrefix}total-width`} name="total-width" label="Total Width" value_mm={config.width} onChange_mm={v => setConfig('width', v)} placeholder="e.g., 1800" />
         )}
-        <DimensionInput id={`${idPrefix}total-height`} name="total-height" label="Total Height" value_mm={config.height} onChange_mm={v => setConfig('height', v)} placeholder="e.g., 1200" />
+        {!compoundLouvers && (
+            <DimensionInput id={`${idPrefix}total-height`} name="total-height" label="Total Height" value_mm={config.height} onChange_mm={v => setConfig('height', v)} placeholder="e.g., 1200" />
+        )}
       </CollapsibleCard>
       
       {isCorner && (
@@ -434,6 +456,146 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
               <option value={WindowType.VENTILATOR}>Ventilator</option>
             </Select>
          </CollapsibleCard>
+      )}
+
+      {windowType === WindowType.LOUVERS && (
+        <CollapsibleCard
+          title="Joint louver façades (up to 5)"
+          isOpen={openCard === 'Joint louver façades (up to 5)'}
+          onToggle={() => handleToggleCard('Joint louver façades (up to 5)')}
+        >
+          <p className="mb-3 text-xs leading-relaxed text-slate-400">
+            Stack or align several opening sizes in <strong className="text-slate-300">one quoted module</strong>. Rate × area uses the <strong className="text-slate-300">sum of bay areas</strong>{' '}
+            (e.g. 10′×20′ + 18′×30′ + 5′×3′), not the outer rectangle alone. Bays share one outer frame — no extra mullions between them.
+          </p>
+          {(config.louverBays ?? []).length === 0 ? (
+            <Button variant="secondary" className="w-full" onClick={onAddLouverBay}>
+              <PlusIcon className="mr-2 h-4 w-4" />
+              Combine multiple sizes in one module
+            </Button>
+          ) : (
+            <>
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                <div className="w-full sm:w-36">
+                  <Select
+                    id={`${idPrefix}louver-bay-unit`}
+                    name="louver-bay-unit"
+                    label="Unit (all bays)"
+                    value={louverBayUnit}
+                    onChange={(e) => setLouverBayUnit(e.target.value as Unit)}
+                  >
+                    <option value="mm">mm</option>
+                    <option value="cm">cm</option>
+                    <option value="in">in</option>
+                    <option value="ft-in">ft-in</option>
+                  </Select>
+                </div>
+                <div className="flex flex-1 flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-slate-400">Bay layout</span>
+                  <Button
+                    variant={config.louverBayLayout !== 'horizontal' ? 'primary' : 'secondary'}
+                    className="flex-1 sm:flex-none"
+                    onClick={() => onSetLouverBayLayout('vertical')}
+                  >
+                    Vertical stack
+                  </Button>
+                  <Button
+                    variant={config.louverBayLayout === 'horizontal' ? 'primary' : 'secondary'}
+                    className="flex-1 sm:flex-none"
+                    onClick={() => onSetLouverBayLayout('horizontal')}
+                  >
+                    Horizontal row
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {(config.louverBays ?? []).map((bay, idx) => {
+                  const isHorizontalRow = config.louverBayLayout === 'horizontal';
+                  const crossLabel = isHorizontalRow ? 'Vertical position' : 'Horizontal position';
+                  const offsetLabel = isHorizontalRow ? 'Offset from top' : 'Offset from left';
+                  return (
+                  <div
+                    key={bay.id}
+                    className="flex flex-col gap-3 rounded-md border border-slate-700 bg-slate-900/40 p-3"
+                  >
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-[4.5rem_minmax(0,1fr)_minmax(0,1fr)_2.75rem] sm:items-end">
+                      <span className="pt-6 text-xs font-bold text-sky-300 sm:pt-0 sm:pb-2">Bay {idx + 1}</span>
+                      <DimensionInput
+                        className="min-w-0"
+                        id={`${idPrefix}louver-bay-w-${bay.id}`}
+                        name={`louver-bay-w-${bay.id}`}
+                        label="Width"
+                        value_mm={bay.width}
+                        onChange_mm={(v) => onUpdateLouverBayDim(bay.id, 'width', v)}
+                        controlledUnit={louverBayUnit}
+                      />
+                      <DimensionInput
+                        className="min-w-0"
+                        id={`${idPrefix}louver-bay-h-${bay.id}`}
+                        name={`louver-bay-h-${bay.id}`}
+                        label="Height"
+                        value_mm={bay.height}
+                        onChange_mm={(v) => onUpdateLouverBayDim(bay.id, 'height', v)}
+                        controlledUnit={louverBayUnit}
+                      />
+                      <Button
+                        variant="danger"
+                        onClick={() => onRemoveLouverBay(bay.id)}
+                        className="h-10 w-full shrink-0 px-3 sm:w-11"
+                        aria-label={`Remove bay ${idx + 1}`}
+                      >
+                        <TrashIcon className="mx-auto h-5 w-5" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <Select
+                        id={`${idPrefix}louver-bay-align-${bay.id}`}
+                        name={`louver-bay-align-${bay.id}`}
+                        label={crossLabel}
+                        value={bay.crossAlign ?? 'center'}
+                        onChange={(e) =>
+                          onUpdateLouverBayPosition(bay.id, {
+                            crossAlign: e.target.value as LouverBayCrossAlign,
+                            offsetMm: '',
+                          })
+                        }
+                      >
+                        <option value="top">{isHorizontalRow ? 'Top' : 'Left'}</option>
+                        <option value="center">Center</option>
+                        <option value="bottom">{isHorizontalRow ? 'Bottom' : 'Right'}</option>
+                      </Select>
+                      <DimensionInput
+                        className="min-w-0"
+                        id={`${idPrefix}louver-bay-offset-${bay.id}`}
+                        name={`louver-bay-offset-${bay.id}`}
+                        label={offsetLabel}
+                        value_mm={bay.offsetMm ?? ''}
+                        onChange_mm={(v) => onUpdateLouverBayPosition(bay.id, { offsetMm: v })}
+                        controlledUnit={louverBayUnit}
+                        placeholder="Optional — overrides align"
+                      />
+                    </div>
+                  </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  disabled={(config.louverBays ?? []).length >= LOUVER_BAY_MAX}
+                  onClick={onAddLouverBay}
+                >
+                  <PlusIcon className="mr-2 h-4 w-4" />
+                  Add bay
+                </Button>
+                <Button variant="secondary" className="flex-1 text-xs" onClick={onClearLouverBays}>
+                  Use single rectangle only
+                </Button>
+              </div>
+            </>
+          )}
+        </CollapsibleCard>
       )}
 
       {windowType === WindowType.LOUVERS && (

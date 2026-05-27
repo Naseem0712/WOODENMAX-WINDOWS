@@ -1,6 +1,6 @@
 import { hardwareProfilesSummary } from './railProfiles'
 import { quoteRailRft } from './railLength'
-import { formatCurrency } from './utils'
+import { formatCurrency, glassDisplayForQuote } from './utils'
 import type { QuotationLine, RateDisplayUnit } from './types'
 
 export function quoteUnitForLine(line: QuotationLine): RateDisplayUnit {
@@ -130,6 +130,8 @@ export function recalculateQuoteLine(line: QuotationLine): QuotationLine {
           ...line.packageQuote,
           unit,
           rate,
+          materialRate: line.packageQuote.materialRate ?? rate,
+          installationRate: line.packageQuote.installationRate ?? 0,
           basisQty: basis.qty,
           basisLabel: basis.label,
           amountPerSet,
@@ -179,8 +181,7 @@ export function buildItemSpecRows(line: QuotationLine): { label: string; value: 
     })
   }
 
-  const glassSpec = `${line.glassLabel}${f.glassColor ? ` · ${f.glassColor}` : ''}`
-  rows.push({ label: 'Glass', value: glassSpec })
+  rows.push({ label: 'Glass', value: glassDisplayForQuote(line) })
 
   rows.push(...hardwareSpecRows(line))
 

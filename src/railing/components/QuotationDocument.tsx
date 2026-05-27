@@ -1,7 +1,7 @@
-import { COMPANY, QUOTATION_BANK } from '../constants'
-import { parseTermsLines } from '../metaDefaults'
-import { formatCurrency } from '../utils'
-import { formatQuoteDate, quoteTotals } from '../quotationFormat'
+import { COMPANY } from '../constants'
+import { bankDetailsForQuote, parseTermsLines } from '../metaDefaults'
+import { formatQuoteMoney } from '../utils'
+import { formatQuoteDate, quoteTotals, recalculateQuoteLine } from '../quotationFormat'
 import type { QuotationLine, QuotationMeta } from '../types'
 import { CompanyLogo } from './CompanyLogo'
 import { RailingQuotationLinePrintBlock } from './RailingQuotationLinePrintBlock'
@@ -36,8 +36,10 @@ function InfoRow({
 }
 
 export function QuotationDocument({ meta, lines }: Props) {
-  const { subtotal, gst, grand } = quoteTotals(lines)
+  const displayLines = lines.map(recalculateQuoteLine)
+  const { subtotal, gst, grand } = quoteTotals(displayLines)
   const terms = parseTermsLines(meta.termsText ?? '')
+  const bank = bankDetailsForQuote(meta)
 
   return (
     <div className="quotation-doc">
@@ -46,13 +48,12 @@ export function QuotationDocument({ meta, lines }: Props) {
       </div>
       <header className="qdoc-header-panels">
         <section className="qdoc-panel qdoc-panel-company" aria-label="Company details">
-          <h2 className="qdoc-panel-title">Company details</h2>
-          <div className="qdoc-brand-row">
-            <CompanyLogo size={64} className="qdoc-logo" />
-            <div className="qdoc-brand-text">
-              <p className="qdoc-brand-name">{COMPANY.name}</p>
-              <p className="qdoc-tag">Glass Railings · Architectural Elements</p>
-            </div>
+          <div className="qdoc-company-logo-bar">
+            <CompanyLogo size={88} className="qdoc-logo-head" />
+          </div>
+          <div className="qdoc-company-intro">
+            <p className="qdoc-brand-name">{COMPANY.name}</p>
+            <p className="qdoc-tag">Glass Railings · Architectural Elements</p>
           </div>
           <table className="qdoc-info-table">
             <tbody>
@@ -88,8 +89,9 @@ export function QuotationDocument({ meta, lines }: Props) {
             <tbody>
               <InfoRow label="Quote no." value={meta.quoteNumber} strong alwaysShow />
               <InfoRow label="Date" value={formatQuoteDate(meta.date)} alwaysShow />
-              <InfoRow label="Client name" value={meta.clientName} strong alwaysShow />
+              <InfoRow label="M/s" value={meta.clientName} strong alwaysShow />
               <InfoRow label="Project" value={meta.projectName} alwaysShow />
+              <InfoRow label="GSTIN" value={meta.clientGstin ?? ''} />
               <InfoRow label="Phone" value={meta.clientPhone ?? ''} />
               <InfoRow label="Address" value={meta.clientAddress ?? ''} />
             </tbody>
@@ -103,10 +105,10 @@ export function QuotationDocument({ meta, lines }: Props) {
         </div>
       )}
 
-      {lines.length > 0 && (
+      {displayLines.length > 0 && (
         <section className="qdoc-products-section">
           <h2 className="qdoc-section-title">Products &amp; pricing</h2>
-          {lines.map((line, i) => (
+          {displayLines.map((line, i) => (
             <RailingQuotationLinePrintBlock key={line.id} line={line} index={i} />
           ))}
 
@@ -115,20 +117,20 @@ export function QuotationDocument({ meta, lines }: Props) {
               <tbody>
                 <tr>
                   <th scope="row">Subtotal</th>
-                  <td className="text-right">
-                    <strong>{formatCurrency(subtotal)}</strong>
+                  <td className="qdoc-col-amount">
+                    <strong>{formatQuoteMoney(subtotal)}</strong>
                   </td>
                 </tr>
                 <tr>
                   <th scope="row">GST @ 18%</th>
-                  <td className="text-right">{formatCurrency(gst)}</td>
+                  <td className="qdoc-col-amount">{formatQuoteMoney(gst)}</td>
                 </tr>
                 <tr className="grand-row">
                   <th scope="row">
                     <strong>Grand total</strong>
                   </th>
-                  <td className="text-right">
-                    <strong>{formatCurrency(grand)}</strong>
+                  <td className="qdoc-col-amount">
+                    <strong>{formatQuoteMoney(grand)}</strong>
                   </td>
                 </tr>
               </tbody>
@@ -150,23 +152,23 @@ export function QuotationDocument({ meta, lines }: Props) {
           <tbody>
             <tr>
               <td>Account name</td>
-              <td>{QUOTATION_BANK.accountName}</td>
+              <td>{bank.accountName}</td>
             </tr>
             <tr>
               <td>Bank</td>
-              <td>{QUOTATION_BANK.bankName}</td>
+              <td>{bank.bankName}</td>
             </tr>
             <tr>
               <td>Account no.</td>
-              <td>{QUOTATION_BANK.accountNo}</td>
+              <td>{bank.accountNo}</td>
             </tr>
             <tr>
               <td>IFSC</td>
-              <td>{QUOTATION_BANK.ifsc}</td>
+              <td>{bank.ifsc}</td>
             </tr>
             <tr>
               <td>Branch</td>
-              <td>{QUOTATION_BANK.branch}</td>
+              <td>{bank.branch}</td>
             </tr>
           </tbody>
         </table>

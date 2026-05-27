@@ -1,4 +1,5 @@
 import { calculateDesign, countAnchors } from './calculations'
+import { isStaircaseDraft } from './presets'
 import { quoteRailRft } from './railLength'
 import { mmToFt, mmToRmt, sqmToSft } from './units'
 import type {
@@ -44,7 +45,30 @@ function railCost(
   return line(label, rft, 'RFT', rate, rateField, ref)
 }
 
-/** Total subtotal divided by glass SFT, rail RFT, and run RMT (per 1 set). */
+/** Glass BOM line from costing (user-entered ₹/SFT), if any. */
+export function glassCostLine(breakdown: CostBreakdown): CostLineItem | undefined {
+  return breakdown.items.find((i) => i.rateField === 'glassPerSft')
+}
+
+export function supportHoleCount(hw: {
+  totalPillars: number
+  totalStuds: number
+}): number {
+  return hw.totalPillars + hw.totalStuds
+}
+
+export function holeCostLine(breakdown: CostBreakdown): CostLineItem | undefined {
+  return breakdown.items.find((i) => i.rateField === 'holePerPcs')
+}
+
+/** Entered glass material rate (not BOM ÷ SFT). */
+export function glassEnteredRatePerSft(breakdown: CostBreakdown): number | null {
+  const row = glassCostLine(breakdown)
+  if (!row || row.rate <= 0) return null
+  return row.rate
+}
+
+/** Total subtotal divided by glass SFT, rail RFT, and run RMT (per 1 set) — blended BOM averages, not item rates. */
 export function computeSetRates(
   subtotal: number,
   glassAreaSft: number,
@@ -70,24 +94,36 @@ export function calculateCosting(
 ): CostBreakdown {
   const design = calculateDesign(draft)
   const hw = design.hardware
+  const staircase = isStaircaseDraft(draft)
+  const glassAreaSftActual =
+    Math.round(sqmToSft(design.totalGlassAreaSqmActual ?? design.totalGlassAreaSqm) * 100) /
+    100
   const glassAreaSft = Math.round(sqmToSft(design.totalGlassAreaSqm) * 100) / 100
+  const staircaseRunRft = Math.round(mmToFt(design.perimeterRunMm) * 100) / 100
   const bottomRailRft = Math.round(mmToFt(hw.bottomRailMm) * 100) / 100
   const handrailRft = Math.round(mmToFt(hw.handrailMm) * 100) / 100
   const perimeterRmt = Math.round(mmToRmt(design.perimeterRunMm) * 100) / 100
 
   const items: CostLineItem[] = []
+  let staircaseGlassCostPerRft: number | null = null
 
   if (glassAreaSft > 0) {
-    items.push(
-      line(
-        'Glass',
-        glassAreaSft,
-        'SFT',
-        rates.glassPerSft,
-        'glassPerSft',
-        rates.referenceGlassPerSft,
-      ),
+    const glassLabel = staircase
+      ? `Glass (staircase: (W+H) × H per panel)`
+      : 'Glass'
+    const glassRow = line(
+      glassLabel,
+      glassAreaSft,
+      'SFT',
+      rates.glassPerSft,
+      'glassPerSft',
+      rates.referenceGlassPerSft,
     )
+    items.push(glassRow)
+    if (staircase && staircaseRunRft > 0 && glassRow.amount > 0) {
+      staircaseGlassCostPerRft =
+        Math.round((glassRow.amount / staircaseRunRft) * 100) / 100
+    }
   }
 
   if (hw.totalPillars > 0) {
@@ -99,6 +135,19 @@ export function calculateCosting(
         rates.pillarPerPcs,
         'pillarPerPcs',
         rates.referencePillarPerPcs,
+      ),
+    )
+  }
+
+  if (hw.totalStuds > 0) {
+    items.push(
+      line(
+        'Glass studs',
+        hw.totalStuds,
+        'pcs',
+        rates.studPerPcs,
+        'studPerPcs',
+        rates.referenceStudPerPcs,
       ),
     )
   }
@@ -142,6 +191,19 @@ export function calculateCosting(
     )
   }
 
+  if (hw.endCaps > 0) {
+    items.push(
+      line(
+        'Handrail end cap',
+        hw.endCaps,
+        'pcs',
+        rates.endCapPerPcs,
+        'endCapPerPcs',
+        rates.referenceEndCap,
+      ),
+    )
+  }
+
   if (bottomRailRft > 0) {
     items.push(railCost('Bottom rail', bottomRailRft, rates, 'bottom'))
     if (hw.bottomRailStock.totalBars > 0) {
@@ -160,7 +222,12 @@ export function calculateCosting(
     items.push(railCost('Handrail (SS)', handrailRft, rates, 'handrail'))
   }
 
-  const anchors = countAnchors(hw.totalPillars, bottomRailRft, draft.bottomFixing)
+  const anchors = countAnchors(
+    hw.totalPillars,
+    hw.totalStuds,
+    bottomRailRft,
+    draft.bottomFixing,
+  )
   if (anchors > 0) {
     items.push(
       line(
@@ -170,6 +237,20 @@ export function calculateCosting(
         rates.anchorPerPcs,
         'anchorPerPcs',
         rates.referenceAnchor,
+      ),
+    )
+  }
+
+  const holeCount = supportHoleCount(hw)
+  if (draft.applyHoleCharges && holeCount > 0) {
+    items.push(
+      line(
+        'Glass hole / drilling (pillar & stud)',
+        holeCount,
+        'holes',
+        rates.holePerPcs,
+        'holePerPcs',
+        rates.referenceHolePerPcs,
       ),
     )
   }
@@ -190,6 +271,11 @@ export function calculateCosting(
     subtotal,
     referenceSubtotal,
     glassAreaSft,
+    glassAreaSftActual,
+    staircaseGlassFormula: staircase,
+    staircaseGlassCostPerRft,
+    staircaseRunRft: staircase ? staircaseRunRft : undefined,
+    holeChargeQty: draft.applyHoleCharges ? holeCount : 0,
     bottomRailRft,
     handrailRft,
     perimeterRmt,

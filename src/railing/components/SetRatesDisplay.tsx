@@ -7,27 +7,40 @@ interface Props {
   quantity?: number
   highlightUnit?: RateDisplayUnit
   compact?: boolean
+  clickable?: boolean
+  onSelectUnit?: (unit: RateDisplayUnit) => void
 }
 
 function RateChip({
   label,
+  unit,
   rate,
   basis,
   active,
+  clickable,
+  onClick,
 }: {
   label: string
+  unit: RateDisplayUnit
   rate: number | null
   basis: string
   active?: boolean
+  clickable?: boolean
+  onClick?: () => void
 }) {
   if (rate == null) return null
+  const Tag = clickable ? 'button' : 'div'
   return (
-    <div className={`set-rate-chip ${active ? 'set-rate-chip-active' : ''}`}>
+    <Tag
+      type={clickable ? 'button' : undefined}
+      className={`set-rate-chip ${active ? 'set-rate-chip-active' : ''} ${clickable ? 'set-rate-chip-clickable' : ''}`}
+      onClick={clickable ? onClick : undefined}
+    >
       <span className="set-rate-chip-label">{label}</span>
       <strong className="set-rate-chip-value">{formatCurrency(rate)}</strong>
-      <span className="set-rate-chip-unit">/ {label.split(' ').pop()}</span>
+      <span className="set-rate-chip-unit">/ {unit.toUpperCase()}</span>
       <small className="set-rate-chip-basis">{basis}</small>
-    </div>
+    </Tag>
   )
 }
 
@@ -36,6 +49,8 @@ export function SetRatesDisplay({
   quantity = 1,
   highlightUnit,
   compact = false,
+  clickable = false,
+  onSelectUnit,
 }: Props) {
   const r =
     breakdown.setRates ??
@@ -53,26 +68,37 @@ export function SetRatesDisplay({
   return (
     <div className={`set-rates-display ${compact ? 'set-rates-compact' : ''}`}>
       <p className="set-rates-heading">
-        Set rate <span className="hi">(subtotal ÷ area / length)</span>
+        {clickable
+          ? 'Click a unit to apply package rate'
+          : 'BOM average (full subtotal ÷ area or run — not your glass ₹/SFT alone)'}
       </p>
       <div className="set-rates-grid">
         <RateChip
-          label="Per SFT"
+          label="BOM ÷ SFT"
+          unit="sft"
           rate={r.perSft}
-          basis={`${breakdown.glassAreaSft} SFT glass`}
+          basis={`${breakdown.glassAreaSft} SFT (all items)`}
           active={unit === 'sft'}
+          clickable={clickable}
+          onClick={() => onSelectUnit?.('sft')}
         />
         <RateChip
-          label="Per RFT"
+          label="BOM ÷ RFT"
+          unit="rft"
           rate={r.perRft}
-          basis={`${r.railRftBasis} RFT run`}
+          basis={`${r.railRftBasis} RFT (all items)`}
           active={unit === 'rft'}
+          clickable={clickable}
+          onClick={() => onSelectUnit?.('rft')}
         />
         <RateChip
-          label="Per RMT"
+          label="BOM ÷ RMT"
+          unit="rmt"
           rate={r.perRmt}
-          basis={`${breakdown.perimeterRmt} RMT run`}
+          basis={`${breakdown.perimeterRmt} RMT (all items)`}
           active={unit === 'rmt'}
+          clickable={clickable}
+          onClick={() => onSelectUnit?.('rmt')}
         />
       </div>
       <div className="set-rates-totals">
