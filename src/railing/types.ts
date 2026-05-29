@@ -33,6 +33,9 @@ export type SegmentBendMode =
   | 'right-side-90'
   | 'custom'
 
+/** First leg direction on plan (SVG y grows downward). */
+export type PathStartHeading = 'east' | 'north' | 'south' | 'west'
+
 export interface SegmentDim {
   key: string
   label: string
@@ -297,6 +300,10 @@ export interface DesignDraft {
   customizeHardware?: boolean
   /** Add ₹/hole × (pillars + studs) to BOM costing when pillars or studs are used. */
   applyHoleCharges?: boolean
+  /** Optional photo/PNG/SVG shown on quotation print & PDF instead of the CAD schematic. */
+  printImageUrl?: string
+  /** Custom path: which way leg 1 runs on plan (default east = left→right). */
+  pathStartHeading?: PathStartHeading
 }
 
 export interface QuotationLine {

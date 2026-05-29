@@ -148,6 +148,12 @@
   overflow: visible;
 }
 
+.wm-railing-quote-print .quote-mini-img {
+  object-fit: contain;
+  background: #fafafa;
+  overflow: hidden;
+}
+
 .wm-railing-quote-print .dim-box {
   font-size: 7.5pt;
   color: #334155;

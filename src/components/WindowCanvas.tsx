@@ -14,11 +14,15 @@ import {
   slidingMemberSide4G2M,
   mirrorHandleForSlidingMember,
   mirrorHandleForPartitionHandleX,
+  buildHandleConfigForMember,
+  type HandleMemberPlacement,
+  type HandlePanelFrameMetrics,
 } from '../utils/handleDefaults';
+import { useHomeownerHandlePlacement } from './homeowner/HomeownerHandlePlacementContext';
 import { PROFILE_TEXTURE_TILE, profileTexturePosition } from '../utils/profileTexture';
 import {
   PARTITION_PANEL_GAP_MM,
-  getPartitionPanelWidthsMm,
+  resolvePartitionPanelWidthsMm,
   isOperablePartitionType,
   clampFoldLeafCount,
   getPartitionPanelTopMm,
@@ -44,6 +48,9 @@ interface WindowCanvasProps {
   onToggleElevationDoor: (row: number, col: number) => void;
   /** Visible scrollport (e.g. designer middle column). If omitted, scale uses this component’s box, which grows with content and over-zooms. */
   fitViewportRef?: React.RefObject<HTMLElement | null>;
+  /** Optional: enable interactive door-handle dragging (Homeowner mode). */
+  onUpdateHandle?: (panelId: string, newConfig: HandleConfig | null) => void;
+  enableDoorHandleDrag?: boolean;
 }
 
 /** Convert mm at current canvas scale to CSS px; rounded so frame borders and glass insets stay aligned. */
@@ -126,6 +133,175 @@ const Handle: React.FC<{ config: HandleConfig; scale: number; color: string; mir
     return <WindowHandleVisual variant={variant} lenMm={lenMm} color={metalTint} gid={gid} scale={scale} mirrored={mirrored} />;
 };
 
+function listDoorPanelIdsForConfig(config: WindowConfig): string[] {
+  switch (config.windowType) {
+    case WindowType.SLIDING: {
+      let n = 0;
+      switch (config.shutterConfig) {
+        case ShutterConfigType.TWO_GLASS:
+          n = 2;
+          break;
+        case ShutterConfigType.THREE_GLASS:
+        case ShutterConfigType.TWO_GLASS_ONE_MESH:
+          n = 3;
+          break;
+        case ShutterConfigType.FOUR_GLASS:
+          n = 4;
+          break;
+        case ShutterConfigType.FOUR_GLASS_TWO_MESH:
+          n = 6;
+          break;
+      }
+      return Array.from({ length: Math.max(n, (config.slidingHandles ?? []).length) }, (_, i) => `sliding-${i}`);
+    }
+    case WindowType.CASEMENT:
+      return (config.doorPositions ?? []).map((p) => `casement-${p.row}-${p.col}`);
+    case WindowType.VENTILATOR: {
+      const out: string[] = [];
+      (config.ventilatorGrid ?? []).forEach((row, r) =>
+        row.forEach((cell, c) => {
+          if (cell?.type === 'door') out.push(`ventilator-${r}-${c}`);
+        }),
+      );
+      return out;
+    }
+    case WindowType.GLASS_PARTITION: {
+      const out: string[] = [];
+      (config.partitionPanels?.types ?? []).forEach((t, idx) => {
+        if (t?.type !== 'fixed') out.push(`partition-${idx}`);
+      });
+      return out;
+    }
+    default:
+      return [];
+  }
+}
+
+function getHandleConfigForPanelId(config: WindowConfig, panelId: string): HandleConfig | null {
+  const parts = panelId.split('-');
+  const type = parts[0];
+  if (type === 'sliding') {
+    const idx = Number(parts[1]);
+    return (config.slidingHandles ?? [])[idx] ?? null;
+  }
+  if (type === 'casement') {
+    const row = Number(parts[1]);
+    const col = Number(parts[2]);
+    const p = (config.doorPositions ?? []).find((d) => d.row === row && d.col === col);
+    return (p?.handle as HandleConfig) ?? null;
+  }
+  if (type === 'ventilator') {
+    const row = Number(parts[1]);
+    const col = Number(parts[2]);
+    const cell = (config.ventilatorGrid ?? [])?.[row]?.[col];
+    return (cell?.handle as HandleConfig) ?? null;
+  }
+  if (type === 'partition') {
+    const idx = Number(parts[1]);
+    const t = (config.partitionPanels?.types ?? [])?.[idx];
+    return (t?.handle as HandleConfig) ?? null;
+  }
+  return null;
+}
+
+const DraggableHandleWrap: React.FC<{
+  config: WindowConfig;
+  panelId: string;
+  handle: HandleConfig;
+  scale: number;
+  color: string;
+  mirrored?: boolean;
+  panelWidthMm: number;
+  panelHeightMm: number;
+  enableDrag: boolean;
+  onUpdateHandle?: (panelId: string, newConfig: HandleConfig | null) => void;
+}> = React.memo(
+  ({ config, panelId, handle, scale, color, mirrored, panelWidthMm, panelHeightMm, enableDrag, onUpdateHandle }) => {
+    const { setDragMeasure } = useHomeownerHandlePlacement();
+    const dragRef = useRef<{
+      active: boolean;
+      startX: number;
+      startY: number;
+      startHandle: HandleConfig;
+      mode: 'pending' | 'vertical' | 'free';
+    }>({ active: false, startX: 0, startY: 0, startHandle: handle, mode: 'pending' });
+
+    const onPointerDown = (e: React.PointerEvent) => {
+      if (!enableDrag || !onUpdateHandle) return;
+      e.stopPropagation();
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      dragRef.current = { active: true, startX: e.clientX, startY: e.clientY, startHandle: handle, mode: 'pending' };
+    };
+
+    const onPointerMove = (e: React.PointerEvent) => {
+      if (!enableDrag || !onUpdateHandle) return;
+      const st = dragRef.current;
+      if (!st.active) return;
+      e.preventDefault();
+      const dxPx = e.clientX - st.startX;
+      const dyPx = e.clientY - st.startY;
+
+      const wPx = panelWidthMm * scale;
+      const hPx = panelHeightMm * scale;
+      if (wPx <= 0 || hPx <= 0) return;
+
+      const dXpct = (dxPx / wPx) * 100;
+      const dYpct = (dyPx / hPx) * 100;
+
+      if (st.mode === 'pending') {
+        const adx = Math.abs(dxPx);
+        const ady = Math.abs(dyPx);
+        if (adx + ady > 6) {
+          st.mode = ady > adx * 1.2 ? 'vertical' : 'free';
+        }
+      }
+
+      const nextX = clamp(st.startHandle.x + dXpct, 5, 95);
+      const nextY = clamp(st.startHandle.y + dYpct, 5, 95);
+
+      if (st.mode === 'vertical') {
+        const mmFromTop = Math.round((nextY / 100) * panelHeightMm);
+        const mmFromBottom = Math.round(Math.max(0, panelHeightMm - mmFromTop));
+        setDragMeasure({ mmFromTop, mmFromBottom });
+        const ids = listDoorPanelIdsForConfig(config);
+        ids.forEach((id) => {
+          const existing = getHandleConfigForPanelId(config, id) ?? st.startHandle;
+          onUpdateHandle(id, { ...existing, y: nextY });
+        });
+        return;
+      }
+
+      onUpdateHandle(panelId, { ...st.startHandle, x: nextX, y: nextY });
+    };
+
+    const onPointerUp = (e: React.PointerEvent) => {
+      if (!enableDrag || !onUpdateHandle) return;
+      const st = dragRef.current;
+      if (!st.active) return;
+      st.active = false;
+      setDragMeasure(null);
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+      } catch {
+        // ignore
+      }
+    };
+
+    return (
+      <div
+        className={enableDrag ? 'cursor-grab active:cursor-grabbing' : undefined}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        style={{ touchAction: 'none' }}
+      >
+        <Handle config={handle} scale={scale} color={color} mirrored={mirrored} />
+      </div>
+    );
+  },
+);
+
 
 const ProfilePiece: React.FC<{ style: React.CSSProperties; color: string; texture?: string }> = React.memo(({ style, color, texture }) => {
     const isLegacyTextureOnly = Boolean(color && !color.startsWith('#'));
@@ -148,15 +324,37 @@ const ProfilePiece: React.FC<{ style: React.CSSProperties; color: string; textur
     }
 
     const baseColor = color.startsWith('#') ? color : '#8b939e';
+    const z = typeof style.zIndex === 'number' ? style.zIndex : 0;
+    const shadow = z >= 10 ? 0.28 : 0.18;
     return (
-        <div style={{ boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)', position: 'absolute', ...style, backgroundColor: baseColor, overflow: 'hidden' }}>
+        <div
+          style={{
+            boxShadow: `inset 0 0 0 1px rgba(0,0,0,0.32), 0 2px 10px rgba(0,0,0,${shadow})`,
+            position: 'absolute',
+            ...style,
+            backgroundColor: baseColor,
+            overflow: 'hidden',
+          }}
+        >
             <div
                 style={{
                     position: 'absolute',
                     inset: 0,
-                    background: 'linear-gradient(145deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.06) 40%, rgba(0,0,0,0.18) 100%)',
+                    background:
+                      'linear-gradient(145deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.07) 38%, rgba(0,0,0,0.20) 100%)',
                     pointerEvents: 'none',
                 }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background:
+                  'radial-gradient(120% 90% at 12% 8%, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.00) 58%)',
+                pointerEvents: 'none',
+                mixBlendMode: 'screen',
+                opacity: 0.65,
+              }}
             />
             {texture ? (
                 <div
@@ -395,23 +593,67 @@ const SlidingShutter: React.FC<{
     isMesh: boolean;
     isFixed?: boolean;
     isSliding?: boolean;
-}> = React.memo(({ config, panelId, width, height, topProfile, rightProfile, bottomProfile, leftProfile, scale, isMesh, isFixed = false, isSliding = false }) => {
+    cadLabel?: string;
+    laneLabel?: string;
+    zLayer?: number;
+    /** Visual-only overlap so shutters sit “into” frame/mullions. */
+    bleedMm?: number;
+    placementPickActive?: boolean;
+    onPickPlacement?: () => void;
+}> = React.memo(({
+    config,
+    panelId,
+    width,
+    height,
+    topProfile,
+    rightProfile,
+    bottomProfile,
+    leftProfile,
+    scale,
+    isMesh,
+    isFixed = false,
+    isSliding = false,
+    cadLabel,
+    laneLabel,
+    zLayer: _zLayer,
+    bleedMm = 0,
+    placementPickActive = false,
+    onPickPlacement,
+}) => {
     
     const glassWidth = width - leftProfile - rightProfile;
     const glassHeight = height - topProfile - bottomProfile;
-    const wPx = mmToPx(width, scale);
-    const hPx = mmToPx(height, scale);
+    const bleed = Math.max(0, Number(bleedMm) || 0);
+    const wPx = mmToPx(width + 2 * bleed, scale);
+    const hPx = mmToPx(height + 2 * bleed, scale);
     const lPx = mmToPx(leftProfile, scale);
     const tPx = mmToPx(topProfile, scale);
     const rPx = mmToPx(rightProfile, scale);
     const bPx = mmToPx(bottomProfile, scale);
     const shutterColor = config.profileColor.startsWith('#') ? adjustHexColor(config.profileColor, 0.08) : config.profileColor;
+    const outline = config.profileColor.startsWith('#') ? adjustHexColor(config.profileColor, -0.28) : '#0f172a';
 
     return (
-        <div className="absolute left-0 top-0" style={{ width: wPx, height: hPx }}>
+        <div
+          className="absolute left-0 top-0"
+          style={{
+            // visual-only bleed so shutter overlaps mullion/frame and hides tiny gaps
+            left: mmToPx(-bleed, scale),
+            top: mmToPx(-bleed, scale),
+            width: wPx,
+            height: hPx,
+          }}
+        >
+             <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  boxShadow: `inset 0 0 0 2px ${outline}, inset 0 0 0 1px rgba(255,255,255,0.08)`,
+                  opacity: isMesh ? 0.95 : 1,
+                }}
+             />
              <MiteredFrame 
-                width={width}
-                height={height}
+                width={width + 2 * bleed}
+                height={height + 2 * bleed}
                 topSize={topProfile}
                 bottomSize={bottomProfile}
                 leftSize={leftProfile}
@@ -420,6 +662,51 @@ const SlidingShutter: React.FC<{
                 color={shutterColor}
                 texture={profileOverlayTexture(config)}
              />
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                left: 6,
+                top: 6,
+                zIndex: 50,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+              }}
+            >
+              <div
+                style={{
+                  padding: '2px 6px',
+                  borderRadius: 6,
+                  background: 'rgba(15,23,42,0.78)',
+                  border: '1px solid rgba(148,163,184,0.35)',
+                  color: '#e2e8f0',
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: '0.02em',
+                  lineHeight: 1.2,
+                  textTransform: 'uppercase',
+                  width: 'fit-content',
+                }}
+              >
+                {isMesh ? 'Mesh' : 'Glass'} {cadLabel ? `· ${cadLabel}` : ''}
+              </div>
+              {laneLabel ? (
+                <div
+                  style={{
+                    padding: '2px 6px',
+                    borderRadius: 999,
+                    background: 'rgba(2,6,23,0.55)',
+                    border: '1px dashed rgba(148,163,184,0.45)',
+                    color: '#cbd5e1',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    width: 'fit-content',
+                  }}
+                >
+                  {laneLabel}
+                </div>
+              ) : null}
+            </div>
             <div
                 className="absolute overflow-hidden"
                 style={{ left: lPx, top: tPx, right: rPx, bottom: bPx }}
@@ -445,6 +732,17 @@ const SlidingShutter: React.FC<{
                     <ShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
                 </GlassPanel>
             </div>
+            {placementPickActive && onPickPlacement ? (
+              <button
+                type="button"
+                className="absolute inset-0 z-[45] cursor-pointer rounded-sm bg-indigo-500/15 ring-2 ring-inset ring-indigo-400/70 hover:bg-indigo-500/25"
+                aria-label="Place handle on this shutter"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPickPlacement();
+                }}
+              />
+            ) : null}
         </div>
     );
 });
@@ -482,8 +780,9 @@ const GlassPanel: React.FC<{
     const panelStyle: React.CSSProperties = {
         ...glassStyles[glassType],
         ...style,
-        // Soft inner light only — no inset stroke (avoids visible grey line on all edges)
-        boxShadow: 'inset 0 2px 10px rgba(255,255,255,0.28), inset 0 -1px 6px rgba(0,0,0,0.05)',
+        // Photoreal-ish depth without heavy effects (PDF-safe; no blur filters here)
+        boxShadow:
+          'inset 0 2px 14px rgba(255,255,255,0.30), inset 0 -10px 20px rgba(0,0,0,0.06), 0 2px 12px rgba(0,0,0,0.12)',
     };
     if (glassTexture) {
         panelStyle.backgroundImage = `url(${glassTexture})`;
@@ -502,10 +801,20 @@ const GlassPanel: React.FC<{
         }}
       />
     );
+    const edgeTint = (
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          boxShadow:
+            'inset 0 0 0 1px rgba(15,23,42,0.18), inset 0 0 0 3px rgba(255,255,255,0.06)',
+        }}
+      />
+    );
 
     return ( 
       <div className="absolute overflow-hidden" style={panelStyle}>
         {!glassTexture && reflectionElement}
+        {edgeTint}
         <GlassGrid config={config} panelId={panelId} width={glassWidth} height={glassHeight} scale={scale} />
         {children}
       </div> 
@@ -541,6 +850,10 @@ const createWindowElements = (
       onRemoveHorizontalDivider: (index: number) => void,
       onRemoveVerticalDivider: (index: number) => void,
       onToggleElevationDoor: (row: number, col: number) => void,
+      onUpdateHandle?: (panelId: string, newConfig: HandleConfig | null) => void,
+      enableDoorHandleDrag?: boolean,
+      handlePlacement?: HandleMemberPlacement | null,
+      onPlaceHandleOnPanel?: (panelId: string, metrics: HandlePanelFrameMetrics) => void,
     }
 ) => {
     const { width, height, fixedPanels, profileColor, windowType } = config;
@@ -554,19 +867,71 @@ const createWindowElements = (
         const leftFix = fixedPanels.find(p => p.position === FixedPanelPosition.LEFT);
         const rightFix = fixedPanels.find(p => p.position === FixedPanelPosition.RIGHT);
 
-        const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) ? dims.outerFrame : 0;
-        const holeX1 = leftFix ? leftFix.size : frameOffset;
-        const holeY1 = topFix ? topFix.size : frameOffset;
-        const holeX2 = rightFix ? w - rightFix.size : w - frameOffset;
-        const holeY2 = bottomFix ? numHeight - bottomFix.size : numHeight - frameOffset;
+        // Important: outer frame thickness may differ for vertical sides vs top/bottom.
+        // Using a single offset causes sliding shutters/tracks to drift relative to the outer frame.
+        const isFramed =
+          windowType !== WindowType.GLASS_PARTITION &&
+          windowType !== WindowType.CORNER &&
+          windowType !== WindowType.MIRROR &&
+          windowType !== WindowType.LOUVERS;
+
+        const frameOffsetY = isFramed ? (Number(dims.outerFrame) || 0) : 0;
+        const frameOffsetX = isFramed
+          ? ((Number(dims.outerFrameVertical) > 0 ? Number(dims.outerFrameVertical) : Number(dims.outerFrame)) || 0)
+          : 0;
+
+        const holeX1 = leftFix ? leftFix.size : frameOffsetX;
+        const holeY1 = topFix ? topFix.size : frameOffsetY;
+        const holeX2 = rightFix ? w - rightFix.size : w - frameOffsetX;
+        const holeY2 = bottomFix ? numHeight - bottomFix.size : numHeight - frameOffsetY;
         
-        return { topFix, bottomFix, leftFix, rightFix, frameOffset, holeX1, holeY1, holeX2, holeY2 };
+        return { topFix, bottomFix, leftFix, rightFix, frameOffsetX, frameOffsetY, holeX1, holeY1, holeX2, holeY2 };
     })();
 
     const profileElements: React.ReactNode[] = [];
     const glassElements: React.ReactNode[] = [];
     const handleElements: React.ReactNode[] = [];
-    const { topFix, bottomFix, leftFix, rightFix, frameOffset, holeX1, holeY1, holeX2, holeY2 } = geometry;
+    const placementPickActive = Boolean(callbacks.handlePlacement && callbacks.onPlaceHandleOnPanel);
+    const pickPlacement = (panelId: string, metrics: HandlePanelFrameMetrics) => {
+      callbacks.onPlaceHandleOnPanel?.(panelId, metrics);
+    };
+    const appendOperableHandle = (
+      panelId: string,
+      handleConfig: HandleConfig,
+      centerLeftMm: number,
+      centerTopMm: number,
+      panelWidthMm: number,
+      panelHeightMm: number,
+      mirrored?: boolean,
+    ) => {
+      handleElements.push(
+        <div
+          key={`handle-${panelId}`}
+          style={{
+            position: 'absolute',
+            zIndex: 55,
+            left: centerLeftMm * scale,
+            top: centerTopMm * scale,
+            transform: 'translate(-50%, -50%)',
+            transformOrigin: 'center center',
+          }}
+        >
+          <DraggableHandleWrap
+            config={config}
+            panelId={panelId}
+            handle={handleConfig}
+            scale={scale}
+            color={profileColor}
+            mirrored={mirrored}
+            panelWidthMm={panelWidthMm}
+            panelHeightMm={panelHeightMm}
+            enableDrag={Boolean(callbacks.enableDoorHandleDrag && callbacks.onUpdateHandle)}
+            onUpdateHandle={callbacks.onUpdateHandle}
+          />
+        </div>,
+      );
+    };
+    const { topFix, bottomFix, leftFix, rightFix, frameOffsetX, frameOffsetY, holeX1, holeY1, holeX2, holeY2 } = geometry;
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
@@ -575,11 +940,11 @@ const createWindowElements = (
         profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} texture={pt} />);
     }
 
-    if (leftFix) profileElements.push(<ProfilePiece key="divider-left" color={profileColor} texture={pt} style={{ top: frameOffset * scale, left: (holeX1 - dims.fixedFrame) * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffset) * scale }} />);
-    if (rightFix) profileElements.push(<ProfilePiece key="divider-right" color={profileColor} texture={pt} style={{ top: frameOffset * scale, left: holeX2 * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffset) * scale }} />);
+    if (leftFix) profileElements.push(<ProfilePiece key="divider-left" color={profileColor} texture={pt} style={{ top: frameOffsetY * scale, left: (holeX1 - dims.fixedFrame) * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffsetY) * scale }} />);
+    if (rightFix) profileElements.push(<ProfilePiece key="divider-right" color={profileColor} texture={pt} style={{ top: frameOffsetY * scale, left: holeX2 * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffsetY) * scale }} />);
     
-    const hDividerX = leftFix ? holeX1 : frameOffset;
-    const hDividerWidth = (rightFix ? holeX2 : w - frameOffset) - hDividerX;
+    const hDividerX = leftFix ? holeX1 : frameOffsetX;
+    const hDividerWidth = (rightFix ? holeX2 : w - frameOffsetX) - hDividerX;
   
     const horizontalFixDivisions = getFixedPanelVerticalDivisionsMm(config, hDividerWidth);
     const mullionSize = Math.max(dims.fixedFrame, dims.mullion || dims.fixedFrame);
@@ -629,14 +994,15 @@ const createWindowElements = (
         profileElements.push(
           <ProfilePiece
             key={`${keyPrefix}-mullion-${idx}`}
-            color={profileColor}
+            color={profileColor.startsWith('#') ? adjustHexColor(profileColor, -0.10) : profileColor}
             texture={pt}
             style={{
               top: topMm * scale,
               left: (hDividerX + dPos - mullionSize / 2) * scale,
               width: mullionSize * scale,
               height: glassH * scale,
-              zIndex: 5,
+              // Above glass/shutters so mullion edge reads clearly
+              zIndex: 12,
             }}
           />
         );
@@ -645,23 +1011,23 @@ const createWindowElements = (
 
     if (topFix) {
         profileElements.push(<ProfilePiece key="divider-top" color={profileColor} texture={pt} style={{ top: (holeY1 - dims.fixedFrame) * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
-        const glassH = holeY1 - frameOffset - dims.fixedFrame;
-        pushHorizontalFixGlass('glass-top', 'fixed-top', frameOffset, glassH);
+        const glassH = holeY1 - frameOffsetY - dims.fixedFrame;
+        pushHorizontalFixGlass('glass-top', 'fixed-top', frameOffsetY, glassH);
     }
     if (bottomFix) {
         profileElements.push(<ProfilePiece key="divider-bottom" color={profileColor} texture={pt} style={{ top: holeY2 * scale, left: hDividerX * scale, width: hDividerWidth * scale, height: dims.fixedFrame * scale }} />);
-        const glassH = numHeight - holeY2 - frameOffset - dims.fixedFrame;
+        const glassH = numHeight - holeY2 - frameOffsetY - dims.fixedFrame;
         pushHorizontalFixGlass('glass-bottom', 'fixed-bottom', holeY2 + dims.fixedFrame, glassH);
     }
-    const vGlassY = topFix ? holeY1 : frameOffset;
-    const vGlassHeight = (bottomFix ? holeY2 : numHeight - frameOffset) - vGlassY;
+    const vGlassY = topFix ? holeY1 : frameOffsetY;
+    const vGlassHeight = (bottomFix ? holeY2 : numHeight - frameOffsetY) - vGlassY;
     if (leftFix) {
-        const glassW = holeX1 - frameOffset - dims.fixedFrame;
+        const glassW = holeX1 - frameOffsetX - dims.fixedFrame;
         const glassH = vGlassHeight;
-        glassElements.push(<GlassPanel key="glass-left" panelId="fixed-left" config={config} style={{ top: vGlassY * scale, left: frameOffset * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH} scale={scale}/>);
+        glassElements.push(<GlassPanel key="glass-left" panelId="fixed-left" config={config} style={{ top: vGlassY * scale, left: frameOffsetX * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH} scale={scale}/>);
     }
     if (rightFix) {
-        const glassW = w - holeX2 - frameOffset - dims.fixedFrame;
+        const glassW = w - holeX2 - frameOffsetX - dims.fixedFrame;
         const glassH = vGlassHeight;
         glassElements.push(<GlassPanel key="glass-right" panelId="fixed-right" config={config} style={{ top: vGlassY * scale, left: (holeX2 + dims.fixedFrame) * scale, width: glassW * scale, height: glassH * scale }} glassWidth={glassW} glassHeight={glassH} scale={scale}/>);
     }
@@ -913,6 +1279,7 @@ const createWindowElements = (
                 }
                 
                 if (shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
+                    const bleedMm = 8;
                     const panelWidth = (innerAreaWidth + 3 * interlock) / 4;
                     const panels = [
                         { id: 0, type: 'glass', x: 0, z: 5 }, // Fixed Left (Outer Track)
@@ -924,22 +1291,38 @@ const createWindowElements = (
                     ];
 
                     panels.forEach(p => {
-                        const handleConfig = slidingHandles[p.id];
-                        if (handleConfig) {
-                             const side = slidingMemberSide4G2M(p.id);
-                             const mirrored = mirrorHandleForSlidingMember(side);
-                             handleElements.push(<div key={`handle-${p.id}`} style={{ position: 'absolute', zIndex: 30, left: (p.x + panelWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={handleConfig} scale={scale} color={profileColor} mirrored={mirrored} /></div>);
-                        }
-                        
                         let leftProf = dims.shutterInterlock;
                         let rightProf = dims.shutterInterlock;
                         if (p.id === 0 || p.id === 2) leftProf = dims.shutterHandle;
                         if (p.id === 3 || p.id === 5) rightProf = dims.shutterHandle;
+                        const panelId = `sliding-${p.id}`;
+                        const frameMetrics: HandlePanelFrameMetrics = {
+                          widthMm: panelWidth,
+                          heightMm: innerAreaHeight,
+                          leftProf,
+                          rightProf,
+                          topProf: dims.shutterTop,
+                          bottomProf: dims.shutterBottom,
+                        };
+                        const handleConfig = slidingHandles[p.id];
+                        if (handleConfig) {
+                          const side = slidingMemberSide4G2M(p.id);
+                          const mirrored = mirrorHandleForSlidingMember(side);
+                          appendOperableHandle(
+                            panelId,
+                            handleConfig,
+                            p.x + (panelWidth * handleConfig.x) / 100,
+                            (innerAreaHeight * handleConfig.y) / 100,
+                            panelWidth,
+                            innerAreaHeight,
+                            mirrored,
+                          );
+                        }
 
                         innerContent.push(
                             <div key={p.id} className="absolute" style={{ left: mmToPx(p.x, scale), top: 0, zIndex: p.z }}>
                                 <SlidingShutter
-                                    panelId={`sliding-${p.id}`}
+                                    panelId={panelId}
                                     config={config}
                                     width={panelWidth} height={innerAreaHeight}
                                     topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom}
@@ -947,20 +1330,78 @@ const createWindowElements = (
                                     scale={scale}
                                     isMesh={p.type === 'mesh'}
                                     isFixed={fixedShutters[p.id]} isSliding={!fixedShutters[p.id]}
+                                    cadLabel={`S${p.id + 1}`}
+                                    laneLabel={p.z >= 15 ? 'Track 3 (inner)' : p.z >= 10 ? 'Track 2 (mid)' : 'Track 1 (outer)'}
+                                    zLayer={p.z}
+                                    bleedMm={bleedMm}
+                                    placementPickActive={placementPickActive}
+                                    onPickPlacement={() => pickPlacement(panelId, frameMetrics)}
                                 />
                             </div>
                         );
                     });
 
                 } else if (shutterConfig === ShutterConfigType.FOUR_GLASS) {
+                    const bleedMm = 8;
                     const shutterWidth = (innerAreaWidth + (2 * interlock) + meeting) / 4;
                     const positions = [ 0, shutterWidth - interlock, (2*shutterWidth) - interlock - meeting, (3*shutterWidth) - (2*interlock) - meeting ];
                     const profiles = [ { l: dims.shutterHandle, r: interlock }, { l: interlock, r: meeting }, { l: meeting, r: interlock }, { l: interlock, r: dims.shutterHandle } ];
                     
-                    slidingHandles.forEach((handleConfig, i) => { if (handleConfig) { const side = slidingMemberSideStandard(i, 4); const mirrored = mirrorHandleForSlidingMember(side); handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (positions[i] + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={handleConfig} scale={scale} color={profileColor} mirrored={mirrored} /></div>); } });
-                    
-                    innerContent.push(...profiles.map((p, i) => <div key={i} className="absolute" style={{ left: mmToPx(positions[i], scale), top: 0, zIndex: (i === 1 || i === 2) ? 10 : 5 }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={p.l} rightProfile={p.r} scale={scale} isMesh={false} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]} /></div>));
+                    slidingHandles.forEach((handleConfig, i) => {
+                      if (!handleConfig) return;
+                      const side = slidingMemberSideStandard(i, 4);
+                      const mirrored = mirrorHandleForSlidingMember(side);
+                      appendOperableHandle(
+                        `sliding-${i}`,
+                        handleConfig,
+                        positions[i] + (shutterWidth * handleConfig.x) / 100,
+                        (innerAreaHeight * handleConfig.y) / 100,
+                        shutterWidth,
+                        innerAreaHeight,
+                        mirrored,
+                      );
+                    });
+
+                    innerContent.push(...profiles.map((p, i) => {
+                      const panelId = `sliding-${i}`;
+                      const frameMetrics: HandlePanelFrameMetrics = {
+                        widthMm: shutterWidth,
+                        heightMm: innerAreaHeight,
+                        leftProf: p.l,
+                        rightProf: p.r,
+                        topProf: dims.shutterTop,
+                        bottomProf: dims.shutterBottom,
+                      };
+                      return (
+                      <div
+                        key={i}
+                        className="absolute"
+                        style={{ left: mmToPx(positions[i], scale), top: 0, zIndex: (i === 1 || i === 2) ? 10 : 5 }}
+                      >
+                        <SlidingShutter
+                          panelId={panelId}
+                          config={config}
+                          width={shutterWidth}
+                          height={innerAreaHeight}
+                          topProfile={dims.shutterTop}
+                          bottomProfile={dims.shutterBottom}
+                          leftProfile={p.l}
+                          rightProfile={p.r}
+                          scale={scale}
+                          isMesh={false}
+                          isFixed={fixedShutters[i]}
+                          isSliding={!fixedShutters[i]}
+                          cadLabel={`S${i + 1}`}
+                          laneLabel={(i === 1 || i === 2) ? 'Track 2 (front)' : 'Track 1 (back)'}
+                          zLayer={(i === 1 || i === 2) ? 10 : 5}
+                          bleedMm={bleedMm}
+                          placementPickActive={placementPickActive}
+                          onPickPlacement={() => pickPlacement(panelId, frameMetrics)}
+                        />
+                      </div>
+                    ); }));
                 } else {
+                    const bleedMm = 8;
                     const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
                     const numShutters = hasMesh ? 3 : (shutterConfig === ShutterConfigType.TWO_GLASS ? 2 : 3);
                     const shutterDivider = hasMesh ? 2 : numShutters;
@@ -969,10 +1410,60 @@ const createWindowElements = (
                         const isMeshShutter = hasMesh && i === numShutters - 1;
                         let leftPosition = (hasMesh ? Math.min(i, numShutters - 2) : i) * (shutterWidth - interlock);
                         
+                        const panelId = `sliding-${i}`;
+                        const leftProf = i === 0 ? dims.shutterHandle : interlock;
+                        const rightProf = i === numShutters - 1 ? dims.shutterHandle : interlock;
+                        const frameMetrics: HandlePanelFrameMetrics = {
+                          widthMm: shutterWidth,
+                          heightMm: innerAreaHeight,
+                          leftProf,
+                          rightProf,
+                          topProf: dims.shutterTop,
+                          bottomProf: dims.shutterBottom,
+                        };
                         const handleConfig = slidingHandles[i];
-                        if (handleConfig) { const side = slidingMemberSideStandard(i, numShutters); const mirrored = mirrorHandleForSlidingMember(side); handleElements.push(<div key={`handle-${i}`} style={{ position: 'absolute', zIndex: 30, left: (leftPosition + shutterWidth * handleConfig.x / 100) * scale, top: (innerAreaHeight * handleConfig.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={handleConfig} scale={scale} color={profileColor} mirrored={mirrored} /></div>); }
-                        
-                        return ( <div key={i} className="absolute" style={{ left: mmToPx(leftPosition, scale), top: 0, zIndex: i + (isMeshShutter ? 10 : 5) }}><SlidingShutter panelId={`sliding-${i}`} config={config} width={shutterWidth} height={innerAreaHeight} topProfile={dims.shutterTop} bottomProfile={dims.shutterBottom} leftProfile={i === 0 ? dims.shutterHandle : interlock} rightProfile={i === numShutters - 1 ? dims.shutterHandle : interlock} scale={scale} isMesh={isMeshShutter} isFixed={fixedShutters[i]} isSliding={!fixedShutters[i]}/></div> );
+                        if (handleConfig) {
+                          const side = slidingMemberSideStandard(i, numShutters);
+                          const mirrored = mirrorHandleForSlidingMember(side);
+                          appendOperableHandle(
+                            panelId,
+                            handleConfig,
+                            leftPosition + (shutterWidth * handleConfig.x) / 100,
+                            (innerAreaHeight * handleConfig.y) / 100,
+                            shutterWidth,
+                            innerAreaHeight,
+                            mirrored,
+                          );
+                        }
+
+                        const z = hasMesh
+                          ? (isMeshShutter ? 15 : (i === 1 ? 10 : 5))
+                          : (numShutters === 2 ? (i === 1 ? 10 : 5) : (i === 1 ? 10 : 5));
+                        const laneLabel = z >= 15 ? 'Track 3 (inner)' : z >= 10 ? 'Track 2 (front)' : 'Track 1 (back)';
+                        return (
+                          <div key={i} className="absolute" style={{ left: mmToPx(leftPosition, scale), top: 0, zIndex: z }}>
+                            <SlidingShutter
+                              panelId={panelId}
+                              config={config}
+                              width={shutterWidth}
+                              height={innerAreaHeight}
+                              topProfile={dims.shutterTop}
+                              bottomProfile={dims.shutterBottom}
+                              leftProfile={leftProf}
+                              rightProfile={rightProf}
+                              scale={scale}
+                              isMesh={isMeshShutter}
+                              isFixed={fixedShutters[i]}
+                              isSliding={!fixedShutters[i]}
+                              cadLabel={`S${i + 1}`}
+                              laneLabel={laneLabel}
+                              zLayer={z}
+                              bleedMm={bleedMm}
+                              placementPickActive={placementPickActive}
+                              onPickPlacement={() => pickPlacement(panelId, frameMetrics)}
+                            />
+                          </div>
+                        );
                     }));
                 }
                 break;
@@ -996,14 +1487,49 @@ const createWindowElements = (
                         const cellW = (x_end_rel - x_start_rel) * innerAreaWidth;
                         const cellH = (y_end_rel - y_start_rel) * innerAreaHeight;
                         
-                         const doorInfo = config.doorPositions.find(p => p.row === r && p.col === c);
+                        const doorInfo = config.doorPositions.find(p => p.row === r && p.col === c);
                           if (doorInfo?.handle) {
                             const mirrored = mirrorHandleForPartitionHandleX(doorInfo.handle.x);
-                            handleElements.push(<div key={`handle-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (cellX + cellW * doorInfo.handle.x / 100) * scale, top: (cellY + cellH * doorInfo.handle.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={doorInfo.handle} scale={scale} color={profileColor} mirrored={mirrored} /></div>);
+                            handleElements.push(
+                              <div
+                                key={`handle-${r}-${c}`}
+                                style={{
+                                  position: 'absolute',
+                                  zIndex: 55,
+                                  left: (cellX + (cellW * doorInfo.handle.x) / 100) * scale,
+                                  top: (cellY + (cellH * doorInfo.handle.y) / 100) * scale,
+                                  transform: 'translate(-50%, -50%)',
+                                  transformOrigin: 'center center',
+                                }}
+                              >
+                                <DraggableHandleWrap
+                                  config={config}
+                                  panelId={`casement-${r}-${c}`}
+                                  handle={doorInfo.handle}
+                                  scale={scale}
+                                  color={profileColor}
+                                  mirrored={mirrored}
+                                  panelWidthMm={cellW}
+                                  panelHeightMm={cellH}
+                                  enableDrag={Boolean(callbacks.enableDoorHandleDrag && callbacks.onUpdateHandle)}
+                                  onUpdateHandle={callbacks.onUpdateHandle}
+                                />
+                              </div>,
+                            );
                           }
 
                         if (windowType === WindowType.CASEMENT) {
                             if (doorInfo) {
+                                const casementProf = dims.casementShutter;
+                                const casementPanelId = `casement-${r}-${c}`;
+                                const casementMetrics: HandlePanelFrameMetrics = {
+                                  widthMm: cellW,
+                                  heightMm: cellH,
+                                  leftProf: casementProf,
+                                  rightProf: casementProf,
+                                  topProf: casementProf,
+                                  bottomProf: casementProf,
+                                };
                                 innerContent.push(
                                   <div key={`cell-${r}-${c}`} className="absolute" style={{left: mmToPx(cellX, scale), top: mmToPx(cellY, scale), width: mmToPx(cellW, scale), height: mmToPx(cellH, scale)}}>
                                     <MiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} texture={pt} />
@@ -1011,6 +1537,17 @@ const createWindowElements = (
                                       <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={cellW - 2 * dims.casementShutter} glassHeight={cellH - 2 * dims.casementShutter} scale={scale} />
                                     </div>
                                     <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none"><svg viewBox="0 0 100 100" className="w-1/2 h-1/2" style={{transform: c % 2 === 0 ? 'scaleX(1)' : 'scaleX(-1)'}}><path d="M 10 10 L 10 90 L 90 90" stroke="white" strokeDasharray="4" strokeWidth="2" fill="none"/></svg></div>
+                                    {placementPickActive ? (
+                                      <button
+                                        type="button"
+                                        className="absolute inset-0 z-[45] cursor-pointer bg-indigo-500/15 ring-2 ring-inset ring-indigo-400/70 hover:bg-indigo-500/25"
+                                        aria-label="Place handle on this door"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          pickPlacement(casementPanelId, casementMetrics);
+                                        }}
+                                      />
+                                    ) : null}
                                   </div>
                                 );
                             } else { innerContent.push(<GlassPanel key={`cell-${r}-${c}`} panelId={panelId} config={config} style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}} glassWidth={cellW} glassHeight={cellH} scale={scale} />); }
@@ -1018,10 +1555,45 @@ const createWindowElements = (
                             const cell = config.ventilatorGrid[r]?.[c];
                             const cellType = cell?.type || 'glass';
                             if (cell?.handle) {
-                                const mirrored = mirrorHandleForPartitionHandleX(cell.handle.x);
-                                handleElements.push(<div key={`handle-vent-${r}-${c}`} style={{ position: 'absolute', zIndex: 30, left: (cellX + cellW * cell.handle.x / 100) * scale, top: (cellY + cellH * cell.handle.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={cell.handle} scale={scale} color={profileColor} mirrored={mirrored} /></div>);
+                            const mirrored = mirrorHandleForPartitionHandleX(cell.handle.x);
+                                handleElements.push(
+                                  <div
+                                    key={`handle-vent-${r}-${c}`}
+                                    style={{
+                                      position: 'absolute',
+                                      zIndex: 55,
+                                      left: (cellX + (cellW * cell.handle.x) / 100) * scale,
+                                      top: (cellY + (cellH * cell.handle.y) / 100) * scale,
+                                      transform: 'translate(-50%, -50%)',
+                                      transformOrigin: 'center center',
+                                    }}
+                                  >
+                                    <DraggableHandleWrap
+                                      config={config}
+                                      panelId={`ventilator-${r}-${c}`}
+                                      handle={cell.handle}
+                                      scale={scale}
+                                      color={profileColor}
+                                      mirrored={mirrored}
+                                      panelWidthMm={cellW}
+                                      panelHeightMm={cellH}
+                                      enableDrag={Boolean(callbacks.enableDoorHandleDrag && callbacks.onUpdateHandle)}
+                                      onUpdateHandle={callbacks.onUpdateHandle}
+                                    />
+                                  </div>,
+                                );
                             }
                             if (cellType === 'door') {
+                                const casementProf = dims.casementShutter;
+                                const ventPanelId = `ventilator-${r}-${c}`;
+                                const ventMetrics: HandlePanelFrameMetrics = {
+                                  widthMm: cellW,
+                                  heightMm: cellH,
+                                  leftProf: casementProf,
+                                  rightProf: casementProf,
+                                  topProf: casementProf,
+                                  bottomProf: casementProf,
+                                };
                                 innerContent.push(
                                   <div key={`cell-${r}-${c}`} className="absolute" style={{left: mmToPx(cellX, scale), top: mmToPx(cellY, scale), width: mmToPx(cellW, scale), height: mmToPx(cellH, scale)}}>
                                     <MiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} texture={pt} />
@@ -1029,6 +1601,17 @@ const createWindowElements = (
                                       <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={cellW - 2*dims.casementShutter} glassHeight={cellH - 2*dims.casementShutter} scale={scale}/>
                                     </div>
                                     <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none"><svg viewBox="0 0 100 100" className="w-1/2 h-1/2" style={{transform: c % 2 === 0 ? 'scaleX(1)' : 'scaleX(-1)'}}><path d="M 10 10 L 10 90 L 90 90" stroke="white" strokeDasharray="4" strokeWidth="2" fill="none"/></svg></div>
+                                    {placementPickActive ? (
+                                      <button
+                                        type="button"
+                                        className="absolute inset-0 z-[45] cursor-pointer bg-indigo-500/15 ring-2 ring-inset ring-indigo-400/70 hover:bg-indigo-500/25"
+                                        aria-label="Place handle on this door"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          pickPlacement(ventPanelId, ventMetrics);
+                                        }}
+                                      />
+                                    ) : null}
                                   </div>
                                 );
                             } else if (cellType === 'louvers') {
@@ -1085,7 +1668,7 @@ const createWindowElements = (
             case WindowType.GLASS_PARTITION: {
                 const { partitionPanels } = config;
                 const gap = PARTITION_PANEL_GAP_MM;
-                const panelWidths = getPartitionPanelWidthsMm(
+                const panelWidths = resolvePartitionPanelWidthsMm(
                   innerAreaWidth,
                   partitionPanels.count,
                   partitionPanels.types,
@@ -1140,7 +1723,32 @@ const createWindowElements = (
 
                     if (handle) {
                         const mirrored = mirrorHandleForPartitionHandleX(handle.x);
-                        handleElements.push(<div key={`handle-part-${i}`} style={{ position: 'absolute', zIndex: 30, left: (panelX + currentPanelWidth * handle.x / 100) * scale, top: (py + ph * handle.y / 100) * scale, transform: 'translate(-50%, -50%)', transformOrigin: 'center center' }}><Handle config={handle} scale={scale} color={profileColor} mirrored={mirrored} /></div>);
+                        handleElements.push(
+                          <div
+                            key={`handle-part-${i}`}
+                            style={{
+                              position: 'absolute',
+                              zIndex: 55,
+                              left: (panelX + (currentPanelWidth * handle.x) / 100) * scale,
+                              top: (py + (ph * handle.y) / 100) * scale,
+                              transform: 'translate(-50%, -50%)',
+                              transformOrigin: 'center center',
+                            }}
+                          >
+                            <DraggableHandleWrap
+                              config={config}
+                              panelId={panelId}
+                              handle={handle}
+                              scale={scale}
+                              color={profileColor}
+                              mirrored={mirrored}
+                              panelWidthMm={currentPanelWidth}
+                              panelHeightMm={ph}
+                              enableDrag={Boolean(callbacks.enableDoorHandleDrag && callbacks.onUpdateHandle)}
+                              onUpdateHandle={callbacks.onUpdateHandle}
+                            />
+                          </div>,
+                        );
                     }
                     
                     const isFramed = framing === 'full' || type === 'hinged';
@@ -1248,7 +1856,7 @@ const RenderedWindow: React.FC<{
 };
 
 export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
-  const { config, onRemoveHorizontalDivider, onRemoveVerticalDivider, onToggleElevationDoor, fitViewportRef } = props;
+  const { config, onRemoveHorizontalDivider, onRemoveVerticalDivider, onToggleElevationDoor, fitViewportRef, onUpdateHandle, enableDoorHandleDrag } = props;
   const { width, height, series, profileColor, windowType } = config;
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1338,11 +1946,31 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
 
   const scale = fitScale * zoom;
 
+  const { placement, dragMeasure } = useHomeownerHandlePlacement();
+
   const canvasCallbacks = useMemo(() => ({
     onRemoveHorizontalDivider,
     onRemoveVerticalDivider,
     onToggleElevationDoor,
-  }), [onRemoveHorizontalDivider, onRemoveVerticalDivider, onToggleElevationDoor]);
+    onUpdateHandle,
+    enableDoorHandleDrag,
+    handlePlacement: enableDoorHandleDrag ? placement : null,
+    onPlaceHandleOnPanel:
+      enableDoorHandleDrag && onUpdateHandle && placement
+        ? (panelId: string, metrics: HandlePanelFrameMetrics) => {
+            const cfg = buildHandleConfigForMember(panelId, config, placement, metrics);
+            if (cfg) onUpdateHandle(panelId, cfg);
+          }
+        : undefined,
+  }), [
+    enableDoorHandleDrag,
+    onRemoveHorizontalDivider,
+    onRemoveVerticalDivider,
+    onToggleElevationDoor,
+    onUpdateHandle,
+    placement,
+    config,
+  ]);
 
     const handleExportPng = () => {
         const element = renderedWindowRef.current;
@@ -1440,12 +2068,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   return (
     <div
       ref={containerRef}
-      className="relative flex min-h-full w-full min-w-0 flex-1 flex-col items-center justify-center overflow-visible bg-transparent px-4 py-4"
-      style={
-        viewportSize.h > 0
-          ? { minHeight: viewportSize.h }
-          : undefined
-      }
+      className="relative flex w-full min-w-0 shrink-0 flex-col items-center justify-center overflow-visible bg-transparent"
     >
       <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none"> WoodenMax </div>
        <div ref={renderedWindowRef} className="flex shrink-0 flex-col items-center justify-center">
@@ -1490,6 +2113,18 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
             {isExporting ? <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <PhotoIcon className="w-6 h-6"/>}
         </button>
       </div>
+      {enableDoorHandleDrag && dragMeasure ? (
+        <div className="pointer-events-none absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-lg bg-slate-900/90 px-4 py-2 text-center text-sm font-mono text-white shadow-lg ring-1 ring-slate-600 no-print">
+          <span className="text-emerald-300">{dragMeasure.mmFromTop} mm</span> from top
+          <span className="mx-2 text-slate-500">·</span>
+          <span className="text-sky-300">{dragMeasure.mmFromBottom} mm</span> from bottom
+        </div>
+      ) : null}
+      {enableDoorHandleDrag && placement && !dragMeasure ? (
+        <div className="pointer-events-none absolute top-3 left-1/2 z-30 max-w-[90%] -translate-x-1/2 rounded-md bg-indigo-600/90 px-3 py-1.5 text-center text-xs text-white shadow-lg no-print">
+          Click a panel — handle on <strong className="uppercase">{placement}</strong> frame member
+        </div>
+      ) : null}
       {viewportEl ? createPortal(zoomControls, viewportEl) : zoomControls}
     </div>
   );

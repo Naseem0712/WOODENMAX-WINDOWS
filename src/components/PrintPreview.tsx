@@ -18,7 +18,7 @@ import { PROFILE_TEXTURE_TILE, profileTexturePosition } from '../utils/profileTe
 import { quotationPdfFilename, printDocumentTitleForQuotation } from '../utils/pdfFilename';
 import {
   PARTITION_PANEL_GAP_MM,
-  getPartitionPanelWidthsMm,
+  resolvePartitionPanelWidthsMm,
   isOperablePartitionType,
   clampFoldLeafCount,
   getPartitionPanelTopMm,
@@ -37,6 +37,8 @@ import { quotationItemSubtotalContribution } from '../utils/quotationTotals';
 import { getWindowQuotationAreaMm2 } from '../utils/louverBays';
 import { RailingQuotationLinePrintBlock } from '../railing/components/RailingQuotationLinePrintBlock';
 import '../railing/quotation-print-embed.css';
+import { OpenViewPrintBlock } from '../windowOpenView/OpenViewPrintBlock';
+import { getOpenViewPrintConfigs } from '../windowOpenView/supportsOpenView';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
   return config.profileColor.startsWith('#') ? config.profileTexture || undefined : undefined;
@@ -795,7 +797,14 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
             {innerAreaWidth > 0 && innerAreaHeight > 0 && (
                 <div
                     className="absolute overflow-hidden"
-                    style={{ top: mmToPx(holeY1, scale), left: mmToPx(holeX1, scale), width: mmToPx(innerAreaWidth, scale), height: mmToPx(innerAreaHeight, scale) }}
+                    style={{
+                      top: mmToPx(holeY1, scale),
+                      left: mmToPx(holeX1, scale),
+                      width: mmToPx(innerAreaWidth, scale),
+                      height: mmToPx(innerAreaHeight, scale),
+                      boxSizing: 'border-box',
+                      border: `${Math.max(0.75, scale * 0.85)}px solid #374151`,
+                    }}
                 >
                     {windowType === WindowType.MIRROR ? (() => {
                         const mirrorConfig = config.mirrorConfig ?? { shape: MirrorShape.RECTANGLE, isFrameless: false, cornerRadius: 0 };
@@ -1127,7 +1136,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                           hasTopChannel: false,
                         };
                         const gap = PARTITION_PANEL_GAP_MM;
-                        const panelWidths = getPartitionPanelWidthsMm(
+                        const panelWidths = resolvePartitionPanelWidthsMm(
                           innerAreaWidth,
                           partitionPanels.count,
                           partitionPanels.types,
@@ -1508,7 +1517,6 @@ const getColorName = (item: QuotationItem) => {
 
 
 export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, items, settings, setSettings }) => {
-    
   const customer = settings.customer ?? {
     name: '',
     address: '',
@@ -1523,6 +1531,9 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
   const [isExporting, setIsExporting] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isArchitecturalMode, setIsArchitecturalMode] = useState(false);
+  const [includeOpenViewDiagram, setIncludeOpenViewDiagram] = useState(true);
+  const [openViewPrintAmount, setOpenViewPrintAmount] = useState(50);
+  const [openViewPrintSwing, setOpenViewPrintSwing] = useState<'inside' | 'outside'>('outside');
   const isLikelyMobile = useMemo(() => {
     try {
       const ua = typeof navigator !== 'undefined' ? (navigator.userAgent || '') : '';
@@ -1565,6 +1576,13 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
     () => calculateMaterialCostSummary(items, resolvedMaterialRates, makingChargePerSqFt),
     [items, resolvedMaterialRates, makingChargePerSqFt]
   );
+  const hasOpenViewQuotationItems = useMemo(
+    () =>
+      items.some(
+        (item) => item.kind !== 'railing' && getOpenViewPrintConfigs(item.config).length > 0,
+      ),
+    [items],
+  );
 
   const subTotal = items.reduce((total, item) => total + quotationItemSubtotalContribution(item), 0);
 
@@ -1577,7 +1595,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
   const gstAmount = totalAfterDiscount * (Number(settings.financials?.gstPercentage ?? 0) / 100);
   const grandTotal = totalAfterDiscount + gstAmount;
 
-  const handleExportPdf = () => {
+  const handleExportPdf = async () => {
     const element = printContainerRef.current?.querySelector<HTMLElement>('.a4-page');
     if (!element || isExporting || isPrinting) return;
 
@@ -1661,10 +1679,10 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
       });
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (isExporting || isPrinting) return;
     if (isLikelyMobile || typeof window.print !== 'function') {
-      handleExportPdf();
+      await handleExportPdf();
       return;
     }
     const prevTitle = document.title;
@@ -1731,6 +1749,49 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                 />
                 <span>Architectural Version</span>
             </label>
+            <label
+              className={`flex items-center space-x-2 cursor-pointer text-white ${hasOpenViewQuotationItems ? '' : 'opacity-50'}`}
+              title={
+                hasOpenViewQuotationItems
+                  ? 'Main canvas elevation + plan at 50% for sliding, casement, fold & sliding'
+                  : 'No operable windows in this quotation'
+              }
+            >
+                <input
+                    type="checkbox"
+                    checked={includeOpenViewDiagram && hasOpenViewQuotationItems}
+                    disabled={!hasOpenViewQuotationItems}
+                    onChange={e => setIncludeOpenViewDiagram(e.target.checked)}
+                    className="w-4 h-4 rounded bg-slate-700 border-slate-500 text-indigo-600 focus:ring-indigo-500 disabled:opacity-40"
+                />
+                <span>Canvas design + plan (fold / swing)</span>
+            </label>
+            {includeOpenViewDiagram && hasOpenViewQuotationItems ? (
+              <div className="flex flex-wrap items-end gap-3 text-white text-xs">
+                <label className="flex min-w-[140px] flex-col gap-1">
+                  <span>Open amount ({openViewPrintAmount}%)</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={openViewPrintAmount}
+                    onChange={(e) => setOpenViewPrintAmount(Number(e.target.value))}
+                    className="w-full accent-indigo-500"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span>Swing</span>
+                  <select
+                    value={openViewPrintSwing}
+                    onChange={(e) => setOpenViewPrintSwing(e.target.value as 'inside' | 'outside')}
+                    className="rounded bg-slate-700 px-2 py-1 text-xs"
+                  >
+                    <option value="outside">Outside open</option>
+                    <option value="inside">Inside open</option>
+                  </select>
+                </label>
+              </div>
+            ) : null}
             {isArchitecturalMode && (
                 <div className="w-64">
                     <Input
@@ -1879,9 +1940,19 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                             <td className="p-2 align-top w-[25%]">
                                                 <div style={{ paddingRight: 24, paddingBottom: 8 }}>
                                                     <PrintableWindow
-                                                        config={item.config}
-                                                        weightKg={itemWeight?.totalWeightKg}
+                                                      config={item.config}
+                                                      weightKg={itemWeight?.totalWeightKg}
                                                     />
+                                                    {includeOpenViewDiagram
+                                                      ? getOpenViewPrintConfigs(item.config).map((openCfg, openIdx) => (
+                                                          <OpenViewPrintBlock
+                                                            key={`open-plan-${openIdx}`}
+                                                            config={openCfg}
+                                                            openAmount={openViewPrintAmount / 100}
+                                                            swingSide={openViewPrintSwing}
+                                                          />
+                                                        ))
+                                                      : null}
                                                 </div>
                                             </td>
                                             

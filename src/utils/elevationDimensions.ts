@@ -1,6 +1,6 @@
 import type { WindowConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, WindowType } from '../types';
-import { getPartitionPanelWidthsMm } from './partitionPanelGeometry';
+import { resolvePartitionPanelWidthsMm } from './partitionPanelGeometry';
 import { getEffectiveLouverBays } from './louverBays';
 
 export interface ElevationSegment {
@@ -133,7 +133,7 @@ export function getElevationDimensionsMm(config: WindowConfig | undefined): Elev
     case WindowType.GLASS_PARTITION: {
       const pp = config.partitionPanels;
       if (pp && pp.count > 0) {
-        const widths = getPartitionPanelWidthsMm(
+        const widths = resolvePartitionPanelWidthsMm(
           numWidth,
           pp.count,
           pp.types,

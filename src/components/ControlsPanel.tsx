@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, PartitionPanelConfig, LouverBayCrossAlign } from '../types';
+import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, PartitionPanelConfig, LouverBayCrossAlign, MaterialRateSettings } from '../types';
 import { getDefaultHandleConfig } from '../utils/handleDefaults';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType, MirrorShape } from '../types';
 import { Button } from './ui/Button';
@@ -20,10 +20,13 @@ import {
   dimensionKeyLabel,
 } from '../utils/profileDimensionKeys';
 import { DOOR_WINDOW_COMBO_PRESETS } from '../utils/doorWindowComboPresets';
+import { DesignLayoutPanel } from './DesignLayoutPanel';
 import { clampFoldLeafCount } from '../utils/partitionPanelGeometry';
 import { SLIDING_LAYOUT_PRESETS, type SlidingLayoutPreset } from '../utils/slidingLayoutPresets';
 import { isCompoundLouverConfig, LOUVER_BAY_MAX } from '../utils/louverBays';
 import { scrollNearestVerticalOverflowAncestor } from '../utils/scrollParentWheel';
+import { useUserMode } from './UserModeProvider';
+import { HomeownerConfigSections } from './homeowner/HomeownerConfigSections';
 const PROFILE_QUICK_PRESETS: { name: string; value: string }[] = [
   { name: 'Grey', value: '#6b7280' },
   { name: 'Black', value: '#2f3238' },
@@ -86,6 +89,17 @@ interface ControlsPanelProps {
   activeCornerSide: 'left' | 'right';
   setActiveCornerSide: (side: 'left' | 'right') => void;
   idPrefix?: string;
+  /** Homeowner live pricing (optional). */
+  materialRates?: MaterialRateSettings;
+  openingMm2?: number;
+  onHomeownerLiveBaseRate?: (ratePerSqFt: number) => void;
+  layoutCompanions?: import('../types').DesignLayoutUnit[];
+  activeLayoutUnitId?: import('../types').DesignLayoutActiveUnit;
+  onActiveLayoutUnitChange?: (id: import('../types').DesignLayoutActiveUnit) => void;
+  onAddLayoutUnit?: (unit: import('../types').DesignLayoutUnit) => void;
+  onRemoveLayoutUnit?: (id: string) => void;
+  onUpdateLayoutUnit?: (id: string, partial: Partial<import('../types').DesignLayoutUnit>) => void;
+  windowTitle?: string;
 }
 
 const Slider: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string, unit?: string }> = ({ id, label, unit, onWheel, ...props }) => {
@@ -117,6 +131,9 @@ const Slider: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: st
 };
 
 export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefix = '', ...props }) => {
+  const { state: userModeState } = useUserMode();
+  const isHomeowner = userModeState.mode === 'homeowner';
+
   const { 
     config, onClose, setConfig, setSideConfig, setGridSize, availableSeries, onSeriesSelect, onSeriesSave, onSeriesDelete,
     addFixedPanel, removeFixedPanel, updateFixedPanelSize,
@@ -247,11 +264,22 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
   const operablePanels = useMemo(() => {
     const panels: { id: string; label: string }[] = [];
     switch (activeWindowType) {
-        case WindowType.SLIDING:
-            (displayConfig.slidingHandles ?? []).forEach((_, i) => {
+        case WindowType.SLIDING: {
+            const n = Math.max(
+              (displayConfig.slidingHandles ?? []).length,
+              displayConfig.shutterConfig === ShutterConfigType.TWO_GLASS
+                ? 2
+                : displayConfig.shutterConfig === ShutterConfigType.FOUR_GLASS
+                  ? 4
+                  : displayConfig.shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH
+                    ? 6
+                    : 3,
+            );
+            for (let i = 0; i < n; i++) {
               panels.push({ id: `sliding-${i}`, label: `Shutter ${i + 1}` });
-            });
+            }
             break;
+          }
         case WindowType.CASEMENT:
             (displayConfig.doorPositions ?? []).forEach((p) => {
               panels.push({ id: `casement-${p.row}-${p.col}`, label: `Door (R${p.row + 1}, C${p.col + 1})` });
@@ -770,7 +798,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
           </CollapsibleCard>
       )}
 
-      {windowType === WindowType.GLASS_PARTITION && onSetPartitionPreset && (
+      {!isHomeowner && windowType === WindowType.GLASS_PARTITION && onSetPartitionPreset && (
         <CollapsibleCard title="Door + window combinations" isOpen={openCard === 'Door + window combinations'} onToggle={() => handleToggleCard('Door + window combinations')}>
           <p className="text-xs text-slate-400 mb-3 leading-snug">
             Main entrance–style layouts: door leaf with fixed or sliding sidelight, shower enclosures, bi-fold + slider, etc. Set <strong className="text-slate-300">total width × height</strong> in Overall Dimensions (e.g. 2134 × 1219 mm ≈ 7′ × 4′), then tap a preset. Fine-tune panel types in Partition Panel Setup below.
@@ -791,7 +819,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         </CollapsibleCard>
       )}
 
-      {windowType === WindowType.GLASS_PARTITION && (
+      {!isHomeowner && windowType === WindowType.GLASS_PARTITION && (
         <CollapsibleCard title="Partition Panel Setup" isOpen={openCard === 'Partition Panel Setup'} onToggle={() => handleToggleCard('Partition Panel Setup')}>
           <Input id={`${idPrefix}partition-count`} name="partition-count" label="Number of Panels" type="number" inputMode="numeric" min={1} max={8} value={config.partitionPanels.count} onChange={e => onSetPartitionPanelCount(Math.max(1, parseInt(e.target.value) || 1))}/>
            <label className="flex items-center space-x-2 cursor-pointer mt-2">
@@ -1047,7 +1075,21 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         </CollapsibleCard>
       )}
 
-      {operablePanels.length > 0 && (
+      {isHomeowner && props.materialRates && (
+        <HomeownerConfigSections
+          config={config}
+          displayConfig={displayConfig}
+          setConfig={setConfig}
+          onUpdateHandle={onUpdateHandle}
+          rates={props.materialRates}
+          openCard={openCard}
+          onToggleCard={handleToggleCard}
+          idPrefix={idPrefix}
+          onLiveBaseRate={props.onHomeownerLiveBaseRate}
+        />
+      )}
+
+      {!isHomeowner && operablePanels.length > 0 && (
           <CollapsibleCard title="Handle Configuration" isOpen={openCard === 'Handle Configuration'} onToggle={() => handleToggleCard('Handle Configuration')}>
               <Select id={`${idPrefix}handle-panel-select`} name="handle-panel-select" label="Select Panel" value={selectedPanelId} onChange={e => setSelectedPanelId(e.target.value)}>
                 {operablePanels.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
@@ -1081,6 +1123,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
           </CollapsibleCard>
       )}
 
+      {!isHomeowner && (
       <CollapsibleCard title="Appearance" isOpen={openCard === 'Appearance'} onToggle={() => handleToggleCard('Appearance')}>
         {windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS && (
             <>
@@ -1215,8 +1258,9 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
             )}
         </div>
       </CollapsibleCard>
+      )}
 
-      {windowType !== WindowType.LOUVERS && (
+      {!isHomeowner && windowType !== WindowType.LOUVERS && (
           <CollapsibleCard title="Georgian Bars" isOpen={openCard === 'Georgian Bars'} onToggle={() => handleToggleCard('Georgian Bars')}>
             <div className="grid grid-cols-2 gap-4">
                 <DimensionInput id={`${idPrefix}georgian-bar-thickness`} name="georgian-bar-thickness" label="Bar Thickness" value_mm={glassGrid.barThickness} onChange_mm={v => setConfig('glassGrid', {...glassGrid, barThickness: v === '' ? 0 : v})} controlledUnit={georgianUnit} />
@@ -1258,7 +1302,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
           </CollapsibleCard>
       )}
       
-      {windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS && (
+      {!isHomeowner && windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS && (
           <CollapsibleCard title="Fixed Panels" isOpen={openCard === 'Fixed Panels'} onToggle={() => handleToggleCard('Fixed Panels')}>
           <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" onClick={() => addFixedPanel(FixedPanelPosition.TOP)}><PlusIcon className="w-4 h-4 mr-2"/> Top</Button>
@@ -1279,6 +1323,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         </CollapsibleCard>
       )}
 
+      {!isHomeowner && (
       <CollapsibleCard title="Profile Series" isOpen={openCard === 'Profile Series'} onToggle={() => handleToggleCard('Profile Series')}>
         <SearchableSelect id={`${idPrefix}series-select`} label="Select Series" options={seriesOptions} value={series.id} onChange={onSeriesSelect} />
         <div className="flex gap-2 mt-2">
@@ -1377,6 +1422,20 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
           )}
         </div>
       </CollapsibleCard>
+      )}
+
+      {props.onAddLayoutUnit && props.onActiveLayoutUnitChange ? (
+        <DesignLayoutPanel
+          primaryTitle={props.windowTitle ?? 'Window 1'}
+          activeUnitId={props.activeLayoutUnitId ?? 'primary'}
+          companions={props.layoutCompanions ?? []}
+          onActiveUnitChange={props.onActiveLayoutUnitChange}
+          onAddUnit={props.onAddLayoutUnit}
+          onRemoveUnit={props.onRemoveLayoutUnit ?? (() => {})}
+          onUpdateUnit={props.onUpdateLayoutUnit ?? (() => {})}
+          currentConfig={config}
+        />
+      ) : null}
 
     </div>
   );

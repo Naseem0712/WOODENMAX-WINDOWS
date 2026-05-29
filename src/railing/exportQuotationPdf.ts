@@ -4,6 +4,7 @@ import {
   QDOC_PADDING_MM,
   QDOC_PDF_MARGINS_MM,
 } from './quotationPrintSheet';
+import { stampSearchableTextLayer } from './pdfSearchableTextLayer';
 
 type JsPdfDoc = {
   internal: {
@@ -133,6 +134,7 @@ async function buildRailingQuotationPdf(element: HTMLElement, filename: string):
     .get('pdf')
     .then((pdf) => {
       pdfDoc = pdf;
+      stampSearchableTextLayer(pdf, element);
       stampPdfPageNumbers(pdf);
     });
 
@@ -157,6 +159,7 @@ export async function exportRailingQuotationPdf(
       .toPdf()
       .get('pdf')
       .then((pdf) => {
+        stampSearchableTextLayer(pdf, element);
         stampPdfPageNumbers(pdf);
       })
       .save();

@@ -106,7 +106,7 @@ export const DESIGN_TYPES: {
     id: 'custom',
     label: 'Custom path',
     labelHi: 'कस्टम',
-    description: 'Bends & extra legs — choose Normal or Staircase hardware',
+    description: 'Multi-leg — wall runs, notches, any plan shape',
   },
 ]
 

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef, useReducer, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import type { ProfileSeries, WindowConfig, HardwareItem, QuotationItem, WindowQuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, PartitionPanelConfig, QuotationSettings, HandleConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig, LouverBayCrossAlign } from './types';
+import type { ProfileSeries, WindowConfig, HardwareItem, QuotationItem, WindowQuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, PartitionPanelConfig, QuotationSettings, HandleConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig, LouverBayCrossAlign, DesignLayoutUnit, DesignLayoutActiveUnit } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType, MirrorShape } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
+import { DesignLayoutCanvas } from './components/DesignLayoutCanvas';
 import { WindowCanvas } from './components/WindowCanvas';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { QuotationPanel } from './components/QuotationPanel';
@@ -28,11 +29,13 @@ import { DEFAULT_MATERIAL_RATES } from './constants/materialRates';
 import { computeHardwareCostForQuotation } from './utils/quotationHardwareCost';
 import { applyDesignerCorrectionToQuotationItem } from './utils/applyDesignerCorrectionToQuotationItem';
 import { calculateMaterialCostSummary } from './utils/materialCosting';
+import { applyHomeownerDefaultsToConfig, loadHomeownerDefaults } from './utils/homeownerDefaultsStorage';
 import { RailingDesignerApp } from './railing/App';
 import { recalculateQuoteLine as recalculateRailingQuoteLine } from './railing/quotationFormat';
 import { displayDesignTitle as railingDisplayTitle } from './railing/utils';
 import type { QuotationLine } from './railing/types';
 import { isWindowQuotationItem } from './utils/quotationItemKinds';
+import { supportsOpenView } from './windowOpenView/supportsOpenView';
 import {
   getLouverBaySeparatorMm,
   LOUVER_BAY_MAX,
@@ -40,6 +43,8 @@ import {
   getLouverCompoundOuterMm,
   getWindowQuotationAreaMm2,
 } from './utils/louverBays';
+import { useUserMode } from './components/UserModeProvider';
+import type { UserMode } from './types';
 
 function normalizeQuotationItemFromStorage(raw: unknown): QuotationItem | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -61,12 +66,20 @@ function normalizeQuotationItemFromStorage(raw: unknown): QuotationItem | null {
   return null;
 }
 
+function labelForMode(mode: UserMode): string {
+  if (mode === 'manufacturer') return 'Manufacturer'
+  if (mode === 'architect') return 'Architect'
+  return 'Homeowner'
+}
+
 const BatchAddModal = lazy(() => import('./components/BatchAddModal').then(module => ({ default: module.BatchAddModal })));
 const GuidesViewer = lazy(() => import('./components/GuidesViewer').then(module => ({ default: module.GuidesViewer })));
 const QuotationListModal = lazy(() =>
   import('./components/QuotationListModal').then((m) => ({ default: m.QuotationListModal }))
 );
-/** Loaded only when user opens 3D preview — zero impact on main designer bundle. */
+const WindowOpenViewModal = lazy(() =>
+  import('./windowOpenView/WindowOpenViewModal').then((m) => ({ default: m.WindowOpenViewModal }))
+);
 const Window3DPreviewModal = lazy(() => import('./window3d/Window3DPreviewModal'));
 
 interface BeforeInstallPromptEvent extends Event {
@@ -112,7 +125,8 @@ type ConfigAction =
   | { type: 'UPDATE_DGU_CONFIG'; payload: Partial<DguGlassConfig> }
   | { type: 'UPDATE_MIRROR_CONFIG'; payload: Partial<WindowConfig['mirrorConfig']> }
   | { type: 'LOAD_CONFIG'; payload: ConfigState }
-  | { type: 'RESET_DESIGN' };
+  | { type: 'RESET_DESIGN' }
+  | { type: 'LOAD_CONFIG_STATE'; payload: ConfigState };
 
 const BASE_DIMENSIONS = {
     outerFrame: 0, outerFrameVertical: 0, fixedFrame: 0, shutterHandle: 0, shutterInterlock: 0,
@@ -938,7 +952,8 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             switch (type) {
                 case 'sliding': {
                     const index = parseInt(parts[1], 10);
-                    const newHandles = [...config.slidingHandles];
+                    const newHandles = [...(config.slidingHandles ?? [])];
+                    while (newHandles.length <= index) newHandles.push(null);
                     newHandles[index] = newConfig;
                     newSideConfig.slidingHandles = newHandles;
                     break;
@@ -1230,11 +1245,19 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             return withLouverOuterSynced(finalConfig, 50);
         }
         case 'RESET_DESIGN': {
-             return {
+             const base = {
                 ...initialConfig,
                 windowType: state.windowType,
             };
+             try {
+               const d = loadHomeownerDefaults();
+               return d ? (applyHomeownerDefaultsToConfig(base as any, d) as any) : base;
+             } catch {
+               return base;
+             }
         }
+        case 'LOAD_CONFIG_STATE':
+            return withLouverOuterSynced({ ...action.payload }, 50);
         default:
             return state;
     }
@@ -1306,12 +1329,15 @@ const getInitialConfig = (): ConfigState => {
           });
       }
 
-      return withLouverOuterSynced(finalConfig, 50);
+            const base = withLouverOuterSynced(finalConfig, 50);
+            const d = loadHomeownerDefaults();
+            return d ? (applyHomeownerDefaultsToConfig(base as any, d) as any) : base;
     }
   } catch (error) {
     console.error("Could not load current config from localStorage", error);
   }
-  return initialConfig;
+  const d = loadHomeownerDefaults();
+  return d ? (applyHomeownerDefaultsToConfig(initialConfig as any, d) as any) : initialConfig;
 };
 
 type MobilePanelState = 'none' | 'configure' | 'quotation';
@@ -1353,11 +1379,21 @@ interface DesignerViewProps {
   handleCloseMobilePanels: () => void;
   isEmbedded: boolean;
   onOpenShortcuts: () => void;
+  quotationSettings: QuotationSettings;
+  layoutCompanions: DesignLayoutUnit[];
+  activeLayoutUnitId: DesignLayoutActiveUnit;
+  onActiveLayoutUnitChange: (id: DesignLayoutActiveUnit) => void;
+  onAddLayoutUnit: (unit: DesignLayoutUnit) => void;
+  onRemoveLayoutUnit: (id: string) => void;
+  onUpdateLayoutUnit: (id: string, partial: Partial<DesignLayoutUnit>) => void;
 }
 
 const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
   const canvasViewportRef = useRef<HTMLDivElement>(null);
+  const [showOpenViewModal, setShowOpenViewModal] = useState(false);
   const [show3DPreview, setShow3DPreview] = useState(false);
+  const { state: userModeState, setMode: setUserMode } = useUserMode();
+
   const {
     onOpenGuides,
     installPrompt, handleInstallClick, panelRef, isDesktopPanelOpen, setIsDesktopPanelOpen,
@@ -1368,10 +1404,24 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
     onViewQuotation, bulkCorrectionLineCount, onApplyBulkCorrection,
     activeMobilePanel, handleOpenConfigure, handleOpenQuote, handleCloseMobilePanels,
     isEmbedded,
-    onOpenShortcuts
+    onOpenShortcuts,
+    layoutCompanions,
+    activeLayoutUnitId,
+    onActiveLayoutUnitChange,
+    onAddLayoutUnit,
+    onRemoveLayoutUnit,
+    onUpdateLayoutUnit,
   } = props;
 
+  // Keep model in view after refresh — avoid scroll jumping to empty inflated height.
+  useEffect(() => {
+    const el = canvasViewportRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+  }, [canvasKey, windowConfig.windowType]);
+
   const quotationOpeningMm2 = useMemo(() => getWindowQuotationAreaMm2(windowConfig), [windowConfig]);
+  const openViewAvailable = useMemo(() => supportsOpenView(windowConfig), [windowConfig]);
 
   return (
     <>
@@ -1396,6 +1446,19 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
             </div>
             <div className="flex min-h-9 shrink-0 items-center justify-end gap-1.5 sm:ml-auto sm:min-h-0">
               <WoodenMaxCatalogMenu />
+              <div className="hidden items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200/90 sm:inline-flex">
+                <span className="text-[11px] text-slate-500">Mode</span>
+                <select
+                  value={userModeState.mode}
+                  onChange={(e) => setUserMode(e.target.value as UserMode)}
+                  className="bg-transparent text-xs font-semibold text-slate-800 outline-none"
+                  aria-label="Select user mode"
+                >
+                  <option value="homeowner">Homeowner</option>
+                  <option value="architect">Architect</option>
+                  <option value="manufacturer">Manufacturer</option>
+                </select>
+              </div>
               <Button onClick={onOpenGuides} variant="secondary" className="hidden px-2.5 py-1 text-xs sm:inline-flex">
                 <DocumentTextIcon className="mr-1.5 h-4 w-4" /> Features &amp; Guides
               </Button>
@@ -1403,10 +1466,19 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
                 Keyboard
               </Button>
               <Button
+                onClick={() => setShowOpenViewModal(true)}
+                variant="secondary"
+                className="hidden px-2.5 py-1 text-xs sm:inline-flex"
+                disabled={!openViewAvailable}
+                title={openViewAvailable ? 'Customer open view — sliding / fold / openable' : 'Open view: sliding, casement, ventilator, or operable partition only'}
+              >
+                Open View
+              </Button>
+              <Button
                 onClick={() => setShow3DPreview(true)}
                 variant="secondary"
                 className="hidden px-2.5 py-1 text-xs sm:inline-flex"
-                title="Optional 3D preview — does not affect quotation or 2D canvas"
+                title="3D preview — orbit and slide open"
               >
                 3D Preview
               </Button>
@@ -1418,14 +1490,18 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
               >
                 <DocumentTextIcon className="h-5 w-5" />
               </Button>
-              <Button
-                onClick={() => setShow3DPreview(true)}
-                variant="secondary"
-                className="inline-flex min-h-10 min-w-10 items-center justify-center p-0 sm:hidden"
-                aria-label="3D preview"
+              <button
+                type="button"
+                className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md bg-white/10 text-[10px] font-bold text-slate-100 ring-1 ring-white/15 sm:hidden"
+                onClick={() => {
+                  const next = userModeState.mode === 'homeowner' ? 'architect' : userModeState.mode === 'architect' ? 'manufacturer' : 'homeowner'
+                  setUserMode(next)
+                }}
+                aria-label={`Mode: ${labelForMode(userModeState.mode)}. Tap to change.`}
+                title={`Mode: ${labelForMode(userModeState.mode)} (tap to change)`}
               >
-                <span className="text-[10px] font-bold">3D</span>
-              </Button>
+                {userModeState.mode === 'manufacturer' ? 'MFG' : userModeState.mode === 'architect' ? 'ARC' : 'HOME'}
+              </button>
               {installPrompt && (
                 <Button onClick={handleInstallClick} variant="secondary" className="animate-pulse whitespace-nowrap px-2 py-1 text-[11px] sm:text-xs">
                   <DownloadIcon className="mr-1 h-3.5 w-3.5 sm:mr-1.5 sm:h-4 sm:w-4" />
@@ -1440,7 +1516,18 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
             <div ref={panelRef} className={`hidden min-h-0 shrink-0 flex-col bg-slate-800 no-print transition-[width] duration-300 ease-in-out lg:flex z-30 ${isDesktopPanelOpen ? 'w-96' : 'w-0'}`}>
                 <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                     <ErrorBoundary title="Controls panel crashed">
-                      <ControlsPanel {...commonControlProps} idPrefix="desktop-" onClose={() => setIsDesktopPanelOpen(false)} />
+                      <ControlsPanel
+                        {...commonControlProps}
+                        idPrefix="desktop-"
+                        onClose={() => setIsDesktopPanelOpen(false)}
+                        layoutCompanions={layoutCompanions}
+                        activeLayoutUnitId={activeLayoutUnitId}
+                        onActiveLayoutUnitChange={onActiveLayoutUnitChange}
+                        onAddLayoutUnit={onAddLayoutUnit}
+                        onRemoveLayoutUnit={onRemoveLayoutUnit}
+                        onUpdateLayoutUnit={onUpdateLayoutUnit}
+                        windowTitle={windowTitle}
+                      />
                     </ErrorBoundary>
                 </div>
             </div>
@@ -1450,16 +1537,28 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
                 ref={canvasViewportRef}
                 className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain custom-scrollbar touch-pan-y"
               >
-                 <ErrorBoundary title="Canvas crashed">
-                   <WindowCanvas
-                     key={canvasKey}
-                     fitViewportRef={canvasViewportRef}
-                     config={windowConfig}
-                     onRemoveVerticalDivider={handleRemoveVerticalDivider}
-                     onRemoveHorizontalDivider={handleRemoveHorizontalDivider}
-                     onToggleElevationDoor={() => {}}
-                   />
-                 </ErrorBoundary>
+                <div className="box-border flex w-full min-h-full flex-col items-center justify-center gap-4 px-4 py-6">
+                  <ErrorBoundary title="Canvas crashed">
+                    <WindowCanvas
+                      key={canvasKey}
+                      fitViewportRef={canvasViewportRef}
+                      config={windowConfig}
+                      onRemoveVerticalDivider={handleRemoveVerticalDivider}
+                      onRemoveHorizontalDivider={handleRemoveHorizontalDivider}
+                      onToggleElevationDoor={() => {}}
+                      onUpdateHandle={commonControlProps.onUpdateHandle}
+                      enableDoorHandleDrag={userModeState.mode === 'homeowner'}
+                    />
+                  </ErrorBoundary>
+                  {layoutCompanions.length > 0 ? (
+                    <DesignLayoutCanvas
+                      primary={windowConfig}
+                      primaryTitle={windowTitle}
+                      companions={layoutCompanions}
+                      activeUnitId={activeLayoutUnitId}
+                    />
+                  ) : null}
+                </div>
               </SpringScrollArea>
               <div className="no-print relative z-20 hidden shrink-0 lg:block lg:shadow-[0_-10px_40px_rgba(0,0,0,0.35)]">
                 <QuotationPanel
@@ -1506,7 +1605,18 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
            </div>
            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
              <ErrorBoundary title="Controls panel crashed">
-               <ControlsPanel {...commonControlProps} idPrefix="mobile-" onClose={handleCloseMobilePanels} />
+               <ControlsPanel
+                 {...commonControlProps}
+                 idPrefix="mobile-"
+                 onClose={handleCloseMobilePanels}
+                 layoutCompanions={layoutCompanions}
+                 activeLayoutUnitId={activeLayoutUnitId}
+                 onActiveLayoutUnitChange={onActiveLayoutUnitChange}
+                 onAddLayoutUnit={onAddLayoutUnit}
+                 onRemoveLayoutUnit={onRemoveLayoutUnit}
+                 onUpdateLayoutUnit={onUpdateLayoutUnit}
+                 windowTitle={windowTitle}
+               />
              </ErrorBoundary>
            </div>
         </div>
@@ -1522,19 +1632,20 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
             </SpringScrollArea>
         </div>
     </div>
-    {show3DPreview && (
-      <Suspense
-        fallback={
-          <div className="no-print fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 text-white">
-            Loading 3D preview…
-          </div>
-        }
-      >
-        <ErrorBoundary title="3D preview failed">
+    {showOpenViewModal ? (
+      <ErrorBoundary title="Open view crashed">
+        <Suspense fallback={null}>
+          <WindowOpenViewModal config={windowConfig} onClose={() => setShowOpenViewModal(false)} />
+        </Suspense>
+      </ErrorBoundary>
+    ) : null}
+    {show3DPreview ? (
+      <ErrorBoundary title="3D preview crashed">
+        <Suspense fallback={null}>
           <Window3DPreviewModal config={windowConfig} onClose={() => setShow3DPreview(false)} />
-        </ErrorBoundary>
-      </Suspense>
-    )}
+        </Suspense>
+      </ErrorBoundary>
+    ) : null}
     </>
   );
 });
@@ -1542,8 +1653,25 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
 const App: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { state: userModeState, setFlag, getFlag } = useUserMode();
+
+  // Architect: auto-fill recommended base rate once (keeps clicks minimal).
+  useEffect(() => {
+    if (userModeState.mode !== 'architect') return;
+    if (getFlag('architect_window_rate_autofill')) return;
+    setRate(650);
+    try {
+      window.localStorage.setItem('woodenmax-quotation-panel-rate', JSON.stringify(650));
+    } catch {
+      // ignore
+    }
+    setFlag('architect_window_rate_autofill', true);
+  }, [getFlag, setFlag, userModeState.mode]);
 
   const [windowConfigState, dispatch] = useReducer(configReducer, getInitialConfig());
+  const [layoutCompanions, setLayoutCompanions] = useState<DesignLayoutUnit[]>([]);
+  const [activeLayoutUnitId, setActiveLayoutUnitId] = useState<DesignLayoutActiveUnit>('primary');
+  const frozenPrimaryConfigRef = useRef<ConfigState | null>(null);
   const { windowType } = windowConfigState;
 
   const [isDesktopPanelOpen, setIsDesktopPanelOpen] = useState(window.innerWidth >= 1024);
@@ -1665,6 +1793,14 @@ const App: React.FC = () => {
                               ...DEFAULT_QUOTATION_SETTINGS.materialRates.glassPerSqFt.clear,
                               ...savedSettings.materialRates?.glassPerSqFt?.clear,
                           },
+                          tinted: {
+                              ...(DEFAULT_QUOTATION_SETTINGS.materialRates.glassPerSqFt as any).tinted,
+                              ...(savedSettings.materialRates?.glassPerSqFt as any)?.tinted,
+                          },
+                          reflective: {
+                              ...(DEFAULT_QUOTATION_SETTINGS.materialRates.glassPerSqFt as any).reflective,
+                              ...(savedSettings.materialRates?.glassPerSqFt as any)?.reflective,
+                          },
                           laminated: {
                               ...DEFAULT_QUOTATION_SETTINGS.materialRates.glassPerSqFt.laminated,
                               ...savedSettings.materialRates?.glassPerSqFt?.laminated,
@@ -1672,6 +1808,10 @@ const App: React.FC = () => {
                           dgu: {
                               ...DEFAULT_QUOTATION_SETTINGS.materialRates.glassPerSqFt.dgu,
                               ...savedSettings.materialRates?.glassPerSqFt?.dgu,
+                          },
+                          extras: {
+                              ...(DEFAULT_QUOTATION_SETTINGS.materialRates.glassPerSqFt as any).extras,
+                              ...(savedSettings.materialRates?.glassPerSqFt as any)?.extras,
                           },
                       },
                   },
@@ -1989,6 +2129,11 @@ const App: React.FC = () => {
     series
   }), [windowConfigState, series]);
 
+  const configStateFromWindowConfig = useCallback((wc: WindowConfig): ConfigState => {
+    const { series: _s, ...state } = wc;
+    return state as ConfigState;
+  }, []);
+
   // --- PERSISTENCE EFFECTS ---
   useEffect(() => {
     try {
@@ -2236,6 +2381,71 @@ const App: React.FC = () => {
       }
     }
   }, [availableSeries, windowType, windowConfig, activeCornerSide, navigate]);
+
+  const handleActiveLayoutUnitChange = useCallback(
+    (nextId: DesignLayoutActiveUnit) => {
+      if (nextId === activeLayoutUnitId) return;
+
+      let companions = layoutCompanions;
+      if (activeLayoutUnitId !== 'primary') {
+        companions = layoutCompanions.map((c) =>
+          c.id === activeLayoutUnitId ? { ...c, config: windowConfig } : c,
+        );
+        setLayoutCompanions(companions);
+      }
+
+      if (activeLayoutUnitId === 'primary' && nextId !== 'primary') {
+        frozenPrimaryConfigRef.current = windowConfigState;
+      }
+
+      if (nextId === 'primary') {
+        if (frozenPrimaryConfigRef.current) {
+          dispatch({ type: 'LOAD_CONFIG_STATE', payload: frozenPrimaryConfigRef.current });
+        }
+      } else {
+        const unit = companions.find((c) => c.id === nextId);
+        if (unit) {
+          if (unit.config.series?.id && unit.config.series.id !== series?.id) {
+            handleSeriesSelect(unit.config.series.id);
+          }
+          dispatch({ type: 'LOAD_CONFIG_STATE', payload: configStateFromWindowConfig(unit.config) });
+        }
+      }
+
+      setActiveLayoutUnitId(nextId);
+    },
+    [
+      activeLayoutUnitId,
+      windowConfig,
+      windowConfigState,
+      layoutCompanions,
+      series?.id,
+      handleSeriesSelect,
+      configStateFromWindowConfig,
+    ],
+  );
+
+  const handleAddLayoutUnit = useCallback(
+    (unit: DesignLayoutUnit) => {
+      setLayoutCompanions((prev) => [...prev, unit]);
+      handleActiveLayoutUnitChange(unit.id);
+    },
+    [handleActiveLayoutUnitChange],
+  );
+
+  const handleRemoveLayoutUnit = useCallback(
+    (id: string) => {
+      setLayoutCompanions((prev) => prev.filter((c) => c.id !== id));
+      if (activeLayoutUnitId === id) {
+        handleActiveLayoutUnitChange('primary');
+      }
+    },
+    [activeLayoutUnitId, handleActiveLayoutUnitChange],
+  );
+
+  const handleUpdateLayoutUnit = useCallback((id: string, partial: Partial<DesignLayoutUnit>) => {
+    setLayoutCompanions((prev) => prev.map((c) => (c.id === id ? { ...c, ...partial } : c)));
+  }, []);
   
   const handleSeriesSave = useCallback((name: string) => {
     if (name && name.trim() !== '') {
@@ -2581,6 +2791,15 @@ const App: React.FC = () => {
     );
   }, [quotationBulkTargetIds, quotationItems, windowConfig, series, savedColors, rate, areaType, applySlidingBasicRateProtection]);
 
+  const handleHomeownerLiveBaseRate = useCallback(
+    (next: number) => {
+      if (userModeState.mode !== 'homeowner') return;
+      const rounded = Math.round(next);
+      if (rounded > 0) setRate(rounded);
+    },
+    [userModeState.mode],
+  );
+
   const commonControlProps = useMemo(() => ({
     config: windowConfig,
     setConfig,
@@ -2622,8 +2841,11 @@ const App: React.FC = () => {
     onUpdateMirrorConfig: handleUpdateMirrorConfig,
     onResetDesign: handleResetDesign,
     activeCornerSide,
-    setActiveCornerSide
-  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onSetPartitionPreset, onSetPartitionWidthFractions, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onUpdatePartitionPanel, onAddLouverItem, onRemoveLouverItem, onUpdateLouverItem, onAddLouverBay, onRemoveLouverBay, onUpdateLouverBayDim, onUpdateLouverBayPosition, onSetLouverBayLayout, onClearLouverBays, handleLaminatedConfigChange, handleDguConfigChange, handleUpdateMirrorConfig, handleResetDesign, activeCornerSide]);
+    setActiveCornerSide,
+    materialRates: quotationSettings.materialRates,
+    openingMm2: getWindowQuotationAreaMm2(windowConfig),
+    onHomeownerLiveBaseRate: handleHomeownerLiveBaseRate,
+  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onSetPartitionPreset, onSetPartitionWidthFractions, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onUpdatePartitionPanel, onAddLouverBay, onRemoveLouverBay, onUpdateLouverBayDim, onUpdateLouverBayPosition, onSetLouverBayLayout, onClearLouverBays, handleLaminatedConfigChange, handleDguConfigChange, handleUpdateMirrorConfig, handleResetDesign, activeCornerSide, quotationSettings.materialRates, handleHomeownerLiveBaseRate]);
 
   const handleOpenConfigure = () => setActiveMobilePanel('configure');
   const handleOpenQuote = () => setActiveMobilePanel('quotation');
@@ -2809,7 +3031,7 @@ const App: React.FC = () => {
           appView === 'designer' || appView === 'railing'
             ? 'overflow-y-hidden'
             : 'overflow-y-auto'
-        } ${isPreviewing ? 'hidden' : ''}`}
+        } ${isPreviewing || isQuotationModalOpen || isBatchAddModalOpen ? 'hidden' : ''}`}
       >
         <Suspense fallback={null}>
             {appView === 'railing' ? (
@@ -2864,6 +3086,13 @@ const App: React.FC = () => {
                     handleCloseMobilePanels={handleCloseMobilePanels}
                     isEmbedded={isEmbedded}
                     onOpenShortcuts={() => setIsShortcutHelpOpen(true)}
+                    quotationSettings={quotationSettings}
+                    layoutCompanions={layoutCompanions}
+                    activeLayoutUnitId={activeLayoutUnitId}
+                    onActiveLayoutUnitChange={handleActiveLayoutUnitChange}
+                    onAddLayoutUnit={handleAddLayoutUnit}
+                    onRemoveLayoutUnit={handleRemoveLayoutUnit}
+                    onUpdateLayoutUnit={handleUpdateLayoutUnit}
                 />
             ) : (
                 <GuidesViewer 

@@ -390,6 +390,10 @@ export interface MaterialRateSettings {
       '10': number;
       '12': number;
     };
+    /** Tinted glasses (brown/grey/black etc.) — used by Homeowner quick pricing. */
+    tinted?: Record<string, number>;
+    /** Reflective glasses — used by Homeowner quick pricing. */
+    reflective?: Record<string, number>;
     laminated: {
       '5+5': number;
       '6+6': number;
@@ -398,6 +402,18 @@ export interface MaterialRateSettings {
       '6+12+6': number;
       '5+12+5': number;
     };
+    /** Extra per-sqft charges layered on top of base glass pricing. */
+    extras?: {
+      laminatedChargePerSqFt?: number;
+      dguChargePerSqFt?: number;
+      frostingExtraPerSqFt?: number;
+    };
+  };
+  /** Hardware/lock rates (₹ per piece) — used by Homeowner quick pricing. */
+  lockRates?: {
+    multipoint?: number;
+    touch?: number;
+    mortice?: number;
   };
 }
 
@@ -503,3 +519,47 @@ export interface BOMSeries {
 }
 
 export type BOM = BOMSeries[];
+
+// ─────────────────────────────────────────────────────────────
+// Role-based modes (Homeowner / Architect / Manufacturer)
+// ─────────────────────────────────────────────────────────────
+
+export type UserMode = 'homeowner' | 'architect' | 'manufacturer';
+
+/** Details required to unlock full Manufacturer access on this device. */
+export interface ManufacturerProfile {
+  shopName: string;
+  gstNumber: string;
+  phone: string;
+  address: string;
+}
+
+/** Minimal details required before downloading/printing a quotation. */
+export interface ExportContactProfile {
+  name: string;
+  city: string;
+  pinCode: string;
+  phone: string;
+}
+
+export interface UserModeState {
+  version: 1;
+  mode: UserMode;
+  manufacturer?: ManufacturerProfile;
+  exportContact?: ExportContactProfile;
+  /** For one-time actions per mode, e.g. architect rate auto-fill. */
+  flags?: Record<string, boolean>;
+}
+
+/** Extra window unit in a multi-window façade layout (session design). */
+export interface DesignLayoutUnit {
+  id: string;
+  title: string;
+  config: WindowConfig;
+  /** Horizontal gap from previous unit's right edge (mm). First companion uses gap from primary. */
+  gapFromPrevMm: number;
+  /** Vertical offset of top edge from primary window top (mm). 0 = level-aligned tops. */
+  offsetTopFromPrimaryMm: number;
+}
+
+export type DesignLayoutActiveUnit = 'primary' | string;

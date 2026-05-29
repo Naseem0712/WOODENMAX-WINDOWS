@@ -5,7 +5,6 @@ import {
   GLASS_OPTIONS,
   segmentHeightKeys,
 } from '../constants'
-import { syncSegmentConfigs } from '../calculations'
 import { calculateCosting, supportHoleCount } from '../costing'
 import { staircaseGlassBillLengthMm } from '../staircaseGlass'
 import { MM_PER_FT } from '../units'
@@ -20,7 +19,7 @@ import type {
   HardwareMode,
   PillarsPerGlass,
 } from '../types'
-import { calculateDesign } from '../calculations'
+import { calculateDesign, syncSegmentConfigs } from '../calculations'
 import { packageLineTotal } from '../packagePricing'
 import { displayDesignTitle, formatCurrency } from '../utils'
 import { CustomChargesEditor } from './CustomChargesEditor'
@@ -35,6 +34,7 @@ import {
 } from './SegmentDivideEditor'
 import { RailProfilesSection } from './RailProfilesSection'
 import { CollapsiblePanel } from './CollapsiblePanel'
+import { PrintDesignImageUpload } from './PrintDesignImageUpload'
 import { selectOnFocus } from '../inputUtils'
 
 interface Props {
@@ -52,6 +52,7 @@ interface Props {
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
+  onToast?: (message: string) => void
 }
 
 function mergeSegmentConfigs(
@@ -101,6 +102,7 @@ export function DesignForm({
   canRedo,
   onUndo,
   onRedo,
+  onToast,
 }: Props) {
   const draftMode = resolveDraftMode(draft)
   const activePreset = presetForMode(presets, draftMode)
@@ -156,6 +158,7 @@ export function DesignForm({
       finish: { ...preset.finish },
       packageRates: { ...preset.packageRates },
       packageQuoteUnit: preset.packageQuoteUnit,
+      ...(designType === 'custom' ? { pathStartHeading: 'north' as const } : {}),
     })
   }
 
@@ -196,19 +199,27 @@ export function DesignForm({
     })
   }
 
-  const setCustomDimensions = (dimensions: DesignDraft['dimensions']) => {
-    const mm = dimensions.filter((d) => d.unit === 'mm')
-    set({
-      dimensions,
-      segmentHeights: mm.map((d) => {
+  const setCustomPathPatch = (patch: {
+    dimensions?: DesignDraft['dimensions']
+    pathStartHeading?: DesignDraft['pathStartHeading']
+    designType?: 'custom'
+  }) => {
+    let next: DesignDraft = { ...draft, ...patch }
+    if (patch.designType) next.designType = patch.designType
+    if (patch.dimensions) {
+      const mm = patch.dimensions.filter((d) => d.unit === 'mm')
+      next.dimensions = patch.dimensions
+      next.segmentHeights = mm.map((d) => {
         const ex = draft.segmentHeights.find((h) => h.key === d.key)
         return {
           key: d.key,
           label: d.label,
           value: ex?.value ?? draft.uniformHeight,
         }
-      }),
-    })
+      })
+      next.segmentConfigs = syncSegmentConfigs(next)
+    }
+    onChange(patchDraft(next, {}, activePreset))
   }
 
   const activeConfigs = draft.segmentConfigs.filter((c) => {
@@ -273,6 +284,7 @@ export function DesignForm({
         <p className="hint design-name-preview">
           Quotation title: <strong>{displayDesignTitle(draft)}</strong>
         </p>
+        <PrintDesignImageUpload draft={draft} onChange={set} onToast={onToast} />
         <CollapsiblePanel
           id="design-types"
           open={designTypesOpen}
@@ -336,7 +348,8 @@ export function DesignForm({
         {draft.designType === 'custom' ? (
           <CustomSegmentFields
             dimensions={draft.dimensions}
-            onChange={setCustomDimensions}
+            pathStartHeading={draft.pathStartHeading}
+            onPatch={setCustomPathPatch}
           />
         ) : (
           <>

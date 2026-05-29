@@ -1,6 +1,6 @@
 import type { HandleConfig, WindowConfig } from '../types';
 import { FixedPanelPosition, ShutterConfigType, WindowType } from '../types';
-import { getPartitionPanelWidthsMm } from './partitionPanelGeometry';
+import { resolvePartitionPanelWidthsMm } from './partitionPanelGeometry';
 import { effectiveFourGlassMeetingMm } from './slidingGeometry';
 
 /** Default inset from meeting stile / opening edge (mm). User can fine-tune in Handle Configuration. */
@@ -16,12 +16,12 @@ export function computeInnerHoleDims(config: {
   height: number | string | '';
   fixedPanels: { position: FixedPanelPosition; size: number }[];
   windowType: WindowType;
-  series: { dimensions: { outerFrame?: number | '' } };
+  series?: { dimensions?: { outerFrame?: number | '' } };
 }): { innerW: number; innerH: number } {
   const w = Number(config.width) || 0;
   const h = Number(config.height) || 0;
   const { fixedPanels, windowType } = config;
-  const outerFrame = Number(config.series.dimensions.outerFrame) || 0;
+  const outerFrame = Number(config.series?.dimensions?.outerFrame) || 0;
   const frameOffset =
     windowType !== WindowType.GLASS_PARTITION &&
     windowType !== WindowType.CORNER &&
@@ -104,7 +104,67 @@ export function defaultCasementHandleXPct(col: number, gridCols: number, cellWid
   return clampPct(isRightHalf ? fromRight : fromLeft);
 }
 
+export type HandleMemberPlacement = 'top' | 'bottom' | 'left' | 'right';
+
+const FALLBACK_HANDLE: HandleConfig = {
+  x: 75,
+  y: 55,
+  orientation: 'vertical',
+  length: 172,
+  variant: 'casement',
+};
+
+export function yPctOnFrameEdge(panelHeightMm: number, profileMm: number, edge: 'top' | 'bottom'): number {
+  const H = Math.max(panelHeightMm, 20);
+  const P = Math.max(0, profileMm);
+  if (edge === 'top') {
+    const cy = P > 0 ? P / 2 : Math.min(HANDLE_EDGE_INSET_MM, H / 4);
+    return clampPct((cy / H) * 100);
+  }
+  const cy = P > 0 ? H - P / 2 : H - Math.min(HANDLE_EDGE_INSET_MM, H / 4);
+  return clampPct((cy / H) * 100);
+}
+
+export interface HandlePanelFrameMetrics {
+  widthMm: number;
+  heightMm: number;
+  leftProf?: number;
+  rightProf?: number;
+  topProf?: number;
+  bottomProf?: number;
+}
+
+/** Place handle on a frame member (top / bottom / left / right stile). */
+export function buildHandleConfigForMember(
+  panelId: string,
+  config: WindowConfig,
+  member: HandleMemberPlacement,
+  metrics: HandlePanelFrameMetrics,
+): HandleConfig | null {
+  if (!config.series?.dimensions) return null;
+  const base = getDefaultHandleConfig(panelId, config);
+  const { widthMm, heightMm } = metrics;
+  const leftProf = metrics.leftProf ?? 0;
+  const rightProf = metrics.rightProf ?? 0;
+  const topProf = metrics.topProf ?? 0;
+  const bottomProf = metrics.bottomProf ?? 0;
+
+  if (member === 'top') {
+    return { ...base, x: 50, y: yPctOnFrameEdge(heightMm, topProf, 'top') };
+  }
+  if (member === 'bottom') {
+    return { ...base, x: 50, y: yPctOnFrameEdge(heightMm, bottomProf, 'bottom') };
+  }
+  if (member === 'left') {
+    const x = slidingHandleXPctOnFrameMember(widthMm, leftProf, rightProf, 'left');
+    return { ...base, x };
+  }
+  const x = slidingHandleXPctOnFrameMember(widthMm, leftProf, rightProf, 'right');
+  return { ...base, x };
+}
+
 export function getDefaultHandleConfig(panelId: string, config: WindowConfig): HandleConfig {
+  if (!config.series?.dimensions) return { ...FALLBACK_HANDLE };
   const parts = panelId.split('-');
   const kind = parts[0];
   const inner = computeInnerHoleDims(config);
@@ -196,7 +256,7 @@ export function getDefaultHandleConfig(panelId: string, config: WindowConfig): H
     }
     const i = parseInt(parts[1], 10);
     const { partitionPanels } = config;
-    const widths = getPartitionPanelWidthsMm(
+    const widths = resolvePartitionPanelWidthsMm(
       inner.innerW,
       partitionPanels.count,
       partitionPanels.types,

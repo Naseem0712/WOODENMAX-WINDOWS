@@ -299,7 +299,13 @@ export function buildLayouts(
     case 'custom':
     case 'zigzag-type':
     case 'staircase': {
-      for (const p of buildSegmentPath(draft.dimensions, scale, ox, oy)) {
+      for (const p of buildSegmentPath(
+        draft.dimensions,
+        scale,
+        ox,
+        oy,
+        draft.pathStartHeading ?? 'east',
+      )) {
         const s = seg(p.key)
         if (s && get(p.key) > 0) {
           layouts.push({ calc: s, x0: p.x0, y0: p.y0, x1: p.x1, y1: p.y1 })

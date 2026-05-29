@@ -222,6 +222,10 @@ export function migrateQuotationLine(
     packageQuote: line.packageQuote ?? fresh.packageQuote,
     internalCosting: line.internalCosting ?? fresh.internalCosting,
     calculation: line.calculation ?? fresh.calculation,
+    draftSnapshot: {
+      ...fresh.draftSnapshot,
+      printImageUrl: snapshot.printImageUrl ?? fresh.draftSnapshot.printImageUrl,
+    },
     costing: line.packageQuote
       ? {
           ...fresh.costing,

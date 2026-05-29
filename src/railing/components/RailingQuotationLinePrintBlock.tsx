@@ -104,7 +104,11 @@ export function RailingQuotationLinePrintBlock({
 
         <div className="quote-item-body">
           <div className="quote-item-left">
-            <QuoteMiniDiagram draft={draft} calc={line.calculation} />
+            <QuoteMiniDiagram
+              draft={draft}
+              calc={line.calculation}
+              printImageUrl={draft.printImageUrl}
+            />
             <div className="dim-box dim-box-compact">
               <p className="dim-title">Measurements</p>
               <p className="dim-lines">{line.dimensionsText}</p>

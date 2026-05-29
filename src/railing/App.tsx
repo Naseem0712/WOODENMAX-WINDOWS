@@ -7,6 +7,10 @@ import { AppHeader, type HeaderDrawer } from './components/AppHeader'
 import { BackupPanel } from './components/BackupPanel'
 import { BomTable } from './components/BomTable'
 import { CadPreview } from './components/CadPreview'
+import {
+  PrintDesignCanvasPreview,
+  PrintDesignImageUpload,
+} from './components/PrintDesignImageUpload'
 import { DesignForm } from './components/DesignForm'
 import { DrawerPanel } from './components/DrawerPanel'
 import { MaterialOrderPanel } from './components/MaterialOrderPanel'
@@ -28,6 +32,8 @@ import type { QuotationPresets } from './modePreset'
 import { loadProjectSettings, saveProjectSettings } from './projectStorage'
 import { loadSession, saveSession, saveSessionNow } from './sessionStorage'
 import type { CostingRates, DesignDraft, HardwareMode, QuotationLine, QuotationMeta } from './types'
+import { useUserMode } from '../components/UserModeProvider'
+import { DEFAULT_RATES } from './rateStorage'
 import { packageLineTotal, resolvePackageQuote } from './packagePricing'
 import { quoteLineAmount, quoteTotals, recalculateQuoteLine } from './quotationFormat'
 import { defaultMetaFields, normalizeQuotationMeta } from './metaDefaults'
@@ -115,6 +121,7 @@ function defaultMeta(): QuotationMeta {
 }
 
 export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {}) {
+  const { state: userModeState, getFlag, setFlag } = useUserMode()
   const initialSettings = useMemo(() => loadProjectSettings(), [])
   const initialSession = useMemo(() => loadSession(), [])
 
@@ -124,6 +131,22 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
     initialSettings.ratesStaircase,
   )
   const [prefsSaved, setPrefsSaved] = useState(initialSettings.savedOnce)
+
+  useEffect(() => {
+    if (userModeState.mode !== 'architect') return
+    if (getFlag('architect_railing_rates_autofill')) return
+
+    const looksBlank = (r: CostingRates) =>
+      r.glassPerSft === 0 &&
+      r.pillarPerPcs === 0 &&
+      r.studPerPcs === 0 &&
+      r.bottomRailRate === 0 &&
+      r.handrailRate === 0
+
+    setRatesNormal((p) => (looksBlank(p) ? { ...DEFAULT_RATES, ...p } : p))
+    setRatesStaircase((p) => (looksBlank(p) ? { ...DEFAULT_RATES, ...p } : p))
+    setFlag('architect_railing_rates_autofill', true)
+  }, [getFlag, setFlag, userModeState.mode])
 
   const initialDraft = useMemo(() => {
     const base = normalizeDraft(
@@ -600,13 +623,20 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
       <main className="workspace-main no-print">
         <div className="workspace-grid">
           <div className="workspace-canvas">
-            <CadPreview
-              draft={draft}
-              canUndo={canUndo}
-              canRedo={canRedo}
-              onUndo={() => undo() && showToast('Undo')}
-              onRedo={() => redo() && showToast('Redo')}
-            />
+            {draft.printImageUrl?.trim() ? (
+              <PrintDesignCanvasPreview
+                imageUrl={draft.printImageUrl}
+                title={displayDesignTitle(draft)}
+              />
+            ) : (
+              <CadPreview
+                draft={draft}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                onUndo={() => undo() && showToast('Undo')}
+                onRedo={() => redo() && showToast('Redo')}
+              />
+            )}
           </div>
           <div className="workspace-config custom-scrollbar touch-pan-y">
             <DesignForm
@@ -624,6 +654,7 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
               canRedo={canRedo}
               onUndo={() => undo() && showToast('Undo')}
               onRedo={() => redo() && showToast('Redo')}
+              onToast={showToast}
             />
           </div>
         </div>

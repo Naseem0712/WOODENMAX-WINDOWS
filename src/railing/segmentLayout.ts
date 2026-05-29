@@ -1,4 +1,6 @@
-import type { SegmentBendMode, SegmentDim } from './types'
+import type { PathStartHeading, SegmentBendMode, SegmentDim } from './types'
+
+const DEG = Math.PI / 180
 
 export interface PathSegment {
   key: string
@@ -8,7 +10,31 @@ export interface PathSegment {
   y1: number
 }
 
-const DEG = Math.PI / 180
+export function pathStartHeadingLabel(heading: PathStartHeading | undefined): string {
+  switch (heading ?? 'east') {
+    case 'north':
+      return 'Up (from bottom wall)'
+    case 'south':
+      return 'Down (from top wall)'
+    case 'west':
+      return 'Left'
+    default:
+      return 'Right (default)'
+  }
+}
+
+function initialTheta(heading: PathStartHeading | undefined): number {
+  switch (heading ?? 'east') {
+    case 'north':
+      return -90 * DEG
+    case 'south':
+      return 90 * DEG
+    case 'west':
+      return 180 * DEG
+    default:
+      return 0
+  }
+}
 
 export function bendModeLabel(mode: SegmentBendMode | undefined): string {
   switch (mode) {
@@ -81,12 +107,13 @@ export function buildSegmentPath(
   scale: number,
   originX: number,
   originY: number,
+  startHeading: PathStartHeading = 'east',
 ): PathSegment[] {
   const segs = dimensions.filter((d) => d.unit === 'mm' && d.value > 0)
   const paths: PathSegment[] = []
   let x = originX
   let y = originY
-  let theta = 0
+  let theta = initialTheta(startHeading)
   let depthFlip = 1
 
   for (let i = 0; i < segs.length; i++) {

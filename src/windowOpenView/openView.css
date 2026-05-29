@@ -1,0 +1,145 @@
+.wov-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(6px);
+}
+
+.wov-modal-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(30, 41, 59, 0.95);
+  color: #e2e8f0;
+}
+
+.wov-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.wov-preview-card {
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.9));
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.wov-preview-card.print {
+  background: #fff;
+  border-color: #e2e8f0;
+  box-shadow: none;
+}
+
+.wov-plan-wrap {
+  text-align: center;
+}
+
+.wov-plan-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 0.35rem;
+}
+
+.wov-plan-wrap.print .wov-plan-title {
+  color: #475569;
+}
+
+.wov-slider-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 520px;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.5rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+  font-size: 0.85rem;
+}
+
+.wov-slider-row input[type='range'] {
+  flex: 1;
+  min-width: 120px;
+}
+
+.wov-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: rgba(99, 102, 241, 0.25);
+  color: #c7d2fe;
+}
+
+.wov-print-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.wov-print-plan-only {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.wov-print-block-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #475569;
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.wov-print-block-subtitle {
+  font-size: 0.65rem;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+}
+
+.wov-dual-view {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.wov-plan-wrap.print p {
+  display: none;
+}
+
+@media print {
+  .wov-modal-backdrop {
+    position: static;
+    background: transparent;
+    backdrop-filter: none;
+  }
+}

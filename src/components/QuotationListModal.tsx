@@ -28,6 +28,7 @@ import { migrateBackup, parseBackupJson } from '../railing/backup';
 import { displayDesignTitle as railingDisplayTitle } from '../railing/utils';
 import { isWindowQuotationItem } from '../utils/quotationItemKinds';
 import { getWindowQuotationAreaMm2 } from '../utils/louverBays';
+
 interface QuotationListModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -84,6 +85,10 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
   onSelectedLineIdsChange,
   onEditCorrection,
 }) => {
+  const openPrintPreview = () => {
+    onTogglePreview(true);
+    setIsPreviewOpen(true);
+  };
   const companyLogoInputRef = useRef<HTMLInputElement>(null);
   const importQuotationInputRef = useRef<HTMLInputElement>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -234,11 +239,6 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
     },
     [maxDiscountAmount, subTotal]
   );
-
-  const openPrintPreview = () => {
-    onTogglePreview(true);
-    setIsPreviewOpen(true);
-  };
 
   if (!isOpen) return null;
 
@@ -420,6 +420,14 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                         ...settings.materialRates.glassPerSqFt.clear,
                         ...data.settings.materialRates?.glassPerSqFt?.clear,
                       },
+                      tinted: {
+                        ...(settings.materialRates.glassPerSqFt as any).tinted,
+                        ...(data.settings.materialRates?.glassPerSqFt as any)?.tinted,
+                      },
+                      reflective: {
+                        ...(settings.materialRates.glassPerSqFt as any).reflective,
+                        ...(data.settings.materialRates?.glassPerSqFt as any)?.reflective,
+                      },
                       laminated: {
                         ...settings.materialRates.glassPerSqFt.laminated,
                         ...data.settings.materialRates?.glassPerSqFt?.laminated,
@@ -427,6 +435,10 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                       dgu: {
                         ...settings.materialRates.glassPerSqFt.dgu,
                         ...data.settings.materialRates?.glassPerSqFt?.dgu,
+                      },
+                      extras: {
+                        ...(settings.materialRates.glassPerSqFt as any).extras,
+                        ...(data.settings.materialRates?.glassPerSqFt as any)?.extras,
                       },
                     },
                   },
@@ -631,7 +643,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
 
   return (
     <div 
-        className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"
+        className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4"
         onClick={onClose}
         aria-modal="true"
         role="dialog"

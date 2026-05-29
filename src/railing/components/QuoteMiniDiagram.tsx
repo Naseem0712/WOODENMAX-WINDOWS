@@ -118,10 +118,23 @@ function drawMiteredRun(
 export function QuoteMiniDiagram({
   draft,
   calc,
+  printImageUrl,
 }: {
   draft: DesignDraft
   calc: DesignCalculation
+  /** When set, replaces the CAD schematic on quotation print/PDF. */
+  printImageUrl?: string
 }) {
+  if (printImageUrl?.trim()) {
+    return (
+      <img
+        src={printImageUrl}
+        alt={draft.designName?.trim() || 'Railing design'}
+        className="quote-mini-svg quote-mini-img"
+      />
+    )
+  }
+
   const totalLen = calc.perimeterRunMm || 1
   const maxLeg = Math.max(
     ...draft.dimensions.filter((d) => d.unit === 'mm').map((d) => d.value),

@@ -3871,6 +3871,121 @@ body.quotation-capture-active .quotation-print-root.quotation-print-capture {
   overflow: visible;
 }
 
+.quote-mini-img {
+  object-fit: contain;
+  background: #fafafa;
+  overflow: hidden;
+}
+
+.custom-template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.custom-template-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  text-align: left;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.6);
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.custom-template-card:hover {
+  border-color: #6366f1;
+  background: rgba(49, 46, 129, 0.35);
+}
+
+.custom-template-card strong {
+  font-size: 0.82rem;
+}
+
+.custom-template-card small {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  line-height: 1.25;
+}
+
+.print-design-upload {
+  margin: 10px 0 14px;
+  padding: 10px 12px;
+  border: 1px dashed #475569;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.print-design-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.print-design-upload-btn {
+  font-size: 0.85rem;
+}
+
+.print-design-clear-btn {
+  font-size: 0.82rem;
+}
+
+.print-design-upload-thumb-wrap {
+  position: relative;
+  margin-top: 10px;
+  max-width: 220px;
+}
+
+.print-design-upload-thumb {
+  display: block;
+  width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #0f172a;
+}
+
+.print-design-upload-badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #e0e7ff;
+  background: rgba(79, 70, 229, 0.85);
+}
+
+.print-design-canvas-preview .print-design-canvas-viewport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 360px;
+  background: #0f172a;
+}
+
+.print-design-canvas-img {
+  max-width: 100%;
+  max-height: min(70vh, 520px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.print-design-canvas-toolbar {
+  justify-content: center;
+}
+
 .dim-box {
   font-size: 7.5pt;
   color: #334155;
