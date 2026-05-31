@@ -29,7 +29,7 @@ import { getElevationDimensionsMm, type ElevationSegment } from '../utils/elevat
 import { getQuotationHardwareUnitMultiplier } from '../utils/quotationHardwareCost';
 import { resolveFoldFrameEdges } from '../utils/foldDoorFrame';
 import { FoldDoorOpeningGraphic } from './FoldDoorOpeningVisual';
-import { autoContinueTermsSerial, normalizeWebsiteUrl } from '../utils/quotationText';
+import { normalizeWebsiteUrl, parseInlineBoldSegments, boldSegmentInner, isDoubleBoldSegment, isSingleBoldSegment, splitQuotationLines } from '../utils/quotationText';
 import { calculateMaterialCostSummary, formatItemWeightKg } from '../utils/materialCosting';
 import { getRawDiscountAmount } from '../utils/pricingSafety';
 import { DEFAULT_MATERIAL_RATES } from '../constants/materialRates';
@@ -1298,39 +1298,28 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
 
 
 function renderInlineBold(text: string): React.ReactNode[] {
-    const parts = text.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g);
-    return parts.filter(Boolean).map((part, index) => {
-        if (/^\*\*[^*\n]+\*\*$/.test(part)) {
-            return <strong key={`${part}-${index}`}>{part.slice(2, -2)}</strong>;
-        }
-        if (/^\*[^*\n]+\*$/.test(part)) {
-            return <strong key={`${part}-${index}`}>{part.slice(1, -1)}</strong>;
+    return parseInlineBoldSegments(text).map((part, index) => {
+        if (isDoubleBoldSegment(part) || isSingleBoldSegment(part)) {
+            return <strong key={`${part}-${index}`}>{boldSegmentInner(part)}</strong>;
         }
         return <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>;
     });
 }
 
-function renderFormattedMultiline(value: string, serialAuto: boolean): React.ReactNode {
-    const source = serialAuto ? autoContinueTermsSerial(value) : value;
-    const lines = source.split('\n');
+function renderFormattedMultiline(value: string): React.ReactNode {
+    const lines = splitQuotationLines(value);
     return (
         <>
-            {lines.map((line, index) => {
-                const serialMatch = serialAuto ? line.match(/^\s*((?:[A-Za-z]+|\d+)[.)])\s+(.+)$/) : null;
-                if (serialMatch) {
-                    return (
-                        <p key={`${line}-${index}`} className="whitespace-pre-wrap">
-                            <strong>{serialMatch[1]}</strong>{' '}{renderInlineBold(serialMatch[2])}
-                        </p>
-                    );
-                }
-                return <p key={`${line}-${index}`} className="whitespace-pre-wrap">{renderInlineBold(line)}</p>;
-            })}
+            {lines.map((line, index) => (
+                <p key={`line-${index}`} className="whitespace-pre-wrap">
+                    {line === '' ? '\u00A0' : renderInlineBold(line)}
+                </p>
+            ))}
         </>
     );
 }
 
-const EditableSection: React.FC<{title: string, value: string, onChange: (value: string) => void; serialAuto?: boolean}> = ({ title, value, onChange, serialAuto = false }) => {
+const EditableSection: React.FC<{title: string, value: string, onChange: (value: string) => void}> = ({ title, value, onChange }) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const id = useMemo(() => `editable-section-${title.toLowerCase().replace(/[\s&]+/g, '-').replace(/[^a-z0-9-]/g, 'x')}`, [title]);
     const [isEditing, setIsEditing] = useState(false);
@@ -1351,10 +1340,9 @@ const EditableSection: React.FC<{title: string, value: string, onChange: (value:
                     id={id}
                     name={id}
                     value={value}
-                    onChange={e => onChange(serialAuto ? autoContinueTermsSerial(e.target.value) : e.target.value)}
+                    onChange={e => onChange(e.target.value)}
                     onBlur={() => setIsEditing(false)}
                     className="w-full text-xs whitespace-pre-wrap bg-transparent border-gray-300 rounded-md p-1 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 print-editable"
-                    rows={1}
                     style={{overflow: 'hidden'}}
                     aria-labelledby={id}
                     autoFocus
@@ -1372,7 +1360,7 @@ const EditableSection: React.FC<{title: string, value: string, onChange: (value:
                         }
                     }}
                 >
-                    {renderFormattedMultiline(value, serialAuto)}
+                    {renderFormattedMultiline(value)}
                 </div>
             )}
         </div>
@@ -1681,13 +1669,15 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
 
   const handlePrint = async () => {
     if (isExporting || isPrinting) return;
-    if (isLikelyMobile || typeof window.print !== 'function') {
+    if (typeof window.print !== 'function') {
       await handleExportPdf();
       return;
     }
     const prevTitle = document.title;
     document.title = printDocumentTitleForQuotation(customer.name);
     setIsPrinting(true);
+    printContainerRef.current?.scrollTo(0, 0);
+    window.scrollTo(0, 0);
     let finished = false;
     const finish = () => {
       if (finished) return;
@@ -1705,7 +1695,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
       } catch (err) {
         console.error('Print dialog failed', err);
         finish();
-        alert('Print dialog open nahi ho paaya. Please use Export PDF.');
+        void handleExportPdf();
       }
     });
   };
@@ -1734,7 +1724,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                     {isExporting ? 'Exporting...' : <><DownloadIcon className="w-5 h-5 mr-2"/> Export PDF</>}
                 </Button>
                 <Button onClick={handlePrint} disabled={isExporting || isPrinting}>
-                  <PrinterIcon className="w-5 h-5 mr-2"/> {isPrinting ? 'Printing...' : isLikelyMobile ? 'Download/Print PDF' : 'Print'}
+                  <PrinterIcon className="w-5 h-5 mr-2"/> {isPrinting ? 'Printing...' : 'Print'}
                 </Button>
                 <Button onClick={onClose} variant="secondary"><XMarkIcon className="w-5 h-5 mr-2"/> Close</Button>
             </div>
@@ -2026,7 +2016,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         
                         <EditableSection title="Description" value={settings.description} onChange={(val) => setSettings({...settings, description: val})} />
                         <div className="hide-for-arch">
-                            <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} serialAuto />
+                            <EditableSection title="Terms & Conditions" value={settings.terms} onChange={(val) => setSettings({...settings, terms: val})} />
                         </div>
                         
                         <div className="flex justify-between items-start mt-12 pt-4 border-t-2 border-gray-400 text-xs hide-for-arch" style={{breakBefore: 'avoid'}}>

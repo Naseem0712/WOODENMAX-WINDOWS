@@ -19,7 +19,6 @@ import { PencilIcon } from './icons/PencilIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { sanitizeFilenameSegment } from '../utils/pdfFilename';
-import { autoContinueTermsSerial } from '../utils/quotationText';
 import { getRawDiscountAmount } from '../utils/pricingSafety';
 import { SpringScrollArea } from './ui/SpringScrollArea';
 import { quotationItemSubtotalContribution } from '../utils/quotationTotals';
@@ -52,10 +51,10 @@ const Section: React.FC<{title: string, children: React.ReactNode, className?: s
     </div>
 );
 
-const TextArea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & {label: string}> = ({id, label, ...props}) => (
+const TextArea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & {label: string}> = ({id, label, className, ...props}) => (
     <div>
       <label htmlFor={id} className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
-      <textarea id={id} name={id} {...props} className="w-full h-24 px-3 py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-scrollbar" />
+      <textarea id={id} name={id} {...props} className={`w-full min-h-[6rem] px-3 py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-scrollbar whitespace-pre-wrap ${className ?? ''}`} />
     </div>
 );
 
@@ -922,8 +921,8 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                   <Section title="Details & Terms">
                       <TextArea id="modal-quotation-description" name="modal-quotation-description" label="Description" value={settings.description} onChange={e => setSettings({...settings, description: e.target.value})} maxLength={1500} />
                       <p className="text-[11px] text-slate-400 -mt-2">Use **text** or *text* to make text bold in preview/print.</p>
-                      <TextArea id="modal-quotation-terms" name="modal-quotation-terms" label="Terms & Conditions" value={settings.terms} onChange={e => setSettings({...settings, terms: autoContinueTermsSerial(e.target.value)})} />
-                      <p className="text-[11px] text-slate-400 -mt-2">Use **bold** text and start first line with `a`/`1`; next lines auto-continue serials.</p>
+                      <TextArea id="modal-quotation-terms" name="modal-quotation-terms" label="Terms & Conditions" value={settings.terms} onChange={e => setSettings({...settings, terms: e.target.value})} className="min-h-[12rem]" />
+                      <p className="text-[11px] text-slate-400 -mt-2">Enter as plain text: new lines and spaces stay as typed. Use *bold* or **bold** for bold in print/preview. Number points yourself (1., 2., …).</p>
                   </Section>
                   <Section title="Bank & Signature">
                       <div className="grid grid-cols-2 gap-4">
