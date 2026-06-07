@@ -662,7 +662,6 @@ const SlidingShutter: React.FC<{
     const rPx = mmToPx(rightProfile, scale);
     const bPx = mmToPx(bottomProfile, scale);
     const shutterColor = config.profileColor.startsWith('#') ? adjustHexColor(config.profileColor, 0.08) : config.profileColor;
-    const outline = config.profileColor.startsWith('#') ? adjustHexColor(config.profileColor, -0.28) : '#0f172a';
     const leftButt = (interlockMm > 0 && leftProfile === interlockMm) || (meetingMm > 0 && leftProfile === meetingMm);
     const rightButt = (interlockMm > 0 && rightProfile === interlockMm) || (meetingMm > 0 && rightProfile === meetingMm);
 
@@ -677,13 +676,6 @@ const SlidingShutter: React.FC<{
             height: hPx,
           }}
         >
-             <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  boxShadow: `inset 0 0 0 2px ${outline}, inset 0 0 0 1px rgba(255,255,255,0.08)`,
-                  opacity: isMesh ? 0.95 : 1,
-                }}
-             />
              <MiteredFrame 
                 width={width + 2 * bleed}
                 height={height + 2 * bleed}
@@ -743,22 +735,6 @@ const SlidingShutter: React.FC<{
               >
                 {isMesh ? 'Mesh' : 'Glass'} {cadLabel ? `· ${cadLabel}` : ''}
               </div>
-              {laneLabel ? (
-                <div
-                  style={{
-                    padding: '2px 6px',
-                    borderRadius: 999,
-                    background: 'rgba(2,6,23,0.55)',
-                    border: '1px dashed rgba(148,163,184,0.45)',
-                    color: '#cbd5e1',
-                    fontSize: 10,
-                    fontWeight: 700,
-                    width: 'fit-content',
-                  }}
-                >
-                  {laneLabel}
-                </div>
-              ) : null}
             </div>
             <div
                 className="absolute overflow-hidden"
@@ -1411,7 +1387,6 @@ const createWindowElements = (
                                     isMesh={p.type === 'mesh'}
                                     isFixed={fixedShutters[p.id]} isSliding={!fixedShutters[p.id]}
                                     cadLabel={`S${p.id + 1}`}
-                                    laneLabel={p.z >= 15 ? 'Track 3 (inner)' : p.z >= 10 ? 'Track 2 (mid)' : 'Track 1 (outer)'}
                                     zLayer={p.z}
                                     bleedMm={bleedMm}
                                     interlockMm={interlock}
@@ -1474,7 +1449,6 @@ const createWindowElements = (
                           isFixed={fixedShutters[i]}
                           isSliding={!fixedShutters[i]}
                           cadLabel={`S${i + 1}`}
-                          laneLabel={(i === 1 || i === 2) ? 'Track 2 (front)' : 'Track 1 (back)'}
                           zLayer={(i === 1 || i === 2) ? 10 : 5}
                           bleedMm={bleedMm}
                           interlockMm={interlock}
@@ -1523,7 +1497,6 @@ const createWindowElements = (
                         const z = hasMesh
                           ? (isMeshShutter ? 15 : (i === 1 ? 10 : 5))
                           : (numShutters === 2 ? (i === 1 ? 10 : 5) : (i === 1 ? 10 : 5));
-                        const laneLabel = z >= 15 ? 'Track 3 (inner)' : z >= 10 ? 'Track 2 (front)' : 'Track 1 (back)';
                         return (
                           <div key={i} className="absolute" style={{ left: mmToPx(leftPosition, scale), top: 0, zIndex: z }}>
                             <SlidingShutter
@@ -1540,7 +1513,6 @@ const createWindowElements = (
                               isFixed={fixedShutters[i]}
                               isSliding={!fixedShutters[i]}
                               cadLabel={`S${i + 1}`}
-                              laneLabel={laneLabel}
                               zLayer={z}
                               bleedMm={bleedMm}
                               interlockMm={interlock}

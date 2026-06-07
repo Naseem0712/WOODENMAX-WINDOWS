@@ -3,9 +3,9 @@ import React from 'react';
 export type ProfileJointVariant = 'canvas' | 'print';
 
 const jointStroke = (variant: ProfileJointVariant) =>
-  variant === 'print' ? 'rgba(15,23,42,0.42)' : 'rgba(15,23,42,0.38)';
+  variant === 'print' ? 'rgba(15,23,42,0.55)' : 'rgba(15,23,42,0.48)';
 
-const jointWidth = (variant: ProfileJointVariant) => (variant === 'print' ? 0.65 : 0.85);
+const jointWidth = (variant: ProfileJointVariant) => (variant === 'print' ? 0.7 : 1);
 
 type MiterProps = {
   widthPx: number;
@@ -17,7 +17,10 @@ type MiterProps = {
   variant?: ProfileJointVariant;
 };
 
-/** 45° miter seam lines at frame / shutter corners. */
+/**
+ * 45° miter cut seam at each corner — diagonal through the profile thickness square
+ * (outer corner → inner miter point), matching real frame fabrication.
+ */
 export const MiterJointLines: React.FC<MiterProps> = ({
   widthPx,
   heightPx,
@@ -33,7 +36,7 @@ export const MiterJointLines: React.FC<MiterProps> = ({
   const b = Math.max(0, bottomPx);
   const l = Math.max(0, leftPx);
   const r = Math.max(0, rightPx);
-  if (w <= 0 || h <= 0) return null;
+  if (w <= 0 || h <= 0 || (t <= 0 && b <= 0 && l <= 0 && r <= 0)) return null;
 
   const stroke = jointStroke(variant);
   const sw = jointWidth(variant);
@@ -47,14 +50,18 @@ export const MiterJointLines: React.FC<MiterProps> = ({
       aria-hidden
       style={{ zIndex: 20 }}
     >
-      {/* Top-left 45° */}
-      <line x1={0} y1={t} x2={l} y2={0} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
-      {/* Top-right 45° */}
-      <line x1={w - r} y1={0} x2={w} y2={t} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
-      {/* Bottom-left 45° */}
-      <line x1={0} y1={h - b} x2={l} y2={h} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
-      {/* Bottom-right 45° */}
-      <line x1={w - r} y1={h} x2={w} y2={h - b} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+      {t > 0 && l > 0 ? (
+        <line x1={0} y1={0} x2={l} y2={t} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+      ) : null}
+      {t > 0 && r > 0 ? (
+        <line x1={w} y1={0} x2={w - r} y2={t} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+      ) : null}
+      {b > 0 && l > 0 ? (
+        <line x1={0} y1={h} x2={l} y2={h - b} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+      ) : null}
+      {b > 0 && r > 0 ? (
+        <line x1={w} y1={h} x2={w - r} y2={h - b} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+      ) : null}
     </svg>
   );
 };
@@ -69,7 +76,10 @@ type ButtProps = {
   variant?: ProfileJointVariant;
 };
 
-/** 90° butt-joint outline on interlock / meeting stile. */
+/**
+ * 90° butt joints on interlock / meeting stile — vertical meeting seam plus
+ * horizontal T-joints where stile meets head and sill (not 45°).
+ */
 export const InterlockButtJointLines: React.FC<ButtProps> = ({
   widthPx,
   heightPx,
@@ -88,10 +98,12 @@ export const InterlockButtJointLines: React.FC<ButtProps> = ({
 
   const y1 = t;
   const y2 = h - b;
+  if (y2 <= y1) return null;
+
   const stroke = jointStroke(variant);
   const sw = jointWidth(variant);
 
-  const xOuter = side === 'left' ? 0 : w;
+  const xMeet = side === 'left' ? 0 : w;
   const xInner = side === 'left' ? s : w - s;
 
   return (
@@ -103,10 +115,66 @@ export const InterlockButtJointLines: React.FC<ButtProps> = ({
       aria-hidden
       style={{ zIndex: 21 }}
     >
-      <line x1={xOuter} y1={y1} x2={xOuter} y2={y2} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
-      <line x1={xInner} y1={y1} x2={xInner} y2={y2} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
-      <line x1={xOuter} y1={y1} x2={xInner} y2={y1} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
-      <line x1={xOuter} y1={y2} x2={xInner} y2={y2} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+      {/* Vertical meeting seam (90° butt) */}
+      <line x1={xMeet} y1={y1} x2={xMeet} y2={y2} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+      <line x1={xInner} y1={y1} x2={xInner} y2={y2} stroke={stroke} strokeWidth={sw * 0.85} vectorEffect="non-scaling-stroke" opacity={0.75} />
+      {/* 90° T-joints at head / sill */}
+      <line x1={xMeet} y1={y1} x2={xInner} y2={y1} stroke={stroke} strokeWidth={sw * 0.9} vectorEffect="non-scaling-stroke" />
+      <line x1={xMeet} y1={y2} x2={xInner} y2={y2} stroke={stroke} strokeWidth={sw * 0.9} vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+};
+
+type MullionProps = {
+  widthPx: number;
+  heightPx: number;
+  orientation: 'horizontal' | 'vertical';
+  variant?: ProfileJointVariant;
+};
+
+/** 90° outline on grid mullion (visible between casement doors). */
+export const MullionJointLines: React.FC<MullionProps> = ({
+  widthPx,
+  heightPx,
+  orientation,
+  variant = 'canvas',
+}) => {
+  const w = Math.max(0, widthPx);
+  const h = Math.max(0, heightPx);
+  if (w <= 0 || h <= 0) return null;
+
+  const stroke = jointStroke(variant);
+  const sw = jointWidth(variant);
+
+  if (orientation === 'vertical') {
+    return (
+      <svg
+        className="pointer-events-none absolute left-0 top-0"
+        width={w}
+        height={h}
+        viewBox={`0 0 ${w} ${h}`}
+        aria-hidden
+        style={{ zIndex: 22 }}
+      >
+        <line x1={0} y1={0} x2={0} y2={h} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+        <line x1={w} y1={0} x2={w} y2={h} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+        <line x1={0} y1={0} x2={w} y2={0} stroke={stroke} strokeWidth={sw * 0.85} vectorEffect="non-scaling-stroke" opacity={0.7} />
+        <line x1={0} y1={h} x2={w} y2={h} stroke={stroke} strokeWidth={sw * 0.85} vectorEffect="non-scaling-stroke" opacity={0.7} />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      className="pointer-events-none absolute left-0 top-0"
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      aria-hidden
+      style={{ zIndex: 22 }}
+    >
+      <line x1={0} y1={0} x2={w} y2={0} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+      <line x1={0} y1={h} x2={w} y2={h} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
     </svg>
   );
 };

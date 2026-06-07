@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { TrashIcon } from '../icons/TrashIcon';
-import { mullionEdgeStyle } from '../profile/ProfileJointLines';
+import { mullionEdgeStyle, MullionJointLines } from '../profile/ProfileJointLines';
 import { PROFILE_TEXTURE_TILE, profileTexturePosition } from '../../utils/profileTexture';
 
 type Props = {
@@ -100,6 +100,7 @@ export const GridMullionHandle: React.FC<Props> = ({
       onPointerDown={onPointerDown}
     >
       <div className="absolute inset-0" style={{ ...tileStyle, ...mullionEdgeStyle('canvas') }} />
+      <MullionJointLines widthPx={widthPx} heightPx={heightPx} orientation={orientation} />
       <div className="pointer-events-none absolute inset-0 bg-indigo-500/0 group-hover:bg-indigo-500/20 transition-colors" />
       <span
         className="pointer-events-none absolute left-1/2 top-1/2 z-[2] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-slate-900/90 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-cyan-100"

@@ -41,7 +41,7 @@ import { OpenViewPrintBlock } from '../windowOpenView/OpenViewPrintBlock';
 import { getOpenViewPrintConfigs } from '../windowOpenView/supportsOpenView';
 import { ArchHeadLayer } from './casement/ArchHeadLayer';
 import { OpeningShapedFrame } from './casement/OpeningShapedFrame';
-import { InterlockButtJointLines, MiterJointLines, mullionEdgeStyle } from './profile/ProfileJointLines';
+import { InterlockButtJointLines, MiterJointLines, MullionJointLines, mullionEdgeStyle } from './profile/ProfileJointLines';
 import { archSpringYMmForOpening, isArchTopOutline } from '../utils/casementOutlineGeometry';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
@@ -1175,8 +1175,29 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                             }
                         }
 
-                        effectiveHDivs.forEach((pos) => elements.push(<PrintProfilePiece key={`hmullion-${pos}`} color={profileColor} texture={pt} style={{ left: 0, top: (pos * innerAreaHeight - dims.mullion / 2) * scale, width: innerAreaWidth * scale, height: dims.mullion * scale, zIndex: 10, ...mullionEdgeStyle('print') }}/>));
-                        verticalDividers.forEach((pos) => elements.push(<PrintProfilePiece key={`vmullion-${pos}`} color={profileColor} texture={pt} style={{ top: archTop ? archSpringYmm * scale : 0, left: (pos * innerAreaWidth - dims.mullion / 2) * scale, width: dims.mullion * scale, height: mullionSpanH * scale, zIndex: 10, ...mullionEdgeStyle('print') }}/>));
+                        effectiveHDivs.forEach((pos) => {
+                          const mTop = (pos * innerAreaHeight - dims.mullion / 2) * scale;
+                          const mW = innerAreaWidth * scale;
+                          const mH = dims.mullion * scale;
+                          elements.push(
+                            <div key={`hmullion-${pos}`} className="absolute" style={{ left: 0, top: mTop, width: mW, height: mH, zIndex: 10 }}>
+                              <PrintProfilePiece color={profileColor} texture={pt} style={{ left: 0, top: 0, width: '100%', height: '100%', ...mullionEdgeStyle('print') }} />
+                              <MullionJointLines widthPx={mW} heightPx={mH} orientation="horizontal" variant="print" />
+                            </div>,
+                          );
+                        });
+                        verticalDividers.forEach((pos) => {
+                          const mLeft = (pos * innerAreaWidth - dims.mullion / 2) * scale;
+                          const mW = dims.mullion * scale;
+                          const mH = mullionSpanH * scale;
+                          const mTop = archTop ? archSpringYmm * scale : 0;
+                          elements.push(
+                            <div key={`vmullion-${pos}`} className="absolute" style={{ left: mLeft, top: mTop, width: mW, height: mH, zIndex: 10 }}>
+                              <PrintProfilePiece color={profileColor} texture={pt} style={{ left: 0, top: 0, width: '100%', height: '100%', ...mullionEdgeStyle('print') }} />
+                              <MullionJointLines widthPx={mW} heightPx={mH} orientation="vertical" variant="print" />
+                            </div>,
+                          );
+                        });
                         return elements;
                     })()}
 
