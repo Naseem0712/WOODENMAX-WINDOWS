@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { TrashIcon } from '../icons/TrashIcon';
+import { mullionEdgeStyle } from '../profile/ProfileJointLines';
 import { PROFILE_TEXTURE_TILE, profileTexturePosition } from '../../utils/profileTexture';
 
 type Props = {
