@@ -33,6 +33,7 @@ import { openingInnerClipStyle } from './casement/CasementOutlineOverlay';
 import { OpeningShapedFrame } from './casement/OpeningShapedFrame';
 import { ArchHeadLayer } from './casement/ArchHeadLayer';
 import { GridMullionHandle } from './casement/GridMullionHandle';
+import { InterlockButtJointLines, MiterJointLines, mullionEdgeStyle } from './profile/ProfileJointLines';
 import {
   resolveHiddenMullionSegments,
   resolveCasementMergedCells,
@@ -540,6 +541,7 @@ const MiteredFrame: React.FC<{
                         clipPath: clipRight,
                     }}
                 />
+                <MiterJointLines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} />
             </div>
         );
     }
@@ -576,29 +578,32 @@ const MiteredFrame: React.FC<{
                 <div style={{ ...texOverlay, backgroundPosition: posLeft, top: 0, left: 0, width: clipLs, height: '100%', zIndex: 4, clipPath: clipLeft }} />
                 <div style={{ ...solidBase, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 2, clipPath: clipRight }} />
                 <div style={{ ...texOverlay, backgroundPosition: posRight, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 4, clipPath: clipRight }} />
+                <MiterJointLines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} />
             </div>
         );
     }
 
     // Solid: CSS borders give clean 45° mitred corners at joints (border-radius 0).
     return (
-        <div
-            style={{
-                position: 'absolute',
-                width: wPx,
-                height: hPx,
-                boxSizing: 'border-box',
-                borderStyle: 'solid',
-                borderColor: baseHex,
-                borderRadius: 0,
-                borderTopWidth: ts,
-                borderBottomWidth: bs,
-                borderLeftWidth: ls,
-                borderRightWidth: rs,
-                backgroundColor: 'transparent',
-                boxShadow: 'inset 0 2px 5px rgba(255,255,255,0.12), inset 0 -3px 8px rgba(0,0,0,0.15)',
-            }}
-        />
+        <div className="absolute" style={{ width: wPx, height: hPx, borderRadius: 0 }}>
+            <div
+                style={{
+                    position: 'absolute',
+                    inset: 0,
+                    boxSizing: 'border-box',
+                    borderStyle: 'solid',
+                    borderColor: baseHex,
+                    borderRadius: 0,
+                    borderTopWidth: ts,
+                    borderBottomWidth: bs,
+                    borderLeftWidth: ls,
+                    borderRightWidth: rs,
+                    backgroundColor: 'transparent',
+                    boxShadow: 'inset 0 2px 5px rgba(255,255,255,0.12), inset 0 -3px 8px rgba(0,0,0,0.15)',
+                }}
+            />
+            <MiterJointLines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} />
+        </div>
     );
 });
 
@@ -620,6 +625,8 @@ const SlidingShutter: React.FC<{
     zLayer?: number;
     /** Visual-only overlap so shutters sit “into” frame/mullions. */
     bleedMm?: number;
+    interlockMm?: number;
+    meetingMm?: number;
     placementPickActive?: boolean;
     onPickPlacement?: () => void;
 }> = React.memo(({
@@ -639,6 +646,8 @@ const SlidingShutter: React.FC<{
     laneLabel,
     zLayer: _zLayer,
     bleedMm = 0,
+    interlockMm = 0,
+    meetingMm = 0,
     placementPickActive = false,
     onPickPlacement,
 }) => {
@@ -654,6 +663,8 @@ const SlidingShutter: React.FC<{
     const bPx = mmToPx(bottomProfile, scale);
     const shutterColor = config.profileColor.startsWith('#') ? adjustHexColor(config.profileColor, 0.08) : config.profileColor;
     const outline = config.profileColor.startsWith('#') ? adjustHexColor(config.profileColor, -0.28) : '#0f172a';
+    const leftButt = (interlockMm > 0 && leftProfile === interlockMm) || (meetingMm > 0 && leftProfile === meetingMm);
+    const rightButt = (interlockMm > 0 && rightProfile === interlockMm) || (meetingMm > 0 && rightProfile === meetingMm);
 
     return (
         <div
@@ -684,6 +695,26 @@ const SlidingShutter: React.FC<{
                 color={shutterColor}
                 texture={profileOverlayTexture(config)}
              />
+             {leftButt ? (
+               <InterlockButtJointLines
+                 widthPx={wPx}
+                 heightPx={hPx}
+                 topPx={tPx}
+                 bottomPx={bPx}
+                 sidePx={lPx}
+                 side="left"
+               />
+             ) : null}
+             {rightButt ? (
+               <InterlockButtJointLines
+                 widthPx={wPx}
+                 heightPx={hPx}
+                 topPx={tPx}
+                 bottomPx={bPx}
+                 sidePx={rPx}
+                 side="right"
+               />
+             ) : null}
             <div
               className="absolute pointer-events-none"
               style={{
@@ -1383,6 +1414,8 @@ const createWindowElements = (
                                     laneLabel={p.z >= 15 ? 'Track 3 (inner)' : p.z >= 10 ? 'Track 2 (mid)' : 'Track 1 (outer)'}
                                     zLayer={p.z}
                                     bleedMm={bleedMm}
+                                    interlockMm={interlock}
+                                    meetingMm={meeting}
                                     placementPickActive={placementPickActive}
                                     onPickPlacement={() => pickPlacement(panelId, frameMetrics)}
                                 />
@@ -1444,6 +1477,8 @@ const createWindowElements = (
                           laneLabel={(i === 1 || i === 2) ? 'Track 2 (front)' : 'Track 1 (back)'}
                           zLayer={(i === 1 || i === 2) ? 10 : 5}
                           bleedMm={bleedMm}
+                          interlockMm={interlock}
+                          meetingMm={meeting}
                           placementPickActive={placementPickActive}
                           onPickPlacement={() => pickPlacement(panelId, frameMetrics)}
                         />
@@ -1508,6 +1543,8 @@ const createWindowElements = (
                               laneLabel={laneLabel}
                               zLayer={z}
                               bleedMm={bleedMm}
+                              interlockMm={interlock}
+                              meetingMm={meeting}
                               placementPickActive={placementPickActive}
                               onPickPlacement={() => pickPlacement(panelId, frameMetrics)}
                             />

@@ -51,6 +51,23 @@ export function getOpenViewPrintConfigs(config: WindowConfig | null | undefined)
   return supportsOpenView(config) ? [config] : [];
 }
 
+export function planKindShortLabel(kind: string): string {
+  switch (kind) {
+    case 'sliding':
+    case 'partition_sliding':
+      return 'sliding';
+    case 'partition_fold':
+      return 'bi-fold';
+    case 'casement':
+    case 'ventilator':
+      return 'casement';
+    case 'partition_hinged':
+      return 'hinged';
+    default:
+      return 'open view';
+  }
+}
+
 export function openViewKindLabel(kind: string): string {
   switch (kind) {
     case 'sliding':

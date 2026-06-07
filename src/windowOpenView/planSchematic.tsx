@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import type { OpenViewSpec, OpenViewVariant } from './types';
+import { planKindShortLabel } from './supportsOpenView';
 import {
   buildSlidingPlanSegments,
   slidingLaneYOffset,
@@ -50,12 +51,14 @@ export const PlanSchematic: React.FC<Props> = ({
     sy: trackY + y * scale * 0.55,
   });
 
+  const kindLabel = planKindShortLabel(spec.kind);
+
   return (
     <div className={`wov-plan-wrap ${variant}`}>
       <div className="wov-plan-title">
         {isPrint
-          ? `Plan — fold / swing · ${pct}% · ${swingNote}`
-          : `Plan view — fold / swing direction · ${pct}% · ${swingNote}`}
+          ? `Plan — ${kindLabel} · ${pct}% · ${swingNote}`
+          : `Plan view — ${kindLabel} · ${pct}% · ${swingNote}`}
       </div>
       <svg
         width={widthPx}

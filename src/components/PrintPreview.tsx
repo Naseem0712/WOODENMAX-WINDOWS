@@ -41,6 +41,7 @@ import { OpenViewPrintBlock } from '../windowOpenView/OpenViewPrintBlock';
 import { getOpenViewPrintConfigs } from '../windowOpenView/supportsOpenView';
 import { ArchHeadLayer } from './casement/ArchHeadLayer';
 import { OpeningShapedFrame } from './casement/OpeningShapedFrame';
+import { InterlockButtJointLines, MiterJointLines, mullionEdgeStyle } from './profile/ProfileJointLines';
 import { archSpringYMmForOpening, isArchTopOutline } from '../utils/casementOutlineGeometry';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
@@ -332,6 +333,7 @@ const PrintableMiteredFrame: React.FC<{
                 <div style={{ ...baseDivStyle, ...tileBase, backgroundPosition: posBottom, bottom: 0, left: 0, width: '100%', height: clipBs, zIndex: 1, clipPath: clipBottom }} />
                 <div style={{ ...baseDivStyle, ...tileBase, backgroundPosition: posLeft, top: 0, left: 0, width: clipLs, height: '100%', zIndex: 2, clipPath: clipLeft }} />
                 <div style={{ ...baseDivStyle, ...tileBase, backgroundPosition: posRight, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 2, clipPath: clipRight }} />
+                <MiterJointLines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} variant="print" />
             </div>
         );
     }
@@ -368,27 +370,30 @@ const PrintableMiteredFrame: React.FC<{
                 <div style={{ ...texOverlay, backgroundPosition: posLeft, top: 0, left: 0, width: clipLs, height: '100%', zIndex: 4, clipPath: clipLeft }} />
                 <div style={{ ...solidBase, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 2, clipPath: clipRight }} />
                 <div style={{ ...texOverlay, backgroundPosition: posRight, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 4, clipPath: clipRight }} />
+                <MiterJointLines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} variant="print" />
             </div>
         );
     }
 
     return (
-        <div
-            style={{
-                position: 'absolute',
-                width: wPx,
-                height: hPx,
-                boxSizing: 'border-box',
-                borderStyle: 'solid',
-                borderColor: baseHex,
-                borderRadius: 0,
-                borderTopWidth: ts,
-                borderBottomWidth: bs,
-                borderLeftWidth: ls,
-                borderRightWidth: rs,
-                backgroundColor: 'transparent',
-            }}
-        />
+        <div className="absolute" style={{ width: wPx, height: hPx, borderRadius: 0 }}>
+            <div
+                style={{
+                    position: 'absolute',
+                    inset: 0,
+                    boxSizing: 'border-box',
+                    borderStyle: 'solid',
+                    borderColor: baseHex,
+                    borderRadius: 0,
+                    borderTopWidth: ts,
+                    borderBottomWidth: bs,
+                    borderLeftWidth: ls,
+                    borderRightWidth: rs,
+                    backgroundColor: 'transparent',
+                }}
+            />
+            <MiterJointLines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} variant="print" />
+        </div>
     );
 };
 
@@ -631,7 +636,9 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
     const PrintSlidingShutter: React.FC<{
         width: number; height: number; topProfile: number; bottomProfile: number; leftProfile: number; rightProfile: number;
         isMesh: boolean; isFixed?: boolean; isSliding?: boolean; panelId: string;
-    }> = ({ width, height, topProfile, bottomProfile, leftProfile, rightProfile, isMesh, isFixed = false, isSliding = false, panelId }) => {
+        interlockMm?: number;
+        meetingMm?: number;
+    }> = ({ width, height, topProfile, bottomProfile, leftProfile, rightProfile, isMesh, isFixed = false, isSliding = false, panelId, interlockMm = 0, meetingMm = 0 }) => {
         const glassWidth = width - leftProfile - rightProfile;
         const glassHeight = height - topProfile - bottomProfile;
         const meshStyle: React.CSSProperties = isMesh ? {backgroundColor: '#ccc', opacity: 0.6, backgroundImage: `linear-gradient(45deg, #aaa 25%, transparent 25%), linear-gradient(-45deg, #aaa 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #aaa 75%), linear-gradient(-45deg, transparent 75%, #aaa 75%)`, backgroundSize: '3px 3px' } : {};
@@ -639,6 +646,10 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
         const tPx = mmToPx(topProfile, scale);
         const rPx = mmToPx(rightProfile, scale);
         const bPx = mmToPx(bottomProfile, scale);
+        const wPx = mmToPx(width, scale);
+        const hPx = mmToPx(height, scale);
+        const leftButt = (interlockMm > 0 && leftProfile === interlockMm) || (meetingMm > 0 && leftProfile === meetingMm);
+        const rightButt = (interlockMm > 0 && rightProfile === interlockMm) || (meetingMm > 0 && rightProfile === meetingMm);
 
         return (
             <div className="absolute inset-0" style={{ width: '100%', height: '100%' }}>
@@ -653,6 +664,12 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                     leftSize={leftProfile} 
                     rightSize={rightProfile} 
                 />
+                {leftButt ? (
+                  <InterlockButtJointLines widthPx={wPx} heightPx={hPx} topPx={tPx} bottomPx={bPx} sidePx={lPx} side="left" variant="print" />
+                ) : null}
+                {rightButt ? (
+                  <InterlockButtJointLines widthPx={wPx} heightPx={hPx} topPx={tPx} bottomPx={bPx} sidePx={rPx} side="right" variant="print" />
+                ) : null}
                 <div className="absolute overflow-hidden" style={{ left: lPx, top: tPx, right: rPx, bottom: bPx }}>
                     <GlassPanel panelId={panelId} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', ...meshStyle }} glassWidthPx={glassWidth*scale} glassHeightPx={glassHeight*scale}>
                         <PrintShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : 'fixed'} />
@@ -1003,6 +1020,8 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                                         isMesh={p.type === 'mesh'}
                                         isFixed={fixedShutters[p.id]}
                                         isSliding={!fixedShutters[p.id]}
+                                        interlockMm={interlock}
+                                        meetingMm={meeting}
                                       />
                                     </div>
                                   );
@@ -1041,6 +1060,8 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                                       isMesh={false}
                                       isFixed={fixedShutters[i]}
                                       isSliding={!fixedShutters[i]}
+                                      interlockMm={interlock}
+                                      meetingMm={meeting}
                                     />
                                   </div>
                                 ))}
@@ -1078,6 +1099,8 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                                         isMesh={isMeshShutter}
                                         isFixed={fixedShutters[i]}
                                         isSliding={!fixedShutters[i]}
+                                        interlockMm={interlock}
+                                        meetingMm={meeting}
                                       />
                                     </div>
                                   );
@@ -1152,8 +1175,8 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                             }
                         }
 
-                        effectiveHDivs.forEach((pos) => elements.push(<PrintProfilePiece key={`hmullion-${pos}`} color={profileColor} texture={pt} style={{ left: 0, top: (pos * innerAreaHeight - dims.mullion / 2) * scale, width: innerAreaWidth * scale, height: dims.mullion * scale, zIndex: 10 }}/>));
-                        verticalDividers.forEach((pos) => elements.push(<PrintProfilePiece key={`vmullion-${pos}`} color={profileColor} texture={pt} style={{ top: archTop ? archSpringYmm * scale : 0, left: (pos * innerAreaWidth - dims.mullion / 2) * scale, width: dims.mullion * scale, height: mullionSpanH * scale, zIndex: 10 }}/>));
+                        effectiveHDivs.forEach((pos) => elements.push(<PrintProfilePiece key={`hmullion-${pos}`} color={profileColor} texture={pt} style={{ left: 0, top: (pos * innerAreaHeight - dims.mullion / 2) * scale, width: innerAreaWidth * scale, height: dims.mullion * scale, zIndex: 10, ...mullionEdgeStyle('print') }}/>));
+                        verticalDividers.forEach((pos) => elements.push(<PrintProfilePiece key={`vmullion-${pos}`} color={profileColor} texture={pt} style={{ top: archTop ? archSpringYmm * scale : 0, left: (pos * innerAreaWidth - dims.mullion / 2) * scale, width: dims.mullion * scale, height: mullionSpanH * scale, zIndex: 10, ...mullionEdgeStyle('print') }}/>));
                         return elements;
                     })()}
 
@@ -1791,7 +1814,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
               className={`flex items-center space-x-2 cursor-pointer text-white ${hasOpenViewQuotationItems ? '' : 'opacity-50'}`}
               title={
                 hasOpenViewQuotationItems
-                  ? 'Main canvas elevation + plan at 50% for sliding, casement, fold & sliding'
+                  ? 'Main canvas elevation + plan at 50% — label shows sliding / casement / bi-fold per line'
                   : 'No operable windows in this quotation'
               }
             >
@@ -1802,7 +1825,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                     onChange={e => setIncludeOpenViewDiagram(e.target.checked)}
                     className="w-4 h-4 rounded bg-slate-700 border-slate-500 text-indigo-600 focus:ring-indigo-500 disabled:opacity-40"
                 />
-                <span>Canvas design + plan (fold / swing)</span>
+                <span>Canvas design + plan view</span>
             </label>
             {includeOpenViewDiagram && hasOpenViewQuotationItems ? (
               <div className="flex flex-wrap items-end gap-3 text-white text-xs">
