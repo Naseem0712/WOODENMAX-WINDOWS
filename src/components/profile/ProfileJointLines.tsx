@@ -212,12 +212,9 @@ export const InterlockButtJointLines: React.FC<ButtProps> = ({
       aria-hidden
       style={{ zIndex: 21 }}
     >
-      {/* Vertical meeting seam (90° butt) */}
+      {/* Straight 90° vertical seams only — no horizontal caps (avoids misaligned T-joints between adjacent shutters). */}
       <line x1={xMeet} y1={y1} x2={xMeet} y2={y2} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
-      <line x1={xInner} y1={y1} x2={xInner} y2={y2} stroke={stroke} strokeWidth={sw * 0.85} vectorEffect="non-scaling-stroke" opacity={0.75} />
-      {/* 90° T-joints at head / sill */}
-      <line x1={xMeet} y1={y1} x2={xInner} y2={y1} stroke={stroke} strokeWidth={sw * 0.9} vectorEffect="non-scaling-stroke" />
-      <line x1={xMeet} y1={y2} x2={xInner} y2={y2} stroke={stroke} strokeWidth={sw * 0.9} vectorEffect="non-scaling-stroke" />
+      <line x1={xInner} y1={y1} x2={xInner} y2={y2} stroke={stroke} strokeWidth={sw * 0.88} vectorEffect="non-scaling-stroke" opacity={0.8} />
     </svg>
   );
 };
@@ -255,8 +252,6 @@ export const MullionJointLines: React.FC<MullionProps> = ({
       >
         <line x1={0} y1={0} x2={0} y2={h} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
         <line x1={w} y1={0} x2={w} y2={h} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
-        <line x1={0} y1={0} x2={w} y2={0} stroke={stroke} strokeWidth={sw * 0.85} vectorEffect="non-scaling-stroke" opacity={0.7} />
-        <line x1={0} y1={h} x2={w} y2={h} stroke={stroke} strokeWidth={sw * 0.85} vectorEffect="non-scaling-stroke" opacity={0.7} />
       </svg>
     );
   }

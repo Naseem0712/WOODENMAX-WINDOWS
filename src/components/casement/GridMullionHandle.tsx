@@ -93,6 +93,10 @@ export const GridMullionHandle: React.FC<Props> = ({
       }
     : { backgroundColor: fill };
 
+  const labelStyle: React.CSSProperties = {
+    textShadow: '0 0 6px rgba(0,0,0,0.95), 0 1px 3px rgba(0,0,0,0.85)',
+  };
+
   return (
     <div
       className={`absolute group touch-none ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
@@ -101,10 +105,14 @@ export const GridMullionHandle: React.FC<Props> = ({
     >
       <div className="absolute inset-0" style={{ ...tileStyle, ...mullionEdgeStyle('canvas') }} />
       <MullionJointLines widthPx={widthPx} heightPx={heightPx} orientation={orientation} />
-      <div className="pointer-events-none absolute inset-0 bg-indigo-500/0 group-hover:bg-indigo-500/20 transition-colors" />
+      <div className="pointer-events-none absolute inset-0 bg-indigo-500/0 group-hover:bg-indigo-500/15 transition-colors" />
       <span
-        className="pointer-events-none absolute left-1/2 top-1/2 z-[2] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-slate-900/90 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-cyan-100"
-        style={{ opacity: liveMm != null ? 1 : undefined }}
+        className={`pointer-events-none absolute z-[2] whitespace-nowrap font-mono text-[10px] font-semibold text-cyan-100 opacity-0 transition-opacity group-hover:opacity-100 ${liveMm != null ? '!opacity-100' : ''} ${
+          orientation === 'vertical'
+            ? 'left-1/2 top-1 -translate-x-1/2'
+            : 'left-1 top-1/2 -translate-y-1/2'
+        }`}
+        style={labelStyle}
       >
         {showMm} mm
       </span>

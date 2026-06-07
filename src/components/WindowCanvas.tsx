@@ -688,24 +688,44 @@ const SlidingShutter: React.FC<{
                 texture={profileOverlayTexture(config)}
              />
              {leftButt ? (
-               <InterlockButtJointLines
-                 widthPx={wPx}
-                 heightPx={hPx}
-                 topPx={tPx}
-                 bottomPx={bPx}
-                 sidePx={lPx}
-                 side="left"
-               />
+               <div
+                 className="pointer-events-none absolute"
+                 style={{
+                   left: mmToPx(bleed, scale),
+                   top: mmToPx(bleed, scale),
+                   width: mmToPx(width, scale),
+                   height: mmToPx(height, scale),
+                 }}
+               >
+                 <InterlockButtJointLines
+                   widthPx={mmToPx(width, scale)}
+                   heightPx={mmToPx(height, scale)}
+                   topPx={tPx}
+                   bottomPx={bPx}
+                   sidePx={lPx}
+                   side="left"
+                 />
+               </div>
              ) : null}
              {rightButt ? (
-               <InterlockButtJointLines
-                 widthPx={wPx}
-                 heightPx={hPx}
-                 topPx={tPx}
-                 bottomPx={bPx}
-                 sidePx={rPx}
-                 side="right"
-               />
+               <div
+                 className="pointer-events-none absolute"
+                 style={{
+                   left: mmToPx(bleed, scale),
+                   top: mmToPx(bleed, scale),
+                   width: mmToPx(width, scale),
+                   height: mmToPx(height, scale),
+                 }}
+               >
+                 <InterlockButtJointLines
+                   widthPx={mmToPx(width, scale)}
+                   heightPx={mmToPx(height, scale)}
+                   topPx={tPx}
+                   bottomPx={bPx}
+                   sidePx={rPx}
+                   side="right"
+                 />
+               </div>
              ) : null}
             <div
               className="absolute pointer-events-none"
