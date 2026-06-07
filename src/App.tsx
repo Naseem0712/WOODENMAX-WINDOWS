@@ -28,6 +28,22 @@ import { applyRouteJsonLd, applyRouteSeo, getGuideDisplayTitle, getMetaDescripti
 import { DEFAULT_MATERIAL_RATES } from './constants/materialRates';
 import { computeHardwareCostForQuotation } from './utils/quotationHardwareCost';
 import { applyDesignerCorrectionToQuotationItem } from './utils/applyDesignerCorrectionToQuotationItem';
+import {
+  isOutlineBandCell,
+  buildArchGridHorizontalDividers,
+  isArchTopOutline,
+  applyArchStraightBottomLayout,
+  resolveCasementOutline,
+} from './utils/casementOutlineGeometry';
+import {
+  allHSegmentsHidden,
+  allVSegmentsHidden,
+  pruneHiddenForRemovedHDivider,
+  pruneHiddenForRemovedVDivider,
+  withHiddenHSegment,
+  withHiddenVSegment,
+} from './utils/casementGridMullions';
+import { computeInnerHoleDims } from './utils/handleDefaults';
 import { calculateMaterialCostSummary } from './utils/materialCosting';
 import { applyHomeownerDefaultsToConfig, loadHomeownerDefaults } from './utils/homeownerDefaultsStorage';
 import { RailingDesignerApp } from './railing/App';
@@ -103,6 +119,10 @@ type ConfigAction =
   | { type: 'SET_GRID_SIZE'; payload: { rows: number; cols: number, side: 'left' | 'right' | null } }
   | { type: 'REMOVE_VERTICAL_DIVIDER'; payload: { index: number, side: 'left' | 'right' | null } }
   | { type: 'REMOVE_HORIZONTAL_DIVIDER'; payload: { index: number, side: 'left' | 'right' | null } }
+  | { type: 'REMOVE_H_MULLION_SEGMENT'; payload: { dividerIndex: number; col: number; side: 'left' | 'right' | null } }
+  | { type: 'REMOVE_V_MULLION_SEGMENT'; payload: { dividerIndex: number; row: number; side: 'left' | 'right' | null } }
+  | { type: 'MOVE_HORIZONTAL_DIVIDER'; payload: { index: number; ratio: number; side: 'left' | 'right' | null } }
+  | { type: 'MOVE_VERTICAL_DIVIDER'; payload: { index: number; ratio: number; side: 'left' | 'right' | null } }
   | { type: 'UPDATE_HANDLE'; payload: { panelId: string; newConfig: HandleConfig | null, side: 'left' | 'right' | null } }
   | { type: 'SET_SIDE_CONFIG'; payload: { side: 'left' | 'right'; config: Partial<CornerSideConfig> } }
   | { type: 'SET_WINDOW_TYPE'; payload: WindowType }
@@ -822,6 +842,16 @@ const initialConfig: ConfigState = {
         isFrameless: false,
         cornerRadius: 50,
     },
+    casementOutline: {
+        shape: 'rect',
+        cornerRadiusMm: 40,
+        archStraightBottomMm: '',
+        archSpringRatio: 0.28,
+        archRadialMullions: 2,
+        archMullionAngles: [],
+        archInnerRingCount: 0,
+        archInnerRingGapMm: 16,
+    },
 };
 
 const SERIES_MAP: Record<WindowType, ProfileSeries> = {
@@ -878,6 +908,14 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
         case 'TOGGLE_DOOR_POSITION': {
             const { row, col, side } = action.payload;
             const [configKey, config] = getSideConfig(side);
+            const gridRows = config.horizontalDividers.length + 1;
+            const gridCols = config.verticalDividers.length + 1;
+            if ('casementOutline' in config && isOutlineBandCell(config, row, col, gridRows, gridCols)) {
+              return state;
+            }
+            if (row === 0 && 'casementOutline' in config && config.casementOutline?.shape === 'arch_top') {
+              return state;
+            }
             const exists = config.doorPositions.some(p => p.row === row && p.col === col);
             const newDoorPositions = exists 
                 ? config.doorPositions.filter(p => p.row !== row || p.col !== col) 
@@ -891,6 +929,11 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
         case 'HANDLE_VENTILATOR_CELL_CLICK': {
             const { row, col, side } = action.payload;
             const [configKey, config] = getSideConfig(side);
+            const gridRows = config.horizontalDividers.length + 1;
+            const gridCols = config.verticalDividers.length + 1;
+            if ('casementOutline' in config && isOutlineBandCell(config, row, col, gridRows, gridCols)) {
+              return state;
+            }
             const sequence: VentilatorCellType[] = ['glass', 'louvers', 'door', 'exhaust_fan'];
             const newGrid = config.ventilatorGrid.map(r => r.slice());
             const currentType = newGrid[row][col].type;
@@ -908,8 +951,18 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
         case 'SET_GRID_SIZE': {
             const { rows, cols, side } = action.payload;
             const [configKey, config] = getSideConfig(side);
-            const newH = Array.from({ length: rows - 1 }).map((_, i) => (i + 1) / rows);
+            let newH = Array.from({ length: rows - 1 }).map((_, i) => (i + 1) / rows);
             const newV = Array.from({ length: cols - 1 }).map((_, i) => (i + 1) / cols);
+            if ('casementOutline' in config && isArchTopOutline(config as WindowConfig)) {
+              const host = configKey
+                ? ({ ...state, [configKey]: config } as WindowConfig)
+                : (state as WindowConfig);
+              const inner = computeInnerHoleDims({
+                ...host,
+                series: host.series ?? SERIES_MAP[host.windowType],
+              });
+              newH = buildArchGridHorizontalDividers(rows, config as WindowConfig, inner.innerW, inner.innerH);
+            }
             const newConfig = { ...config, horizontalDividers: newH, verticalDividers: newV };
             if (configKey) {
                 return { ...state, [configKey]: newConfig };
@@ -931,6 +984,9 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
         case 'REMOVE_HORIZONTAL_DIVIDER': {
             const { index, side } = action.payload;
             const [configKey, config] = getSideConfig(side);
+            if ('casementOutline' in config && isArchTopOutline(config as WindowConfig) && index === 0) {
+              return state;
+            }
             const horizontalDividers = config.horizontalDividers.filter((_, i) => i !== index);
             const ventilatorGrid = [...config.ventilatorGrid];
             ventilatorGrid.splice(index + 1, 1);
@@ -939,6 +995,91 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
             if (configKey) {
                 return { ...state, [configKey]: newConfig };
             }
+            return { ...state, ...newConfig };
+        }
+        case 'REMOVE_H_MULLION_SEGMENT': {
+            const { dividerIndex, col, side } = action.payload;
+            const [configKey, config] = getSideConfig(side);
+            if ('casementOutline' in config && isArchTopOutline(config as WindowConfig) && dividerIndex === 0) {
+              return state;
+            }
+            const gridCols = config.verticalDividers.length + 1;
+            const nextHidden = withHiddenHSegment(config as WindowConfig, dividerIndex, col);
+            if (allHSegmentsHidden(nextHidden!, dividerIndex, gridCols)) {
+              const horizontalDividers = config.horizontalDividers.filter((_, i) => i !== dividerIndex);
+              const ventilatorGrid = [...config.ventilatorGrid];
+              ventilatorGrid.splice(dividerIndex + 1, 1);
+              const doorPositions = config.doorPositions
+                .filter((p) => p.row !== dividerIndex + 1)
+                .map((p) => (p.row > dividerIndex + 1 ? { ...p, row: p.row - 1 } : p));
+              const hiddenMullionSegments = pruneHiddenForRemovedHDivider(nextHidden!, dividerIndex);
+              const newConfig = { ...config, horizontalDividers, ventilatorGrid, doorPositions, hiddenMullionSegments };
+              if (configKey) return { ...state, [configKey]: newConfig };
+              return { ...state, ...newConfig };
+            }
+            const newConfig = { ...config, hiddenMullionSegments: nextHidden };
+            if (configKey) return { ...state, [configKey]: newConfig };
+            return { ...state, ...newConfig };
+        }
+        case 'REMOVE_V_MULLION_SEGMENT': {
+            const { dividerIndex, row, side } = action.payload;
+            const [configKey, config] = getSideConfig(side);
+            const gridRows = config.horizontalDividers.length + 1;
+            const nextHidden = withHiddenVSegment(config as WindowConfig, dividerIndex, row);
+            if (allVSegmentsHidden(nextHidden!, dividerIndex, gridRows)) {
+              const verticalDividers = config.verticalDividers.filter((_, i) => i !== dividerIndex);
+              const ventilatorGrid = config.ventilatorGrid.map((r) => {
+                r.splice(dividerIndex + 1, 1);
+                return r;
+              });
+              const doorPositions = config.doorPositions
+                .filter((p) => p.col !== dividerIndex + 1)
+                .map((p) => (p.col > dividerIndex + 1 ? { ...p, col: p.col - 1 } : p));
+              const hiddenMullionSegments = pruneHiddenForRemovedVDivider(nextHidden!, dividerIndex);
+              const newConfig = { ...config, verticalDividers, ventilatorGrid, doorPositions, hiddenMullionSegments };
+              if (configKey) return { ...state, [configKey]: newConfig };
+              return { ...state, ...newConfig };
+            }
+            const newConfig = { ...config, hiddenMullionSegments: nextHidden };
+            if (configKey) return { ...state, [configKey]: newConfig };
+            return { ...state, ...newConfig };
+        }
+        case 'MOVE_HORIZONTAL_DIVIDER': {
+            const { index, ratio, side } = action.payload;
+            const [configKey, config] = getSideConfig(side);
+            const clamped = Math.max(0.05, Math.min(0.95, ratio));
+            const h = [...config.horizontalDividers];
+            if (index < 0 || index >= h.length) return state;
+            h[index] = clamped;
+            let newConfig: typeof config = { ...config, horizontalDividers: h };
+            if ('casementOutline' in config && isArchTopOutline(config as WindowConfig) && index === 0) {
+              const host = configKey ? ({ ...state, [configKey]: config } as WindowConfig) : (state as WindowConfig);
+              const inner = computeInnerHoleDims({ ...host, series: host.series ?? SERIES_MAP[host.windowType] });
+              const straightBottom = Math.max(0, inner.innerH * (1 - clamped));
+              const patch = applyArchStraightBottomLayout(
+                { ...(config as WindowConfig), horizontalDividers: h },
+                inner.innerW,
+                inner.innerH,
+                Math.round(straightBottom),
+              );
+              newConfig = {
+                ...config,
+                horizontalDividers: patch.horizontalDividers,
+                casementOutline: patch.casementOutline,
+              };
+            }
+            if (configKey) return { ...state, [configKey]: newConfig };
+            return { ...state, ...newConfig };
+        }
+        case 'MOVE_VERTICAL_DIVIDER': {
+            const { index, ratio, side } = action.payload;
+            const [configKey, config] = getSideConfig(side);
+            const clamped = Math.max(0.05, Math.min(0.95, ratio));
+            const v = [...config.verticalDividers];
+            if (index < 0 || index >= v.length) return state;
+            v[index] = clamped;
+            const newConfig = { ...config, verticalDividers: v };
+            if (configKey) return { ...state, [configKey]: newConfig };
             return { ...state, ...newConfig };
         }
         case 'UPDATE_HANDLE': {
@@ -1355,6 +1496,10 @@ interface DesignerViewProps {
   windowConfig: WindowConfig;
   handleRemoveVerticalDivider: (index: number) => void;
   handleRemoveHorizontalDivider: (index: number) => void;
+  handleRemoveHMullionSegment: (dividerIndex: number, col: number) => void;
+  handleRemoveVMullionSegment: (dividerIndex: number, row: number) => void;
+  handleMoveHorizontalDivider: (index: number, ratio: number) => void;
+  handleMoveVerticalDivider: (index: number, ratio: number) => void;
   quantity: number | '';
   setQuantity: (value: number | '') => void;
   areaType: AreaType;
@@ -1398,6 +1543,7 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
     onOpenGuides,
     installPrompt, handleInstallClick, panelRef, isDesktopPanelOpen, setIsDesktopPanelOpen,
     commonControlProps, canvasKey, windowConfig, handleRemoveVerticalDivider, handleRemoveHorizontalDivider,
+    handleRemoveHMullionSegment, handleRemoveVMullionSegment, handleMoveHorizontalDivider, handleMoveVerticalDivider,
     quantity, setQuantity, areaType, setAreaType, rate, setRate,
     onSave, onUpdate, onCancelEdit, editingItemId,
     onBatchAdd, windowTitle, setWindowTitle, hardwareCostPerWindow, quotationItemCount,
@@ -1545,6 +1691,10 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
                       config={windowConfig}
                       onRemoveVerticalDivider={handleRemoveVerticalDivider}
                       onRemoveHorizontalDivider={handleRemoveHorizontalDivider}
+                      onRemoveHMullionSegment={handleRemoveHMullionSegment}
+                      onRemoveVMullionSegment={handleRemoveVMullionSegment}
+                      onMoveHorizontalDivider={handleMoveHorizontalDivider}
+                      onMoveVerticalDivider={handleMoveVerticalDivider}
                       onToggleElevationDoor={() => {}}
                       onUpdateHandle={commonControlProps.onUpdateHandle}
                       enableDoorHandleDrag={userModeState.mode === 'homeowner'}
@@ -2362,6 +2512,41 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [windowConfigState.leftConfig?.verticalDividers, windowConfigState.leftConfig?.horizontalDividers, windowConfigState.rightConfig?.verticalDividers, windowConfigState.rightConfig?.horizontalDividers, windowConfigState.verticalDividers, windowConfigState.horizontalDividers, windowType]);
 
+  useEffect(() => {
+    if (![WindowType.CASEMENT, WindowType.VENTILATOR].includes(windowType)) return;
+    if (!isArchTopOutline(windowConfigState as WindowConfig)) return;
+    const outline = resolveCasementOutline(windowConfigState);
+    if (outline.archStraightBottomMm === '' || !Number(outline.archStraightBottomMm)) return;
+    const inner = computeInnerHoleDims({
+      ...windowConfigState,
+      series: series ?? SERIES_MAP[windowType],
+    });
+    const patch = applyArchStraightBottomLayout(
+      windowConfigState as WindowConfig,
+      inner.innerW,
+      inner.innerH,
+      outline.archStraightBottomMm,
+    );
+    const nextR = patch.horizontalDividers[0];
+    const curR = windowConfigState.horizontalDividers[0];
+    if (nextR == null || curR == null || Math.abs(nextR - curR) < 0.0001) return;
+    dispatch({ type: 'SET_FIELD', field: 'horizontalDividers', payload: patch.horizontalDividers });
+    dispatch({
+      type: 'SET_FIELD',
+      field: 'casementOutline',
+      payload: { ...outline, ...patch.casementOutline },
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    windowType,
+    windowConfigState.width,
+    windowConfigState.height,
+    windowConfigState.fixedPanels,
+    series.id,
+    windowConfigState.casementOutline?.archStraightBottomMm,
+    windowConfigState.casementOutline?.shape,
+  ]);
+
   const addFixedPanel = useCallback((position: FixedPanelPosition) => dispatch({ type: 'ADD_FIXED_PANEL', payload: position }), []);
   const removeFixedPanel = useCallback((id: string) => dispatch({ type: 'REMOVE_FIXED_PANEL', payload: id }), []);
   const updateFixedPanelSize = useCallback((id: string, size: number) => dispatch({ type: 'UPDATE_FIXED_PANEL_SIZE', payload: { id, size } }), []);
@@ -2491,6 +2676,10 @@ const App: React.FC = () => {
   const handleSetGridSize = useCallback((rows: number, cols: number) => dispatch({ type: 'SET_GRID_SIZE', payload: { rows, cols, side: getSide() } }), [getSide]);
   const handleRemoveVerticalDivider = useCallback((index: number) => dispatch({ type: 'REMOVE_VERTICAL_DIVIDER', payload: { index, side: getSide() } }), [getSide]);
   const handleRemoveHorizontalDivider = useCallback((index: number) => dispatch({ type: 'REMOVE_HORIZONTAL_DIVIDER', payload: { index, side: getSide() } }), [getSide]);
+  const handleRemoveHMullionSegment = useCallback((dividerIndex: number, col: number) => dispatch({ type: 'REMOVE_H_MULLION_SEGMENT', payload: { dividerIndex, col, side: getSide() } }), [getSide]);
+  const handleRemoveVMullionSegment = useCallback((dividerIndex: number, row: number) => dispatch({ type: 'REMOVE_V_MULLION_SEGMENT', payload: { dividerIndex, row, side: getSide() } }), [getSide]);
+  const handleMoveHorizontalDivider = useCallback((index: number, ratio: number) => dispatch({ type: 'MOVE_HORIZONTAL_DIVIDER', payload: { index, ratio, side: getSide() } }), [getSide]);
+  const handleMoveVerticalDivider = useCallback((index: number, ratio: number) => dispatch({ type: 'MOVE_VERTICAL_DIVIDER', payload: { index, ratio, side: getSide() } }), [getSide]);
   const handleUpdateHandle = useCallback((panelId: string, newConfig: HandleConfig | null) => dispatch({ type: 'UPDATE_HANDLE', payload: { panelId, newConfig, side: getSide() } }), [getSide]);
   const onSetPartitionPanelCount = useCallback((count: number) => dispatch({ type: 'SET_PARTITION_PANEL_COUNT', payload: count }), []);
   const onSetPartitionPreset = useCallback((p: ConfigState['partitionPanels']) => dispatch({ type: 'SET_PARTITION_PRESET', payload: p }), []);
@@ -3062,6 +3251,10 @@ const App: React.FC = () => {
                     windowConfig={windowConfig}
                     handleRemoveVerticalDivider={handleRemoveVerticalDivider}
                     handleRemoveHorizontalDivider={handleRemoveHorizontalDivider}
+                    handleRemoveHMullionSegment={handleRemoveHMullionSegment}
+                    handleRemoveVMullionSegment={handleRemoveVMullionSegment}
+                    handleMoveHorizontalDivider={handleMoveHorizontalDivider}
+                    handleMoveVerticalDivider={handleMoveVerticalDivider}
                     quantity={quantity}
                     setQuantity={setQuantity}
                     areaType={areaType}

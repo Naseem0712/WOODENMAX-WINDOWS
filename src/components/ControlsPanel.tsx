@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import type { ProfileSeries, HardwareItem, WindowConfig, GlassSpecialType, SavedColor, VentilatorCellType, HandleConfig, CornerSideConfig, ProfileDimensions, LaminatedGlassConfig, DguGlassConfig, PartitionPanelConfig, LouverBayCrossAlign, MaterialRateSettings } from '../types';
-import { getDefaultHandleConfig } from '../utils/handleDefaults';
+import { getDefaultHandleConfig, computeInnerHoleDims } from '../utils/handleDefaults';
 import { FixedPanelPosition, ShutterConfigType, TrackType, WindowType, GlassType, MirrorShape } from '../types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -22,6 +22,19 @@ import {
 import { DOOR_WINDOW_COMBO_PRESETS } from '../utils/doorWindowComboPresets';
 import { DesignLayoutPanel } from './DesignLayoutPanel';
 import { clampFoldLeafCount } from '../utils/partitionPanelGeometry';
+import {
+  applyCasementDTypePreset,
+  applyCasementRoundedPreset,
+  applyArchStraightBottomLayout,
+  applyRoundedBandLayout,
+  defaultArchStraightBottomMm,
+  isOutlineBandCell,
+  isRoundedOutline,
+  maxArchStraightBottomMm,
+  MIN_ARCH_ZONE_MM,
+  resolveArchStraightBottomMm,
+  resolveCasementOutline,
+} from '../utils/casementOutlineGeometry';
 import { SLIDING_LAYOUT_PRESETS, type SlidingLayoutPreset } from '../utils/slidingLayoutPresets';
 import { isCompoundLouverConfig, LOUVER_BAY_MAX } from '../utils/louverBays';
 import { scrollNearestVerticalOverflowAncestor } from '../utils/scrollParentWheel';
@@ -767,6 +780,283 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
       )}
 
       {(activeWindowType === WindowType.CASEMENT || activeWindowType === WindowType.VENTILATOR) && (
+          <CollapsibleCard title="Opening shape (arch / round)" isOpen={openCard === 'Opening shape (arch / round)'} onToggle={() => handleToggleCard('Opening shape (arch / round)')}>
+              <p className="text-xs text-slate-400 mb-3 leading-snug">
+                Outer frame closes in the chosen shape. Arch-top uses one <strong className="text-slate-300">spring transom</strong> at the bend (doors start below). Fanlight mullions above it only — set angles like 135, 90, 45. Rounded corners use band mullions; doors go in the square centre.
+              </p>
+              <Select
+                id={`${idPrefix}casement-outline-shape`}
+                label="Opening outline"
+                value={resolveCasementOutline(displayConfig).shape}
+                onChange={(e) => {
+                  const shape = e.target.value as ReturnType<typeof resolveCasementOutline>['shape'];
+                  const next = { ...resolveCasementOutline(displayConfig), shape };
+                  setConfig('casementOutline', next);
+                  if (shape === 'arch_top') {
+                    const { innerW, innerH } = computeInnerHoleDims({
+                      ...displayConfig,
+                      series: config.series,
+                    });
+                    const straightBottom = defaultArchStraightBottomMm(innerW, innerH);
+                    const patch = applyArchStraightBottomLayout(
+                      { ...displayConfig, casementOutline: next },
+                      innerW,
+                      innerH,
+                      straightBottom,
+                    );
+                    setGridSize(2, Math.max(1, displayConfig.verticalDividers.length + 1));
+                    setConfig('casementOutline', patch.casementOutline);
+                    setConfig('horizontalDividers', patch.horizontalDividers);
+                    setConfig(
+                      'doorPositions',
+                      displayConfig.doorPositions.filter((p) => p.row > 0),
+                    );
+                  } else if (isRoundedOutline({ ...displayConfig, casementOutline: next })) {
+                    const { innerW, innerH } = computeInnerHoleDims({
+                      ...displayConfig,
+                      series: config.series,
+                    });
+                    const band = applyRoundedBandLayout(
+                      { ...displayConfig, casementOutline: next },
+                      innerW,
+                      innerH,
+                    );
+                    setGridSize(band.gridRows, band.gridCols);
+                    setConfig('horizontalDividers', band.horizontalDividers);
+                    setConfig('verticalDividers', band.verticalDividers);
+                    setConfig('doorPositions', band.doorPositions);
+                  }
+                }}
+              >
+                <option value="rect">Rectangle</option>
+                <option value="arch_top">Arch top (half-round fanlight)</option>
+                <option value="rounded_rect">All corners rounded</option>
+                <option value="rounded_top">Top corners rounded only</option>
+                <option value="rounded_bottom">Bottom corners rounded only</option>
+              </Select>
+              {(resolveCasementOutline(displayConfig).shape !== 'rect' &&
+                resolveCasementOutline(displayConfig).shape !== 'arch_top') && (
+                <Input
+                  id={`${idPrefix}casement-corner-radius`}
+                  name="casement-corner-radius"
+                  label="Corner radius (mm)"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  value={resolveCasementOutline(displayConfig).cornerRadiusMm}
+                  onChange={(e) => {
+                    const nextOutline = {
+                      ...resolveCasementOutline(displayConfig),
+                      cornerRadiusMm: (e.target.value === '' ? '' : Number(e.target.value)) as number | '',
+                    };
+                    setConfig('casementOutline', nextOutline);
+                    const { innerW, innerH } = computeInnerHoleDims({
+                      ...displayConfig,
+                      series: config.series,
+                    });
+                    const band = applyRoundedBandLayout(
+                      { ...displayConfig, casementOutline: nextOutline },
+                      innerW,
+                      innerH,
+                    );
+                    setGridSize(band.gridRows, band.gridCols);
+                    setConfig('horizontalDividers', band.horizontalDividers);
+                    setConfig('verticalDividers', band.verticalDividers);
+                    setConfig('doorPositions', band.doorPositions);
+                  }}
+                />
+              )}
+              {resolveCasementOutline(displayConfig).shape === 'arch_top' && (() => {
+                const { innerW, innerH } = computeInnerHoleDims({
+                  ...displayConfig,
+                  series: config.series,
+                });
+                const straightBottom = resolveArchStraightBottomMm(displayConfig, innerW, innerH);
+                const archZoneMm = Math.max(0, innerH - straightBottom);
+                const maxStraight = maxArchStraightBottomMm(innerW, innerH);
+                return (
+                <>
+                  <DimensionInput
+                    id={`${idPrefix}casement-arch-straight-bottom`}
+                    name="casement-arch-straight-bottom"
+                    label="Straight height from bottom (mm)"
+                    value_mm={resolveCasementOutline(displayConfig).archStraightBottomMm !== ''
+                      ? resolveCasementOutline(displayConfig).archStraightBottomMm
+                      : straightBottom}
+                    onChange_mm={(v) => {
+                      const patch = applyArchStraightBottomLayout(
+                        displayConfig,
+                        innerW,
+                        innerH,
+                        v === '' ? '' : Number(v),
+                      );
+                      setConfig('casementOutline', patch.casementOutline);
+                      setConfig('horizontalDividers', patch.horizontalDividers);
+                    }}
+                    placeholder={`e.g. ${Math.round(maxStraight * 0.75)}`}
+                  />
+                  <p className="text-xs text-slate-400 -mt-1 leading-snug">
+                    Inner opening <strong className="text-slate-300">{Math.round(innerH)} mm</strong> — straight from bottom <strong className="text-slate-300">{Math.round(straightBottom)} mm</strong>, rounded arch above <strong className="text-slate-300">{Math.round(archZoneMm)} mm</strong> (min {MIN_ARCH_ZONE_MM} mm arch). Change total height or straight height independently; spring transom moves automatically.
+                  </p>
+                  <Input
+                    id={`${idPrefix}casement-arch-mullions`}
+                    name="casement-arch-mullions"
+                    label="Fanlight mullion count (3, 4, 5… — used when custom angles empty)"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={12}
+                    value={resolveCasementOutline(displayConfig).archRadialMullions}
+                    onChange={(e) =>
+                      setConfig('casementOutline', {
+                        ...resolveCasementOutline(displayConfig),
+                        archRadialMullions: Math.max(0, Math.min(12, parseInt(e.target.value, 10) || 0)),
+                        archMullionAngles: [],
+                      })
+                    }
+                  />
+                  <Input
+                    id={`${idPrefix}casement-arch-angles`}
+                    name="casement-arch-angles"
+                    label="Custom fanlight angles (deg) — overrides count above"
+                    placeholder="e.g. 135, 90, 45"
+                    value={(resolveCasementOutline(displayConfig).archMullionAngles ?? []).join(', ')}
+                    onChange={(e) => {
+                      const angles = e.target.value
+                        .split(/[,;\s]+/)
+                        .map((s) => parseFloat(s.trim()))
+                        .filter((n) => Number.isFinite(n));
+                      setConfig('casementOutline', {
+                        ...resolveCasementOutline(displayConfig),
+                        archMullionAngles: angles,
+                      });
+                    }}
+                  />
+                  <Input
+                    id={`${idPrefix}casement-arch-inner-rings`}
+                    name="casement-arch-inner-rings"
+                    label="Inner round frames inside arch (0, 1, or 2)"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={2}
+                    value={resolveCasementOutline(displayConfig).archInnerRingCount ?? 0}
+                    onChange={(e) =>
+                      setConfig('casementOutline', {
+                        ...resolveCasementOutline(displayConfig),
+                        archInnerRingCount: Math.max(0, Math.min(2, parseInt(e.target.value, 10) || 0)),
+                      })
+                    }
+                  />
+                  {(resolveCasementOutline(displayConfig).archInnerRingCount ?? 0) > 0 ? (
+                    <DimensionInput
+                      id={`${idPrefix}casement-arch-ring-gap`}
+                      name="casement-arch-ring-gap"
+                      label="Gap between inner round frames (mm)"
+                      value_mm={resolveCasementOutline(displayConfig).archInnerRingGapMm !== ''
+                        ? resolveCasementOutline(displayConfig).archInnerRingGapMm
+                        : 16}
+                      onChange_mm={(v) =>
+                        setConfig('casementOutline', {
+                          ...resolveCasementOutline(displayConfig),
+                          archInnerRingGapMm: v === '' ? '' : Number(v),
+                        })
+                      }
+                      placeholder="16"
+                    />
+                  ) : null}
+                  <p className="text-xs text-slate-400 -mt-1 leading-snug">
+                    Inner rings are concentric semicircles between the outer arch frame and fanlight mullions. Glass fills each fanlight cell.
+                  </p>
+                </>
+                );
+              })()}
+              <div className="mt-3 flex flex-col gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="text-left justify-start"
+                  onClick={() => {
+                    const { innerW, innerH } = computeInnerHoleDims({
+                      ...displayConfig,
+                      series: config.series,
+                    });
+                    const patch = applyCasementDTypePreset(1, innerW, innerH);
+                    setConfig('casementOutline', patch.casementOutline);
+                    setConfig('horizontalDividers', patch.horizontalDividers);
+                    setConfig('verticalDividers', patch.verticalDividers);
+                    setConfig('doorPositions', patch.doorPositions);
+                    setGridSize(2, 1);
+                  }}
+                >
+                  Preset: D-type arch + 1 door below
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="text-left justify-start"
+                  onClick={() => {
+                    const { innerW, innerH } = computeInnerHoleDims({
+                      ...displayConfig,
+                      series: config.series,
+                    });
+                    const patch = applyCasementDTypePreset(2, innerW, innerH);
+                    setConfig('casementOutline', patch.casementOutline);
+                    setConfig('horizontalDividers', patch.horizontalDividers);
+                    setConfig('verticalDividers', patch.verticalDividers);
+                    setConfig('doorPositions', patch.doorPositions);
+                    setGridSize(2, 2);
+                  }}
+                >
+                  Preset: D-type arch + 2 doors below
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="text-left justify-start"
+                  onClick={() => {
+                    setGridSize(3, 1);
+                    setConfig('casementOutline', {
+                      ...resolveCasementOutline(displayConfig),
+                      shape: 'rounded_rect',
+                      cornerRadiusMm: 48,
+                      archRadialMullions: 0,
+                    });
+                    setConfig('horizontalDividers', [1 / 3, 2 / 3]);
+                    setConfig('doorPositions', [{ row: 1, col: 0 }]);
+                  }}
+                >
+                  Preset: Rounded + fix / door / fix (3 rows)
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="text-left justify-start"
+                  onClick={() => {
+                    const { innerW, innerH } = computeInnerHoleDims({
+                      ...displayConfig,
+                      series: config.series,
+                    });
+                    const patch = applyCasementRoundedPreset(innerW, innerH);
+                    setConfig('casementOutline', patch.casementOutline);
+                    if (patch.horizontalDividers && patch.verticalDividers) {
+                      setGridSize(
+                        patch.horizontalDividers.length + 1,
+                        patch.verticalDividers.length + 1,
+                      );
+                      setConfig('horizontalDividers', patch.horizontalDividers);
+                      setConfig('verticalDividers', patch.verticalDividers);
+                      setConfig('doorPositions', patch.doorPositions ?? []);
+                    }
+                  }}
+                >
+                  Preset: 6″ rounded corners + band mullions
+                </Button>
+              </div>
+          </CollapsibleCard>
+      )}
+
+      {(activeWindowType === WindowType.CASEMENT || activeWindowType === WindowType.VENTILATOR) && (
           <CollapsibleCard title="Grid Layout" isOpen={openCard === 'Grid Layout'} onToggle={() => handleToggleCard('Grid Layout')}>
               <div className="grid grid-cols-2 gap-4">
                   <Input id={`${idPrefix}grid-rows`} name="grid-rows" label="Rows" type="number" inputMode="numeric" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
@@ -781,10 +1071,36 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
                             const row = Math.floor(index / gridCols);
                             const col = index % gridCols;
                             if (activeWindowType === WindowType.CASEMENT) {
+                                if (
+                                  isOutlineBandCell(displayConfig, row, col, gridRows, gridCols)
+                                ) {
+                                  return (
+                                    <div
+                                      key={`${row}-${col}`}
+                                      className="aspect-square rounded text-xs font-semibold flex items-center justify-center bg-slate-600 text-slate-300 cursor-default"
+                                      title="Rounded / arch band — fixed glass only"
+                                    >
+                                      Band
+                                    </div>
+                                  );
+                                }
                                 const isDoor = displayConfig.doorPositions.some(p => p.row === row && p.col === col);
                                 return ( <button key={`${row}-${col}`} onClick={() => toggleDoorPosition(row, col)} className={`aspect-square rounded text-xs font-semibold flex items-center justify-center ${isDoor ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{isDoor ? 'Door' : 'Fixed'}</button> );
                             }
                             if (activeWindowType === WindowType.VENTILATOR) {
+                                if (
+                                  isOutlineBandCell(displayConfig, row, col, gridRows, gridCols)
+                                ) {
+                                  return (
+                                    <div
+                                      key={`${row}-${col}`}
+                                      className="aspect-square rounded text-xs font-semibold flex items-center justify-center bg-slate-600 text-slate-300 cursor-default"
+                                      title="Rounded / arch band — fixed glass only"
+                                    >
+                                      Band
+                                    </div>
+                                  );
+                                }
                                 const cell = displayConfig.ventilatorGrid[row]?.[col];
                                 const cellType = cell?.type || 'glass';
                                 const colorClass = cellType === 'door' ? 'bg-indigo-500 text-white' : cellType === 'louvers' ? 'bg-sky-600 text-white' : cellType === 'exhaust_fan' ? 'bg-teal-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600';

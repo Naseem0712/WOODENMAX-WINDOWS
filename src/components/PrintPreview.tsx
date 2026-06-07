@@ -39,6 +39,9 @@ import { RailingQuotationLinePrintBlock } from '../railing/components/RailingQuo
 import '../railing/quotation-print-embed.css';
 import { OpenViewPrintBlock } from '../windowOpenView/OpenViewPrintBlock';
 import { getOpenViewPrintConfigs } from '../windowOpenView/supportsOpenView';
+import { ArchHeadLayer } from './casement/ArchHeadLayer';
+import { OpeningShapedFrame } from './casement/OpeningShapedFrame';
+import { archSpringYMmForOpening, isArchTopOutline } from '../utils/casementOutlineGeometry';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
   return config.profileColor.startsWith('#') ? config.profileTexture || undefined : undefined;
@@ -518,17 +521,23 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
       );
     }
     
-    // Outer frame
-    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) {
-        const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
-        profileElements.push(<PrintableMiteredFrame key="outer-frame" width={effectiveWidth} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} texture={pt} />);
-    }
-    
     const frameOffset = (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) ? dims.outerFrame : 0;
     const holeX1 = leftFix ? leftFixSize : frameOffset;
     const holeY1 = topFix ? topFixSize : frameOffset;
     const holeX2 = rightFix ? numWidth - rightFixSize : numWidth - frameOffset;
     const holeY2 = bottomFix ? numHeight - bottomFixSize : numHeight - frameOffset;
+    const innerAreaWidth = holeX2 - holeX1;
+    const innerAreaHeight = holeY2 - holeY1;
+    const archTop = isArchTopOutline(config);
+    const archSpringYmm = archTop ? archSpringYMmForOpening(config, innerAreaWidth, innerAreaHeight) : 0;
+
+    // Outer frame (shaped arch uses OpeningShapedFrame instead)
+    if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) {
+        const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
+        if (!archTop) {
+            profileElements.push(<PrintableMiteredFrame key="outer-frame" width={effectiveWidth} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} texture={pt} />);
+        }
+    }
     
     // Fixed Panel frames and glass
     if (leftFix) {
@@ -619,9 +628,6 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
         glassElements.push(<GlassPanel key="glass-right" panelId="fixed-right" style={{ top: vGlassY * scale, left: (holeX2 + dims.fixedFrame) * scale, width: glassW * scale, height: glassH * scale }} glassWidthPx={glassW*scale} glassHeightPx={glassH*scale}><PrintShutterIndicator type="fixed"/></GlassPanel>);
     }
     
-    const innerAreaWidth = holeX2 - holeX1;
-    const innerAreaHeight = holeY2 - holeY1;
-
     const PrintSlidingShutter: React.FC<{
         width: number; height: number; topProfile: number; bottomProfile: number; leftProfile: number; rightProfile: number;
         isMesh: boolean; isFixed?: boolean; isSliding?: boolean; panelId: string;
@@ -794,6 +800,19 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
         <div className="relative" style={{ width: mmToPx(effectiveWidth, scale), height: mmToPx(numHeight, scale) }}>
             {glassElements}
             {profileElements}
+            {archTop ? (
+              <OpeningShapedFrame
+                config={config}
+                windowW={effectiveWidth}
+                windowH={numHeight}
+                holeX={holeX1}
+                holeY={holeY1}
+                innerW={innerAreaWidth}
+                innerH={innerAreaHeight}
+                scale={scale}
+                color={profileColor}
+              />
+            ) : null}
             {innerAreaWidth > 0 && innerAreaHeight > 0 && (
                 <div
                     className="absolute overflow-hidden"
@@ -1071,18 +1090,27 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                     {(windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) && (() => {
                         const verticalDividers = config.verticalDividers ?? [];
                         const horizontalDividers = config.horizontalDividers ?? [];
+                        const springRel = archSpringYmm / Math.max(innerAreaHeight, 1);
+                        const effectiveHDivs =
+                          archTop && horizontalDividers.length > 0
+                            ? [springRel, ...horizontalDividers.slice(1)]
+                            : horizontalDividers;
                         const doorPositionsArr = config.doorPositions ?? [];
                         const ventilatorGridArr = config.ventilatorGrid ?? [];
                         const gridCols = verticalDividers.length + 1;
-                        const gridRows = horizontalDividers.length + 1;
+                        const gridRows = effectiveHDivs.length + 1;
                         const elements: React.ReactNode[] = [];
+                        const mullionSpanH = archTop && archSpringYmm > 0
+                          ? Math.max(0, innerAreaHeight - archSpringYmm)
+                          : innerAreaHeight;
                         
                         for (let r = 0; r < gridRows; r++) {
+                            if (archTop && r === 0) continue;
                             for (let c = 0; c < gridCols; c++) {
                                 const x_start_rel = c === 0 ? 0 : verticalDividers[c - 1];
                                 const x_end_rel = c === verticalDividers.length ? 1 : verticalDividers[c];
-                                const y_start_rel = r === 0 ? 0 : horizontalDividers[r - 1];
-                                const y_end_rel = r === horizontalDividers.length ? 1 : horizontalDividers[r];
+                                const y_start_rel = r === 0 ? 0 : effectiveHDivs[r - 1];
+                                const y_end_rel = r === effectiveHDivs.length ? 1 : effectiveHDivs[r];
 
                                 const cellX = x_start_rel * innerAreaWidth;
                                 const cellY = y_start_rel * innerAreaHeight;
@@ -1124,8 +1152,8 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                             }
                         }
 
-                        horizontalDividers.forEach((pos) => elements.push(<PrintProfilePiece key={`hmullion-${pos}`} color={profileColor} texture={pt} style={{ left: 0, top: (pos * innerAreaHeight - dims.mullion / 2) * scale, width: innerAreaWidth * scale, height: dims.mullion * scale, zIndex: 10 }}/>));
-                        verticalDividers.forEach((pos) => elements.push(<PrintProfilePiece key={`vmullion-${pos}`} color={profileColor} texture={pt} style={{ top: 0, left: (pos * innerAreaWidth - dims.mullion / 2) * scale, width: dims.mullion * scale, height: innerAreaHeight * scale, zIndex: 10 }}/>));
+                        effectiveHDivs.forEach((pos) => elements.push(<PrintProfilePiece key={`hmullion-${pos}`} color={profileColor} texture={pt} style={{ left: 0, top: (pos * innerAreaHeight - dims.mullion / 2) * scale, width: innerAreaWidth * scale, height: dims.mullion * scale, zIndex: 10 }}/>));
+                        verticalDividers.forEach((pos) => elements.push(<PrintProfilePiece key={`vmullion-${pos}`} color={profileColor} texture={pt} style={{ top: archTop ? archSpringYmm * scale : 0, left: (pos * innerAreaWidth - dims.mullion / 2) * scale, width: dims.mullion * scale, height: mullionSpanH * scale, zIndex: 10 }}/>));
                         return elements;
                     })()}
 
@@ -1276,6 +1304,26 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
             )}
             {labelElements}
             {elevationDimsBeside}
+            {archTop && archSpringYmm > 0 ? (
+              <div
+                className="pointer-events-none absolute z-[15]"
+                style={{
+                  top: mmToPx(holeY1, scale),
+                  left: mmToPx(holeX1, scale),
+                  width: mmToPx(innerAreaWidth, scale),
+                  height: mmToPx(archSpringYmm, scale),
+                }}
+              >
+                <ArchHeadLayer
+                  config={config}
+                  innerW={innerAreaWidth}
+                  springYmm={archSpringYmm}
+                  scale={scale}
+                  mullionMm={dims.mullion}
+                  profileColor={profileColor}
+                />
+              </div>
+            ) : null}
         </div>
         {elevationDimsBelow}
         {weightKg != null && weightKg > 0 && (

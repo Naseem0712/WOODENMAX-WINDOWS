@@ -1,6 +1,7 @@
 import type { MaterialRateSettings, ProfileDimensions, QuotationItem, WindowConfig } from '../types';
 import { ShutterConfigType, WindowType } from '../types';
 import { calculateUsageForConfig, packPieces } from './materialCalculator';
+import { countCasementProfileBands } from './casementBandCosting';
 import { computeHardwareCostForQuotation } from './quotationHardwareCost';
 import { getWindowQuotationAreaMm2 } from './louverBays';
 import { SLIDING_CUT_CONSTANTS } from './slidingCutFormula';
@@ -41,6 +42,8 @@ export interface MaterialCostPerItem {
   meshCost: number;
   makingCost: number;
   hardwareCost: number;
+  profileBandCost: number;
+  profileBandCount: number;
   wastageCartageCost: number;
   profitCost: number;
   totalCost: number;
@@ -64,6 +67,7 @@ export interface MaterialCostSummary {
     meshCost: number;
     makingCost: number;
     hardwareCost: number;
+    profileBandCost: number;
     wastageCartageCost: number;
     profitCost: number;
     usedLengthFt: number;
@@ -212,6 +216,8 @@ const ensureItem = (
       meshCost: 0,
       makingCost: 0,
       hardwareCost: 0,
+      profileBandCost: 0,
+      profileBandCount: 0,
       wastageCartageCost: 0,
       profitCost: 0,
       totalCost: 0,
@@ -354,6 +360,11 @@ export function calculateMaterialCostSummary(
       target.hardwareCost += computeHardwareCostForQuotation(item.config, item.hardwareItems ?? []) * qty;
     }
 
+    const bandCount = countCasementProfileBands(item.config);
+    const bandRate = Number(rates.profileBandChargePerBand) || 800;
+    target.profileBandCount += bandCount * qty;
+    target.profileBandCost += bandCount * bandRate * qty;
+
     // Bottom track clips only: 2-track → 2 pcs, 3-track → 3 pcs. Clip length
     // follows the canonical formula (W − TRACK_CLIP_REDUCTION) so this cost
     // matches the cutting plan 1:1. Dedicated clip powder rate (not main track).
@@ -420,6 +431,7 @@ export function calculateMaterialCostSummary(
     meshCost: 0,
     makingCost: 0,
     hardwareCost: 0,
+    profileBandCost: 0,
     wastageCartageCost: 0,
     profitCost: 0,
     usedLengthFt: 0,
@@ -485,6 +497,7 @@ export function calculateMaterialCostSummary(
       row.meshCost +
       row.makingCost +
       row.hardwareCost +
+      row.profileBandCost +
       row.wastageCartageCost;
     row.profitCost =
       rates.profit.mode === 'per_sqft'
@@ -501,6 +514,7 @@ export function calculateMaterialCostSummary(
     totals.meshCost += row.meshCost;
     totals.makingCost += row.makingCost;
     totals.hardwareCost += row.hardwareCost;
+    totals.profileBandCost += row.profileBandCost;
     totals.wastageCartageCost += row.wastageCartageCost;
     totals.profitCost += row.profitCost;
     totals.totalCost += row.totalCost;

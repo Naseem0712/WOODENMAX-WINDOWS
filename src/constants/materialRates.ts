@@ -56,4 +56,5 @@ export const DEFAULT_MATERIAL_RATES: MaterialRateSettings = {
     touch: 550,
     mortice: 2500,
   },
+  profileBandChargePerBand: 800,
 };

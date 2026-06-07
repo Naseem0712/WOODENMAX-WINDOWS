@@ -29,6 +29,24 @@ import {
 } from '../utils/partitionPanelGeometry';
 import { effectiveFourGlassMeetingMm } from '../utils/slidingGeometry';
 import { getFixedPanelVerticalDivisionsMm } from '../utils/fixedPanelDivisions';
+import { openingInnerClipStyle } from './casement/CasementOutlineOverlay';
+import { OpeningShapedFrame } from './casement/OpeningShapedFrame';
+import { ArchHeadLayer } from './casement/ArchHeadLayer';
+import { GridMullionHandle } from './casement/GridMullionHandle';
+import {
+  resolveHiddenMullionSegments,
+  resolveCasementMergedCells,
+  isHSegHidden,
+  isVSegHidden,
+  type MergedCasementCell,
+} from '../utils/casementGridMullions';
+import {
+  archSpringYMmForOpening,
+  isArchTopOutline,
+  isOutlineBandCell,
+  needsShapedOuterFrame,
+  resolveCasementOutline,
+} from '../utils/casementOutlineGeometry';
 import { resolveFoldFrameEdges } from '../utils/foldDoorFrame';
 import {
   getEffectiveLouverBays,
@@ -45,6 +63,10 @@ interface WindowCanvasProps {
   config: WindowConfig;
   onRemoveVerticalDivider: (index: number) => void;
   onRemoveHorizontalDivider: (index: number) => void;
+  onRemoveHMullionSegment?: (dividerIndex: number, col: number) => void;
+  onRemoveVMullionSegment?: (dividerIndex: number, row: number) => void;
+  onMoveHorizontalDivider?: (index: number, ratio: number) => void;
+  onMoveVerticalDivider?: (index: number, ratio: number) => void;
   onToggleElevationDoor: (row: number, col: number) => void;
   /** Visible scrollport (e.g. designer middle column). If omitted, scale uses this component’s box, which grows with content and over-zooms. */
   fitViewportRef?: React.RefObject<HTMLElement | null>;
@@ -849,6 +871,10 @@ const createWindowElements = (
     callbacks: {
       onRemoveHorizontalDivider: (index: number) => void,
       onRemoveVerticalDivider: (index: number) => void,
+      onRemoveHMullionSegment?: (dividerIndex: number, col: number) => void,
+      onRemoveVMullionSegment?: (dividerIndex: number, row: number) => void,
+      onMoveHorizontalDivider?: (index: number, ratio: number) => void,
+      onMoveVerticalDivider?: (index: number, ratio: number) => void,
       onToggleElevationDoor: (row: number, col: number) => void,
       onUpdateHandle?: (panelId: string, newConfig: HandleConfig | null) => void,
       enableDoorHandleDrag?: boolean,
@@ -935,9 +961,30 @@ const createWindowElements = (
     const innerAreaWidth = holeX2 - holeX1;
     const innerAreaHeight = holeY2 - holeY1;
     
+    const shapedOuterFrame =
+      (windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) &&
+      needsShapedOuterFrame(config);
+
     if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
-        profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} texture={pt} />);
+        if (shapedOuterFrame) {
+          profileElements.push(
+            <OpeningShapedFrame
+              key="outer-frame-shaped"
+              config={config}
+              windowW={w}
+              windowH={numHeight}
+              holeX={holeX1}
+              holeY={holeY1}
+              innerW={innerAreaWidth}
+              innerH={innerAreaHeight}
+              scale={scale}
+              color={profileColor}
+            />,
+          );
+        } else {
+          profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} texture={pt} />);
+        }
     }
 
     if (leftFix) profileElements.push(<ProfilePiece key="divider-left" color={profileColor} texture={pt} style={{ top: frameOffsetY * scale, left: (holeX1 - dims.fixedFrame) * scale, width: dims.fixedFrame * scale, height: (numHeight - 2 * frameOffsetY) * scale }} />);
@@ -1033,6 +1080,8 @@ const createWindowElements = (
     }
 
     const innerContent: React.ReactNode[] = [];
+    const archHeadOverlay: React.ReactNode[] = [];
+    let archSpringYmm = 0;
     if (innerAreaWidth > 0 && innerAreaHeight > 0) {
        switch (windowType) {
             case WindowType.LOUVERS: {
@@ -1473,20 +1522,101 @@ const createWindowElements = (
                 const { verticalDividers, horizontalDividers } = config;
                 const gridCols = verticalDividers.length + 1;
                 const gridRows = horizontalDividers.length + 1;
-                
-                for (let r = 0; r < gridRows; r++) {
+                const archTop = isArchTopOutline(config);
+                const springYmm = archTop ? archSpringYMmForOpening(config, innerAreaWidth, innerAreaHeight) : 0;
+                if (archTop) archSpringYmm = springYmm;
+                const springRel = springYmm / Math.max(innerAreaHeight, 1);
+                const effectiveHDivs =
+                  archTop && horizontalDividers.length > 0
+                    ? [springRel, ...horizontalDividers.slice(1)]
+                    : horizontalDividers;
+                const gridRowsEffective = effectiveHDivs.length + 1;
+                const hiddenSegs = resolveHiddenMullionSegments(config);
+                const mergedCells = resolveCasementMergedCells(gridRowsEffective, gridCols, hiddenSegs);
+                const cellMergeMap = new Map<string, MergedCasementCell>();
+                for (const m of mergedCells) {
+                  for (let mr = m.minRow; mr <= m.maxRow; mr++) {
+                    for (let mc = m.minCol; mc <= m.maxCol; mc++) {
+                      cellMergeMap.set(`${mr},${mc}`, m);
+                    }
+                  }
+                }
+                const cellBoundsFromGrid = (r: number, c: number) => {
+                  const x_start_rel = c === 0 ? 0 : verticalDividers[c - 1];
+                  const x_end_rel = c === verticalDividers.length ? 1 : verticalDividers[c];
+                  const y_start_rel = r === 0 ? 0 : effectiveHDivs[r - 1];
+                  const y_end_rel = r === effectiveHDivs.length ? 1 : effectiveHDivs[r];
+                  return {
+                    cellX: x_start_rel * innerAreaWidth,
+                    cellY: y_start_rel * innerAreaHeight,
+                    cellW: (x_end_rel - x_start_rel) * innerAreaWidth,
+                    cellH: (y_end_rel - y_start_rel) * innerAreaHeight,
+                  };
+                };
+                const mergeBounds = (m: MergedCasementCell) => {
+                  const tl = cellBoundsFromGrid(m.minRow, m.minCol);
+                  const br = cellBoundsFromGrid(m.maxRow, m.maxCol);
+                  return {
+                    cellX: tl.cellX,
+                    cellY: tl.cellY,
+                    cellW: br.cellX + br.cellW - tl.cellX,
+                    cellH: br.cellY + br.cellH - tl.cellY,
+                  };
+                };
+                const glassBoundsForCell = (r: number, c: number) => {
+                  const m = cellMergeMap.get(`${r},${c}`);
+                  if (!m) return { render: true, ...cellBoundsFromGrid(r, c) };
+                  if (m.minRow === r && m.minCol === c) return { render: true, ...mergeBounds(m) };
+                  return { render: false, ...cellBoundsFromGrid(r, c) };
+                };
+                const glassLayer: React.ReactNode[] = [];
+                const doorLayer: React.ReactNode[] = [];
+
+                if (archTop && springYmm > 0) {
+                  archHeadOverlay.push(
+                    <ArchHeadLayer
+                      key="arch-head-layer"
+                      config={config}
+                      innerW={innerAreaWidth}
+                      springYmm={springYmm}
+                      scale={scale}
+                      mullionMm={dims.mullion}
+                      profileColor={profileColor}
+                    />,
+                  );
+                }
+
+                for (let r = 0; r < gridRowsEffective; r++) {
+                    if (archTop && r === 0) continue;
                     for (let c = 0; c < gridCols; c++) {
                         const panelId = `cell-${r}-${c}`;
-                        const x_start_rel = c === 0 ? 0 : verticalDividers[c - 1];
-                        const x_end_rel = c === verticalDividers.length ? 1 : verticalDividers[c];
-                        const y_start_rel = r === 0 ? 0 : horizontalDividers[r - 1];
-                        const y_end_rel = r === horizontalDividers.length ? 1 : horizontalDividers[r];
+                        const { cellX, cellY, cellW, cellH } = cellBoundsFromGrid(r, c);
+                        const bandCell = isOutlineBandCell(config, r, c, gridRowsEffective, gridCols);
 
-                        const cellX = x_start_rel * innerAreaWidth;
-                        const cellY = y_start_rel * innerAreaHeight;
-                        const cellW = (x_end_rel - x_start_rel) * innerAreaWidth;
-                        const cellH = (y_end_rel - y_start_rel) * innerAreaHeight;
-                        
+                        if (bandCell) {
+                          const gb = glassBoundsForCell(r, c);
+                          if (!gb.render) continue;
+                          glassLayer.push(
+                            <GlassPanel
+                              key={`cell-${r}-${c}`}
+                              panelId={panelId}
+                              config={config}
+                              style={{
+                                position: 'absolute',
+                                zIndex: 2,
+                                left: gb.cellX * scale,
+                                top: gb.cellY * scale,
+                                width: gb.cellW * scale,
+                                height: gb.cellH * scale,
+                              }}
+                              glassWidth={gb.cellW}
+                              glassHeight={gb.cellH}
+                              scale={scale}
+                            />,
+                          );
+                          continue;
+                        }
+
                         const doorInfo = config.doorPositions.find(p => p.row === r && p.col === c);
                           if (doorInfo?.handle) {
                             const mirrored = mirrorHandleForPartitionHandleX(doorInfo.handle.x);
@@ -1519,7 +1649,7 @@ const createWindowElements = (
                           }
 
                         if (windowType === WindowType.CASEMENT) {
-                            if (doorInfo) {
+                            if (doorInfo && !(archTop && r === 0)) {
                                 const casementProf = dims.casementShutter;
                                 const casementPanelId = `casement-${r}-${c}`;
                                 const casementMetrics: HandlePanelFrameMetrics = {
@@ -1530,8 +1660,8 @@ const createWindowElements = (
                                   topProf: casementProf,
                                   bottomProf: casementProf,
                                 };
-                                innerContent.push(
-                                  <div key={`cell-${r}-${c}`} className="absolute" style={{left: mmToPx(cellX, scale), top: mmToPx(cellY, scale), width: mmToPx(cellW, scale), height: mmToPx(cellH, scale)}}>
+                                doorLayer.push(
+                                  <div key={`cell-${r}-${c}`} className="absolute z-[6]" style={{left: mmToPx(cellX, scale), top: mmToPx(cellY, scale), width: mmToPx(cellW, scale), height: mmToPx(cellH, scale)}}>
                                     <MiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} texture={pt} />
                                     <div className="absolute overflow-hidden" style={{ left: mmToPx(dims.casementShutter, scale), top: mmToPx(dims.casementShutter, scale), right: mmToPx(dims.casementShutter, scale), bottom: mmToPx(dims.casementShutter, scale) }}>
                                       <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={cellW - 2 * dims.casementShutter} glassHeight={cellH - 2 * dims.casementShutter} scale={scale} />
@@ -1550,7 +1680,21 @@ const createWindowElements = (
                                     ) : null}
                                   </div>
                                 );
-                            } else { innerContent.push(<GlassPanel key={`cell-${r}-${c}`} panelId={panelId} config={config} style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}} glassWidth={cellW} glassHeight={cellH} scale={scale} />); }
+                            } else {
+                              const gb = glassBoundsForCell(r, c);
+                              if (!gb.render) continue;
+                              glassLayer.push(
+                                <GlassPanel
+                                  key={`cell-${r}-${c}`}
+                                  panelId={panelId}
+                                  config={config}
+                                  style={{ position: 'absolute', zIndex: 2, left: gb.cellX * scale, top: gb.cellY * scale, width: gb.cellW * scale, height: gb.cellH * scale }}
+                                  glassWidth={gb.cellW}
+                                  glassHeight={gb.cellH}
+                                  scale={scale}
+                                />,
+                              );
+                            }
                         } else { // Ventilator
                             const cell = config.ventilatorGrid[r]?.[c];
                             const cellType = cell?.type || 'glass';
@@ -1594,8 +1738,8 @@ const createWindowElements = (
                                   topProf: casementProf,
                                   bottomProf: casementProf,
                                 };
-                                innerContent.push(
-                                  <div key={`cell-${r}-${c}`} className="absolute" style={{left: mmToPx(cellX, scale), top: mmToPx(cellY, scale), width: mmToPx(cellW, scale), height: mmToPx(cellH, scale)}}>
+                                doorLayer.push(
+                                  <div key={`cell-${r}-${c}`} className="absolute z-[6]" style={{left: mmToPx(cellX, scale), top: mmToPx(cellY, scale), width: mmToPx(cellW, scale), height: mmToPx(cellH, scale)}}>
                                     <MiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} texture={pt} />
                                     <div className="absolute overflow-hidden" style={{ left: mmToPx(dims.casementShutter, scale), top: mmToPx(dims.casementShutter, scale), right: mmToPx(dims.casementShutter, scale), bottom: mmToPx(dims.casementShutter, scale) }}>
                                       <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={cellW - 2*dims.casementShutter} glassHeight={cellH - 2*dims.casementShutter} scale={scale}/>
@@ -1623,10 +1767,10 @@ const createWindowElements = (
                                        louvers.push(<ProfilePiece key={`louver-${i}`} color={profileColor} texture={pt} style={{left: 0, top: (i * spacing)*scale, width: cellW*scale, height: dims.louverBlade*scale }}/>)
                                      }
                                 }
-                                innerContent.push(<div key={`cell-${r}-${c}`} className="absolute" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>{louvers}</div>);
+                                doorLayer.push(<div key={`cell-${r}-${c}`} className="absolute z-[6]" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>{louvers}</div>);
                             } else if (cellType === 'exhaust_fan') {
-                                innerContent.push(
-                                  <div key={`cell-${r}-${c}`} className="absolute flex items-center justify-center" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>
+                                doorLayer.push(
+                                  <div key={`cell-${r}-${c}`} className="absolute z-[6] flex items-center justify-center" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>
                                      <svg viewBox="0 0 100 100" className="w-full h-full text-slate-500 opacity-50">
                                           <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="2"/>
                                           <circle cx="50" cy="50" r="10" fill="currentColor" />
@@ -1637,32 +1781,109 @@ const createWindowElements = (
                                   </div>
                                 )
                             }
-                            else { innerContent.push(<GlassPanel key={`cell-${r}-${c}`} panelId={panelId} config={config} style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}} glassWidth={cellW} glassHeight={cellH} scale={scale} />); }
+                            else {
+                              const gb = glassBoundsForCell(r, c);
+                              if (!gb.render) continue;
+                              glassLayer.push(
+                                <GlassPanel
+                                  key={`cell-${r}-${c}`}
+                                  panelId={panelId}
+                                  config={config}
+                                  style={{ position: 'absolute', zIndex: 2, left: gb.cellX * scale, top: gb.cellY * scale, width: gb.cellW * scale, height: gb.cellH * scale }}
+                                  glassWidth={gb.cellW}
+                                  glassHeight={gb.cellH}
+                                  scale={scale}
+                                />,
+                              );
+                            }
                         }
                     }
                 }
 
-                horizontalDividers.forEach((pos, i) => {
+                innerContent.push(...glassLayer, ...doorLayer);
+
+                const onMoveH = callbacks.onMoveHorizontalDivider;
+                const onMoveV = callbacks.onMoveVerticalDivider;
+                const onDelHSeg = callbacks.onRemoveHMullionSegment ?? ((hi: number, col: number) => callbacks.onRemoveHorizontalDivider(hi));
+                const onDelVSeg = callbacks.onRemoveVMullionSegment ?? ((vi: number, row: number) => callbacks.onRemoveVerticalDivider(vi));
+
+                effectiveHDivs.forEach((pos, hi) => {
+                  for (let c = 0; c < gridCols; c++) {
+                    if (isHSegHidden(hiddenSegs, hi, c)) continue;
+                    const xStart = c === 0 ? 0 : verticalDividers[c - 1];
+                    const xEnd = c === verticalDividers.length ? 1 : verticalDividers[c];
+                    const segLeft = xStart * innerAreaWidth;
+                    const segWidth = (xEnd - xStart) * innerAreaWidth;
+                    const yMm = pos * innerAreaHeight;
+                    const isSpring = archTop && hi === 0;
                     innerContent.push(
-                      <button key={`hmullion-${i}`} onClick={() => callbacks.onRemoveHorizontalDivider(i)} className="absolute w-full group" style={{ top: (pos * innerAreaHeight - dims.mullion / 2) * scale, height: dims.mullion * scale, zIndex: 10 }}>
-                          <ProfilePiece color={profileColor} texture={pt} style={{left: 0, top: 0, width: '100%', height: '100%'}}/>
-                          <div className="absolute inset-0 bg-red-500 bg-opacity-0 group-hover:bg-opacity-50 transition-colors flex items-center justify-center">
-                              <TrashIcon className="w-5 h-5 text-white opacity-0 group-hover:opacity-100"/>
-                          </div>
-                      </button>
+                      <GridMullionHandle
+                        key={`hseg-${hi}-${c}`}
+                        orientation="horizontal"
+                        leftPx={segLeft * scale}
+                        topPx={(yMm - dims.mullion / 2) * scale}
+                        widthPx={segWidth * scale}
+                        heightPx={dims.mullion * scale}
+                        positionMm={yMm}
+                        scale={scale}
+                        profileColor={profileColor}
+                        texture={pt}
+                        draggable={Boolean(onMoveH)}
+                        measureFromBottom={isSpring}
+                        totalHeightMm={isSpring ? innerAreaHeight : undefined}
+                        hideDelete={isSpring}
+                        onDragEnd={
+                          onMoveH
+                            ? (mm) => {
+                                const ratio = Math.max(0.05, Math.min(0.95, mm / innerAreaHeight));
+                                onMoveH(hi, ratio);
+                              }
+                            : undefined
+                        }
+                        onDelete={() => onDelHSeg(hi, c)}
+                        deleteTitle={isSpring ? 'Spring line — drag to adjust height' : 'Remove this horizontal segment'}
+                      />,
                     );
+                  }
                 });
-            
-                verticalDividers.forEach((pos, i) => {
+
+                verticalDividers.forEach((pos, vi) => {
+                  for (let r = 0; r < gridRowsEffective; r++) {
+                    if (archTop && r === 0) continue;
+                    if (isVSegHidden(hiddenSegs, vi, r)) continue;
+                    const yStart = r === 0 ? 0 : effectiveHDivs[r - 1];
+                    const yEnd = r === effectiveHDivs.length ? 1 : effectiveHDivs[r];
+                    const segTop = yStart * innerAreaHeight;
+                    const segHeight = (yEnd - yStart) * innerAreaHeight;
+                    const xMm = pos * innerAreaWidth;
                     innerContent.push(
-                      <button key={`vmullion-${i}`} onClick={() => callbacks.onRemoveVerticalDivider(i)} className="absolute h-full group" style={{ left: (pos * innerAreaWidth - dims.mullion / 2) * scale, width: dims.mullion * scale, zIndex: 10 }}>
-                         <ProfilePiece color={profileColor} texture={pt} style={{left: 0, top: 0, width: '100%', height: '100%'}}/>
-                         <div className="absolute inset-0 bg-red-500 bg-opacity-0 group-hover:bg-opacity-50 transition-colors flex items-center justify-center">
-                              <TrashIcon className="w-5 h-5 text-white opacity-0 group-hover:opacity-100"/>
-                          </div>
-                      </button>
+                      <GridMullionHandle
+                        key={`vseg-${vi}-${r}`}
+                        orientation="vertical"
+                        leftPx={(xMm - dims.mullion / 2) * scale}
+                        topPx={segTop * scale}
+                        widthPx={dims.mullion * scale}
+                        heightPx={segHeight * scale}
+                        positionMm={xMm}
+                        scale={scale}
+                        profileColor={profileColor}
+                        texture={pt}
+                        draggable={Boolean(onMoveV)}
+                        onDragEnd={
+                          onMoveV
+                            ? (mm) => {
+                                const ratio = Math.max(0.05, Math.min(0.95, mm / innerAreaWidth));
+                                onMoveV(vi, ratio);
+                              }
+                            : undefined
+                        }
+                        onDelete={() => onDelVSeg(vi, r)}
+                        deleteTitle="Remove this vertical segment"
+                      />,
                     );
+                  }
                 });
+
                 break;
             }
             case WindowType.GLASS_PARTITION: {
@@ -1818,7 +2039,7 @@ const createWindowElements = (
         }
     }
 
-    return { profileElements, glassElements, handleElements, innerContent, innerAreaWidth, innerAreaHeight, holeX1, holeY1, geometry };
+    return { profileElements, glassElements, handleElements, innerContent, archHeadOverlay, archSpringYmm, innerAreaWidth, innerAreaHeight, holeX1, holeY1, geometry };
 };
 
 const RenderedWindow: React.FC<{
@@ -1826,21 +2047,46 @@ const RenderedWindow: React.FC<{
     elements: ReturnType<typeof createWindowElements>;
     scale: number;
     showLabels?: boolean;
-}> = ({ config, elements, scale, showLabels = true }) => {
-    const { width, height } = config;
+    dims?: { outerFrame: number; mullion: number };
+}> = ({ config, elements, scale, showLabels = true, dims }) => {
+    const { width, height, windowType } = config;
     const numWidth = Number(width) || 0;
     const numHeight = Number(height) || 0;
-
+    const innerStyle =
+      windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR
+        ? openingInnerClipStyle(config, elements.innerAreaWidth, elements.innerAreaHeight, scale)
+        : {};
 
     return (
         <div className="relative shadow-lg" style={{ width: mmToPx(numWidth, scale), height: mmToPx(numHeight, scale) }}>
           {elements.glassElements}
-          {elements.profileElements}
-          
           {elements.innerAreaWidth > 0 && elements.innerAreaHeight > 0 && (
-            <div className="absolute overflow-hidden" style={{ top: mmToPx(elements.holeY1, scale), left: mmToPx(elements.holeX1, scale), width: mmToPx(elements.innerAreaWidth, scale), height: mmToPx(elements.innerAreaHeight, scale) }}>
+            <div
+              className="absolute z-[5]"
+              style={{
+                top: mmToPx(elements.holeY1, scale),
+                left: mmToPx(elements.holeX1, scale),
+                width: mmToPx(elements.innerAreaWidth, scale),
+                height: mmToPx(elements.innerAreaHeight, scale),
+                ...innerStyle,
+              }}
+            >
                 {elements.innerContent}
                 {elements.handleElements}
+            </div>
+          )}
+          {elements.profileElements}
+          {elements.archHeadOverlay.length > 0 && elements.archSpringYmm > 0 && (
+            <div
+              className="pointer-events-none absolute z-[15]"
+              style={{
+                top: mmToPx(elements.holeY1, scale),
+                left: mmToPx(elements.holeX1, scale),
+                width: mmToPx(elements.innerAreaWidth, scale),
+                height: mmToPx(elements.archSpringYmm, scale),
+              }}
+            >
+              {elements.archHeadOverlay}
             </div>
           )}
           
@@ -1856,7 +2102,19 @@ const RenderedWindow: React.FC<{
 };
 
 export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
-  const { config, onRemoveHorizontalDivider, onRemoveVerticalDivider, onToggleElevationDoor, fitViewportRef, onUpdateHandle, enableDoorHandleDrag } = props;
+  const {
+    config,
+    onRemoveHorizontalDivider,
+    onRemoveVerticalDivider,
+    onRemoveHMullionSegment,
+    onRemoveVMullionSegment,
+    onMoveHorizontalDivider,
+    onMoveVerticalDivider,
+    onToggleElevationDoor,
+    fitViewportRef,
+    onUpdateHandle,
+    enableDoorHandleDrag,
+  } = props;
   const { width, height, series, profileColor, windowType } = config;
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1951,6 +2209,10 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   const canvasCallbacks = useMemo(() => ({
     onRemoveHorizontalDivider,
     onRemoveVerticalDivider,
+    onRemoveHMullionSegment,
+    onRemoveVMullionSegment,
+    onMoveHorizontalDivider,
+    onMoveVerticalDivider,
     onToggleElevationDoor,
     onUpdateHandle,
     enableDoorHandleDrag,
@@ -1966,6 +2228,10 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     enableDoorHandleDrag,
     onRemoveHorizontalDivider,
     onRemoveVerticalDivider,
+    onRemoveHMullionSegment,
+    onRemoveVMullionSegment,
+    onMoveHorizontalDivider,
+    onMoveVerticalDivider,
     onToggleElevationDoor,
     onUpdateHandle,
     placement,
@@ -2070,7 +2336,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
       ref={containerRef}
       className="relative flex w-full min-w-0 shrink-0 flex-col items-center justify-center overflow-visible bg-transparent"
     >
-      <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none"> WoodenMax </div>
+      <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none no-print"> WoodenMax </div>
        <div ref={renderedWindowRef} className="flex shrink-0 flex-col items-center justify-center">
             {windowType === WindowType.CORNER && config.leftConfig && config.rightConfig ? (
                 (() => {
@@ -2104,7 +2370,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
                     )
                 })()
             ) : (
-                <RenderedWindow config={config} elements={createWindowElements(config, scale, dims, canvasCallbacks)} scale={scale} />
+                <RenderedWindow config={config} elements={createWindowElements(config, scale, dims, canvasCallbacks)} scale={scale} dims={dims} />
             )}
         </div>
       

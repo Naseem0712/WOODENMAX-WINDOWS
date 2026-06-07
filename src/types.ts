@@ -24,6 +24,31 @@ export enum MirrorShape {
   OVAL = 'oval',
 }
 
+/** Opening silhouette — arch-top, rounded corners, etc. (casement / ventilator). */
+export type CasementOutlineShape =
+  | 'rect'
+  | 'arch_top'
+  | 'rounded_rect'
+  | 'rounded_top'
+  | 'rounded_bottom';
+
+export interface CasementOutlineConfig {
+  shape: CasementOutlineShape;
+  cornerRadiusMm: number | '';
+  /** Straight rectangular zone height from bottom of inner opening (mm). Spring transom sits on top of this. */
+  archStraightBottomMm: number | '';
+  /** Relative height (0–1) where arch meets horizontal transom when archStraightBottomMm is not set. */
+  archSpringRatio: number;
+  /** Auto evenly-spaced fanlight mullions when archMullionAngles is empty. */
+  archRadialMullions: number;
+  /** Custom fanlight mullion angles in degrees (180=left, 90=top, 0=right). Overrides count when set. */
+  archMullionAngles?: number[];
+  /** Concentric semicircular profile rings inside the arch (0, 1, or 2). */
+  archInnerRingCount: number;
+  /** Clear gap between inner arch rings (mm). */
+  archInnerRingGapMm: number | '';
+}
+
 export interface SavedColor {
   id: string;
   name: string;
@@ -296,7 +321,11 @@ export interface WindowConfig {
   // Casement & Ventilator specific
   verticalDividers: number[]; // Relative positions (0-1)
   horizontalDividers: number[]; // Relative positions (0-1)
+  /** Per-segment hidden mullions at grid junctions (not full lines). Keys: h "dividerIdx-col", v "dividerIdx-row". */
+  hiddenMullionSegments?: { horizontal: string[]; vertical: string[] };
   doorPositions: { row: number; col: number; handle?: HandleConfig }[];
+  /** Arch-top / rounded casement outline (visual + layout helper). */
+  casementOutline?: CasementOutlineConfig;
 
   // Ventilator specific
   ventilatorGrid: VentilatorCell[][];
@@ -415,6 +444,8 @@ export interface MaterialRateSettings {
     touch?: number;
     mortice?: number;
   };
+  /** Fabrication charge per profile band (arch band, inner ring, casement door sides). */
+  profileBandChargePerBand?: number;
 }
 
 export interface QuotationSettings {

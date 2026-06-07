@@ -5,6 +5,16 @@ import { hasResolvedSeriesValue, resolveSeriesNumeric } from './profileDimension
 import { getQuotationHardwareUnitMultiplier } from './quotationHardwareCost';
 import { getFixedPanelVerticalDivisionsMm } from './fixedPanelDivisions';
 import { getEffectiveLouverBays, getLouverBaySeparatorMm } from './louverBays';
+import {
+  archHeadGlassAreaMm2,
+  archInnerRingArcLengthMm,
+  archMullionSegments,
+  archOuterFrameProfileLengthsMm,
+  archSpringYMmForOpening,
+  isArchTopOutline,
+  resolveArchInnerRingGapMm,
+  resolveCasementOutline,
+} from './casementOutlineGeometry';
 
 const FEET_TO_MM = 304.8;
 const SQFT_TO_SQMM = 92903.04;
@@ -189,6 +199,25 @@ function calculateUsage(config: WindowConfig, options?: CalculateUsageOptions): 
         }
     };
 
+    const addGlassArea = (panelId: string, areaMm2: number, cutWidthMm: number, cutHeightMm: number) => {
+        if (!Number.isFinite(areaMm2) || areaMm2 <= 0) return;
+        const desc = getGlassDescription(config);
+        glassUsage.set(desc, (glassUsage.get(desc) || 0) + areaMm2);
+        const wk = Math.round(cutWidthMm * 100) / 100;
+        const hk = Math.round(cutHeightMm * 100) / 100;
+        const ck = `${desc}|||${wk}|||${hk}`;
+        const g = glassCutsMap.get(ck);
+        if (g) g.panels += 1;
+        else glassCutsMap.set(ck, { description: desc, widthMm: wk, heightMm: hk, panels: 1 });
+        const pattern = getGridPattern(panelId);
+        if (pattern) {
+            const hc = Number(pattern.horizontal?.count) || 0;
+            const vc = Number(pattern.vertical?.count) || 0;
+            if (hc > 0) addProfile('glassGridProfile', ...Array(hc).fill(cutWidthMm));
+            if (vc > 0) addProfile('glassGridProfile', ...Array(vc).fill(cutHeightMm));
+        }
+    };
+
     const addMesh = (panelId: string, width: number, height: number) => {
         if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
         meshArea += width * height;
@@ -290,6 +319,19 @@ function calculateUsage(config: WindowConfig, options?: CalculateUsageOptions): 
             const unifiedOuter = isSlidingSeriesUnifiedOuter(config.series);
             addProfilePrimary(trackKey, w, w);
             addProfilePrimary(unifiedOuter ? trackKey : jambKey, h, h);
+        } else if (
+            (config.windowType === WindowType.CASEMENT || config.windowType === WindowType.VENTILATOR) &&
+            isArchTopOutline(config)
+        ) {
+            const springY = archSpringYMmForOpening(config, innerW, innerH);
+            const outerLens = archOuterFrameProfileLengthsMm(w, h, holeY1, springY);
+            if (verticalFrame !== frame) {
+                addProfile('outerFrame', outerLens.bottomMm, outerLens.bottomMm);
+                addProfile('outerFrameVertical', outerLens.verticalMm, outerLens.verticalMm);
+            } else {
+                addProfile('outerFrame', outerLens.bottomMm, outerLens.bottomMm, outerLens.verticalMm, outerLens.verticalMm);
+            }
+            addProfile('outerFrame', outerLens.archMm);
         } else if (verticalFrame !== frame) {
             addProfile('outerFrame', w, w);
             addProfile('outerFrameVertical', h, h);
@@ -391,12 +433,38 @@ function calculateUsage(config: WindowConfig, options?: CalculateUsageOptions): 
             const hDiv = config.horizontalDividers ?? [];
             const colWidths = getSegmentSizes(innerW, vDiv);
             const rowHeights = getSegmentSizes(innerH, hDiv);
+            const archTop = isArchTopOutline(config);
+            const archSpringY = archTop ? archSpringYMmForOpening(config, innerW, innerH) : 0;
+            const outline = resolveCasementOutline(config);
+            const mullionProf = Number(dims.mullion) || 0;
 
-            if (vDiv.length > 0) addProfile('mullion', ...Array(vDiv.length).fill(innerH));
+            if (archTop && archSpringY > 0) {
+                addGlassArea('arch-head', archHeadGlassAreaMm2(innerW, archSpringY), innerW, archSpringY);
+                const ringGap = resolveArchInnerRingGapMm(outline);
+                const ringCount = Math.max(0, Math.min(2, outline.archInnerRingCount ?? 0));
+                for (let i = 1; i <= ringCount; i++) {
+                    const len = archInnerRingArcLengthMm(innerW, archSpringY, i, ringGap, mullionProf);
+                    if (len > 0) addProfile('mullion', len);
+                }
+                for (const seg of archMullionSegments(innerW, archSpringY, outline)) {
+                    const len = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1);
+                    if (len > 0) addProfile('mullion', len);
+                }
+            }
+
+            if (vDiv.length > 0) {
+                if (archTop && archSpringY > 0) {
+                    const bottomH = Math.max(0, innerH - archSpringY);
+                    addProfile('mullion', ...Array(vDiv.length).fill(bottomH));
+                } else {
+                    addProfile('mullion', ...Array(vDiv.length).fill(innerH));
+                }
+            }
             if (hDiv.length > 0) addProfile('mullion', ...Array(hDiv.length).fill(innerW));
 
             const doorSet = new Set((config.doorPositions || []).map(p => `${p.row}-${p.col}`));
             for (let r = 0; r < rowHeights.length; r++) {
+                if (archTop && r === 0) continue;
                 for (let c = 0; c < colWidths.length; c++) {
                     const cw = colWidths[c];
                     const ch = rowHeights[r];
@@ -404,7 +472,6 @@ function calculateUsage(config: WindowConfig, options?: CalculateUsageOptions): 
                     const key = `${r}-${c}`;
                     const isDoor = doorSet.has(key);
                     if (isDoor) {
-                        // Door all side
                         addProfile('casementShutter', cw, cw, ch, ch);
                         addGlass(`casement-door-${r}-${c}`, cw - (2 * Number(dims.casementShutter || 0)), ch - (2 * Number(dims.casementShutter || 0)));
                     } else {
