@@ -53,11 +53,14 @@ export const PlanSchematic: React.FC<Props> = ({
 
   const kindLabel = planKindShortLabel(spec.kind);
 
+  const swingShort =
+    swingNote === 'Outside swing' ? 'Outside' : swingNote === 'Inside swing' ? 'Inside' : swingNote;
+
   return (
     <div className={`wov-plan-wrap ${variant}`}>
       <div className="wov-plan-title">
         {isPrint
-          ? `Plan — ${kindLabel} · ${pct}% · ${swingNote}`
+          ? `Plan · ${kindLabel} · ${pct}% · ${swingShort}`
           : `Plan view — ${kindLabel} · ${pct}% · ${swingNote}`}
       </div>
       <svg

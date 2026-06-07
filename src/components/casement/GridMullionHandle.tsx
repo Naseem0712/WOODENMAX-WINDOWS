@@ -22,6 +22,9 @@ type Props = {
   totalHeightMm?: number;
   /** Hide delete control (e.g. arch spring transom). */
   hideDelete?: boolean;
+  zIndex?: number;
+  /** When false, joint lines are drawn on a higher canvas layer instead. */
+  showJointLines?: boolean;
 };
 
 export const GridMullionHandle: React.FC<Props> = ({
@@ -41,6 +44,8 @@ export const GridMullionHandle: React.FC<Props> = ({
   measureFromBottom = false,
   totalHeightMm,
   hideDelete = false,
+  zIndex = 4,
+  showJointLines = true,
 }) => {
   const [liveMm, setLiveMm] = useState<number | null>(null);
   const dragRef = useRef<{ startPos: number; startMm: number; axis: 'x' | 'y' } | null>(null);
@@ -100,11 +105,13 @@ export const GridMullionHandle: React.FC<Props> = ({
   return (
     <div
       className={`absolute group touch-none ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
-      style={{ left: leftPx, top: topPx, width: widthPx, height: heightPx, zIndex: 14 }}
+      style={{ left: leftPx, top: topPx, width: widthPx, height: heightPx, zIndex }}
       onPointerDown={onPointerDown}
     >
       <div className="absolute inset-0" style={{ ...tileStyle, ...mullionEdgeStyle('canvas') }} />
-      <MullionJointLines widthPx={widthPx} heightPx={heightPx} orientation={orientation} />
+      {showJointLines ? (
+        <MullionJointLines widthPx={widthPx} heightPx={heightPx} orientation={orientation} />
+      ) : null}
       <div className="pointer-events-none absolute inset-0 bg-indigo-500/0 group-hover:bg-indigo-500/15 transition-colors" />
       <span
         className={`pointer-events-none absolute z-[2] whitespace-nowrap font-mono text-[10px] font-semibold text-cyan-100 opacity-0 transition-opacity group-hover:opacity-100 ${liveMm != null ? '!opacity-100' : ''} ${

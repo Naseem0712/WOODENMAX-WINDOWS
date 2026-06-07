@@ -70,6 +70,16 @@ export function archRadiusMm(innerW: number, archHeightMm: number): number {
   return (W * W + 4 * H * H) / (8 * H);
 }
 
+/** SVG sweep for upper fanlight arc left → right (chord at springY, apex toward y=0). */
+const ARCH_UPPER_SWEEP = 1;
+
+/** Closed upper semicircle in arch-head coords (y=0 apex, y=springY chord). */
+export function archUpperSemicirclePathD(innerW: number, springY: number, x0 = 0): string {
+  if (springY <= 0 || innerW <= 0) return '';
+  const r = archRadiusMm(innerW, springY);
+  return `M ${x0} ${springY} A ${r} ${r} 0 0 ${ARCH_UPPER_SWEEP} ${x0 + innerW} ${springY} Z`;
+}
+
 /** @deprecated use MIN_ARCH_ZONE_MM — kept for panel hints */
 export function minArchZoneMm(_innerW: number): number {
   return MIN_ARCH_ZONE_MM;
@@ -190,41 +200,222 @@ function segFromAngle(innerW: number, springY: number, angleDeg: number): Radial
   return archMullionRaySegment(innerW, springY, angleDeg);
 }
 
+/** Y of spring transom top face (radial mullions start here, not through the transom). */
+export function archMullionSpringTopY(springY: number, mullionMm: number): number {
+  return springY - Math.max(mullionMm, 4) / 2;
+}
+
+/** Trim radial mullion segment so it starts at the spring transom top (clean T-joint). */
+export function trimRadialSegAtSpringTop(seg: RadialSeg, springY: number, mullionMm: number): RadialSeg {
+  const springTop = archMullionSpringTopY(springY, mullionMm);
+  const dy = seg.y2 - seg.y1;
+  if (Math.abs(dy) < 1e-9) return seg;
+  const t = (springTop - seg.y1) / dy;
+  if (t <= 0) return seg;
+  if (t >= 1) {
+    return { x1: seg.x2, y1: seg.y2, x2: seg.x2, y2: seg.y2 };
+  }
+  return {
+    x1: seg.x1 + t * (seg.x2 - seg.x1),
+    y1: springTop,
+    x2: seg.x2,
+    y2: seg.y2,
+  };
+}
+
+function fanlightContainsPoint(
+  x: number,
+  y: number,
+  innerW: number,
+  springY: number,
+  marginMm = 0,
+): boolean {
+  if (y > springY + marginMm || y < -marginMm) return false;
+  const cx = innerW / 2;
+  const R = archRadiusMm(innerW, springY);
+  if (R <= 0) return false;
+  const cy = R;
+  return Math.hypot(x - cx, y - cy) <= R + marginMm;
+}
+
+function radialBarEndInsideFanlight(
+  seg: RadialSeg,
+  halfW: number,
+  innerW: number,
+  springY: number,
+  insetMm = 0.35,
+): boolean {
+  const dx = seg.x2 - seg.x1;
+  const dy = seg.y2 - seg.y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const px = (-dy / len) * halfW;
+  const py = (dx / len) * halfW;
+  return (
+    fanlightContainsPoint(seg.x2 + px, seg.y2 + py, innerW, springY, -insetMm) &&
+    fanlightContainsPoint(seg.x2 - px, seg.y2 - py, innerW, springY, -insetMm)
+  );
+}
+
+/** Shorten radial mullion so both bar corners stay inside the fanlight semicircle. */
+export function trimRadialSegAtArchFanlight(
+  seg: RadialSeg,
+  innerW: number,
+  springY: number,
+  halfW: number,
+): RadialSeg {
+  if (radialBarEndInsideFanlight(seg, halfW, innerW, springY)) return seg;
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 28; i++) {
+    const mid = (lo + hi) / 2;
+    const test: RadialSeg = {
+      x1: seg.x1,
+      y1: seg.y1,
+      x2: seg.x1 + mid * (seg.x2 - seg.x1),
+      y2: seg.y1 + mid * (seg.y2 - seg.y1),
+    };
+    if (radialBarEndInsideFanlight(test, halfW, innerW, springY)) lo = mid;
+    else hi = mid;
+  }
+  return {
+    x1: seg.x1,
+    y1: seg.y1,
+    x2: seg.x1 + lo * (seg.x2 - seg.x1),
+    y2: seg.y1 + lo * (seg.y2 - seg.y1),
+  };
+}
+
+/** Spring-trim + arch-trim for one radial mullion centerline. */
+export function prepareArchRadialMullionSeg(
+  innerW: number,
+  springY: number,
+  seg: RadialSeg,
+  mullionMm: number,
+): RadialSeg {
+  const halfW = Math.max(mullionMm, 4) / 2;
+  return trimRadialSegAtArchFanlight(trimRadialSegAtSpringTop(seg, springY, mullionMm), innerW, springY, halfW);
+}
+
+export type ArchMullionBarPaths = {
+  fillD: string;
+  leftEdgeD: string;
+  rightEdgeD: string;
+  archCapD: string;
+  springCapD: string;
+};
+
 /** Fanlight mullions — custom angles (deg, 180=left, 90=top, 0=right) or auto evenly spaced. */
 export function archMullionSegments(innerW: number, springY: number, outline: CasementOutlineConfig): RadialSeg[] {
   if (innerW <= 0 || springY <= 0) return [];
-  const custom = (outline.archMullionAngles ?? []).filter((a) => Number.isFinite(a));
-  if (custom.length > 0) {
-    return custom
-      .map((deg) => archMullionRaySegment(innerW, springY, deg))
-      .filter((seg): seg is RadialSeg => seg != null);
-  }
-  const count = outline.archRadialMullions ?? 0;
-  if (count <= 0) return [];
-  const segs: RadialSeg[] = [];
-  for (let i = 1; i <= count; i++) {
-    const angleDeg = 180 - (i * 180) / (count + 1);
-    const seg = archMullionRaySegment(innerW, springY, angleDeg);
-    if (seg) segs.push(seg);
-  }
-  return segs;
+  return archMullionCenterAngles(outline)
+    .map((deg) => archMullionRaySegment(innerW, springY, deg))
+    .filter((seg): seg is RadialSeg => seg != null);
 }
 
-/** @deprecated use archMullionSegments */
-export function archRadialMullionSegments(innerW: number, springY: number, count: number): RadialSeg[] {
-  return archMullionSegments(innerW, springY, { ...DEFAULT_CASEMENT_OUTLINE, archRadialMullions: count });
+/** Mullion centre-line angles only (deg, 180 → 0). */
+export function archMullionCenterAngles(outline: CasementOutlineConfig): number[] {
+  const bounds = fanlightBoundaryAngles(outline);
+  return bounds.length > 2 ? bounds.slice(1, -1) : [];
 }
 
-export function archTopClipPathD(innerW: number, innerH: number, springY: number): string {
-  const r = archRadiusMm(innerW, springY);
-  return `M 0 ${springY} L 0 ${innerH} L ${innerW} ${innerH} L ${innerW} ${springY} A ${r} ${r} 0 0 0 0 ${springY} Z`;
+function lineRayIntersection(
+  ox: number,
+  oy: number,
+  dirX: number,
+  dirY: number,
+  hx: number,
+  hy: number,
+  angleDeg: number,
+): { x: number; y: number } | null {
+  const rad = (angleDeg * Math.PI) / 180;
+  const rx = Math.cos(rad);
+  const ry = -Math.sin(rad);
+  const denom = dirX * ry - dirY * rx;
+  if (Math.abs(denom) < 1e-12) return null;
+  const t = ((hx - ox) * ry - (hy - oy) * rx) / denom;
+  const s = Math.abs(rx) > Math.abs(ry) ? (ox + t * dirX - hx) / rx : (oy + t * dirY - hy) / ry;
+  if (s < -1e-6) return null;
+  return { x: ox + t * dirX, y: oy + t * dirY };
+}
+
+/**
+ * Constant-width radial bar with degree-cut spring miters (bisector joints) and perpendicular arch butt.
+ */
+export function archRadialMullionMiteredBarPaths(
+  innerW: number,
+  springY: number,
+  angleDeg: number,
+  prevAngleDeg: number,
+  nextAngleDeg: number,
+  mullionMm: number,
+): ArchMullionBarPaths | null {
+  const cx = innerW / 2;
+  const halfW = Math.max(mullionMm, 4) / 2;
+  const center = archMullionRaySegment(innerW, springY, angleDeg);
+  if (!center) return null;
+  const seg = prepareArchRadialMullionSeg(innerW, springY, center, mullionMm);
+  const dx = seg.x2 - seg.x1;
+  const dy = seg.y2 - seg.y1;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return null;
+  const ux = dx / len;
+  const uy = dy / len;
+  const px = -uy * halfW;
+  const py = ux * halfW;
+
+  const bisectorLeft = (prevAngleDeg + angleDeg) / 2;
+  const bisectorRight = (angleDeg + nextAngleDeg) / 2;
+  const leftOriginX = seg.x1 + px;
+  const leftOriginY = seg.y1 + py;
+  const rightOriginX = seg.x1 - px;
+  const rightOriginY = seg.y1 - py;
+
+  const aLpt = lineRayIntersection(leftOriginX, leftOriginY, ux, uy, cx, springY, bisectorLeft) ?? {
+    x: seg.x1 + px,
+    y: seg.y1 + py,
+  };
+  const aRpt = lineRayIntersection(rightOriginX, rightOriginY, ux, uy, cx, springY, bisectorRight) ?? {
+    x: seg.x1 - px,
+    y: seg.y1 - py,
+  };
+
+  const bLx = seg.x2 + px;
+  const bLy = seg.y2 + py;
+  const bRx = seg.x2 - px;
+  const bRy = seg.y2 - py;
+
+  return {
+    fillD: `M ${aLpt.x} ${aLpt.y} L ${bLx} ${bLy} L ${bRx} ${bRy} L ${aRpt.x} ${aRpt.y} Z`,
+    leftEdgeD: `M ${aLpt.x} ${aLpt.y} L ${bLx} ${bLy}`,
+    rightEdgeD: `M ${aRpt.x} ${aRpt.y} L ${bRx} ${bRy}`,
+    archCapD: `M ${bLx} ${bLy} L ${bRx} ${bRy}`,
+    springCapD: `M ${aLpt.x} ${aLpt.y} L ${aRpt.x} ${aRpt.y}`,
+  };
+}
+
+/** All fanlight mullions — constant width, hub miters, arch butt inside semicircle. */
+export function archRadialMullionMiteredBarPathsAll(
+  innerW: number,
+  springY: number,
+  outline: CasementOutlineConfig,
+  mullionMm: number,
+): ArchMullionBarPaths[] {
+  if (innerW <= 0 || springY <= 0) return [];
+  const angles = archMullionCenterAngles(outline);
+  const out: ArchMullionBarPaths[] = [];
+  for (let i = 0; i < angles.length; i++) {
+    const angle = angles[i];
+    const prev = i === 0 ? 180 : angles[i - 1];
+    const next = i === angles.length - 1 ? 0 : angles[i + 1];
+    const bar = archRadialMullionMiteredBarPaths(innerW, springY, angle, prev, next, mullionMm);
+    if (bar) out.push(bar);
+  }
+  return out;
 }
 
 /** Fanlight glass / mullion zone — semicircle above spring line only (no square shoulders). */
 export function archHeadZoneClipPathD(innerW: number, springY: number): string {
-  if (springY <= 0) return '';
-  const r = archRadiusMm(innerW, springY);
-  return `M 0 ${springY} A ${r} ${r} 0 0 0 ${innerW} ${springY} Z`;
+  return archUpperSemicirclePathD(innerW, springY);
 }
 
 /** Boundary angles (deg) dividing fanlight into glass wedges — left → right. */
@@ -243,101 +434,9 @@ export function fanlightBoundaryAngles(outline: CasementOutlineConfig): number[]
   return [180, ...mids, 0];
 }
 
-function outerPointAtFanlightAngle(innerW: number, springY: number, angleDeg: number): { x: number; y: number } {
-  if (angleDeg >= 179.5) return { x: 0, y: springY };
-  if (angleDeg <= 0.5) return { x: innerW, y: springY };
-  const seg = archMullionRaySegment(innerW, springY, angleDeg);
-  if (!seg) return { x: innerW / 2, y: 0 };
-  return { x: seg.x2, y: seg.y2 };
-}
-
-/** Glass wedge between two fanlight angles — arc follows the outer semicircle correctly. */
-function archFanlightWedgePathD(
-  innerW: number,
-  springY: number,
-  angleDeg1: number,
-  angleDeg2: number,
-): string {
-  const cx = innerW / 2;
-  const R = archRadiusMm(innerW, springY);
-  const cy = R;
-  const p1 = outerPointAtFanlightAngle(innerW, springY, angleDeg1);
-  const p2 = outerPointAtFanlightAngle(innerW, springY, angleDeg2);
-  const a1 = Math.atan2(p1.y - cy, p1.x - cx);
-  const a2 = Math.atan2(p2.y - cy, p2.x - cx);
-  let delta = a2 - a1;
-  while (delta <= 0) delta += Math.PI * 2;
-  while (delta > Math.PI * 2) delta -= Math.PI * 2;
-  const largeArc = delta > Math.PI ? 1 : 0;
-  const sweep = 1;
-  return `M ${cx} ${springY} L ${p1.x} ${p1.y} A ${R} ${R} 0 ${largeArc} ${sweep} ${p2.x} ${p2.y} Z`;
-}
-
-/** Glass wedge paths between fanlight mullions (or one full semicircle when no mullions). */
-export function archFanlightWedgePaths(
-  innerW: number,
-  springY: number,
-  outline: CasementOutlineConfig,
-): string[] {
-  if (innerW <= 0 || springY <= 0) return [];
-  const bounds = fanlightBoundaryAngles(outline);
-  if (bounds.length <= 2) {
-    const d = archHeadZoneClipPathD(innerW, springY);
-    return d ? [d] : [];
-  }
-  const paths: string[] = [];
-  for (let i = 0; i < bounds.length - 1; i++) {
-    paths.push(archFanlightWedgePathD(innerW, springY, bounds[i], bounds[i + 1]));
-  }
-  return paths;
-}
-
 function halfChordAtSpring(r: number, springY: number, cy: number): number {
   const dy = springY - cy;
   return Math.sqrt(Math.max(0, r * r - dy * dy));
-}
-
-/** Filled semicircular profile bands for inner arch rings (visible frame strips). */
-export function archInnerRingBandPaths(
-  innerW: number,
-  springY: number,
-  ringCount: number,
-  gapMm: number,
-  profileMm: number,
-): string[] {
-  const n = Math.max(0, Math.min(2, Math.round(ringCount)));
-  if (n <= 0 || innerW <= 0 || springY <= 0) return [];
-  const R = archRadiusMm(innerW, springY);
-  const cx = innerW / 2;
-  const cy = R;
-  const gap = Math.max(4, gapMm);
-  const prof = Math.max(4, profileMm);
-  const paths: string[] = [];
-
-  for (let i = 1; i <= n; i++) {
-    const rOut = R - i * gap - (i - 1) * prof;
-    const rIn = rOut - prof;
-    if (rIn <= springY * 0.1) break;
-    const halfOut = halfChordAtSpring(rOut, springY, cy);
-    const halfIn = halfChordAtSpring(rIn, springY, cy);
-    if (halfOut <= 8 || halfIn <= 4) continue;
-    paths.push(
-      `M ${cx - halfOut} ${springY} A ${rOut} ${rOut} 0 0 0 ${cx + halfOut} ${springY} ` +
-        `L ${cx + halfIn} ${springY} A ${rIn} ${rIn} 0 0 1 ${cx - halfIn} ${springY} Z`,
-    );
-  }
-  return paths;
-}
-
-/** @deprecated use archInnerRingBandPaths */
-export function archInnerRingArcPaths(
-  innerW: number,
-  springY: number,
-  ringCount: number,
-  gapMm: number,
-  profileMm: number,
-): string[] {
-  return archInnerRingBandPaths(innerW, springY, ringCount, gapMm, profileMm);
 }
 
 export function resolveArchInnerRingGapMm(outline: CasementOutlineConfig): number {
@@ -419,20 +518,11 @@ export function archInnerRingStrokeSegments(
     const half = halfChordAtSpring(rOuter, springY, cy);
     if (half <= 8) continue;
     out.push({
-      d: `M ${cx - half} ${springY} A ${rOuter} ${rOuter} 0 0 0 ${cx + half} ${springY}`,
+      d: `M ${cx - half} ${springY} A ${rOuter} ${rOuter} 0 0 ${ARCH_UPPER_SWEEP} ${cx + half} ${springY}`,
       strokeWidth: prof,
     });
   }
   return out;
-}
-
-/** CSS clip-path path() for arch-head glass (px coords). */
-export function archHeadClipPathCss(innerW: number, springY: number, scale: number): string {
-  if (springY <= 0) return '';
-  const wPx = innerW * scale;
-  const syPx = springY * scale;
-  const rPx = archRadiusMm(innerW, springY) * scale;
-  return `path('M 0 ${syPx} A ${rPx} ${rPx} 0 0 0 ${wPx} ${syPx} Z')`;
 }
 
 export function archTopFramePathD(innerW: number, springY: number, frameMm: number): string {
@@ -467,7 +557,20 @@ export function buildArchOuterFrameOuterBoundaryD(
   return `M 0 ${windowH} L ${windowW} ${windowH} L ${windowW} ${sy} A ${ro} ${ro} 0 0 0 0 ${sy} Z`;
 }
 
-export function buildArchOuterFrameInnerBoundaryD(
+/** Inner opening arch arc only (spring chord, left → right). */
+export function buildArchInnerOpeningArcD(
+  holeX: number,
+  holeY: number,
+  innerW: number,
+  springY: number,
+): string {
+  const sy = holeY + springY;
+  const ri = archRadiusMm(innerW, springY);
+  return `M ${holeX} ${sy} A ${ri} ${ri} 0 0 ${ARCH_UPPER_SWEEP} ${holeX + innerW} ${sy}`;
+}
+
+/** Inner opening cut-out for arch-top (semicircle + rectangular body). */
+export function buildArchOpeningHoleD(
   holeX: number,
   holeY: number,
   innerW: number,
@@ -476,7 +579,18 @@ export function buildArchOuterFrameInnerBoundaryD(
 ): string {
   const sy = holeY + springY;
   const ri = archRadiusMm(innerW, springY);
-  return `M ${holeX} ${sy} L ${holeX} ${holeY + innerH} L ${holeX + innerW} ${holeY + innerH} L ${holeX + innerW} ${sy} A ${ri} ${ri} 0 0 0 ${holeX} ${sy} Z`;
+  const bottom = holeY + innerH;
+  return `M ${holeX} ${sy} A ${ri} ${ri} 0 0 ${ARCH_UPPER_SWEEP} ${holeX + innerW} ${sy} L ${holeX + innerW} ${bottom} L ${holeX} ${bottom} Z`;
+}
+
+export function buildArchOuterFrameInnerBoundaryD(
+  holeX: number,
+  holeY: number,
+  innerW: number,
+  innerH: number,
+  springY: number,
+): string {
+  return buildArchOpeningHoleD(holeX, holeY, innerW, innerH, springY);
 }
 
 /** SVG even-odd ring: outer window boundary minus inner opening (arch-top). */
@@ -490,10 +604,9 @@ export function buildArchOuterFrameRingD(
   springY: number,
 ): string {
   const sy = holeY + springY;
-  const ri = archRadiusMm(innerW, springY);
   const ro = archRadiusMm(windowW, sy);
   const outer = `M 0 ${windowH} L ${windowW} ${windowH} L ${windowW} ${sy} A ${ro} ${ro} 0 0 0 0 ${sy} Z`;
-  const inner = `M ${holeX} ${sy} L ${holeX} ${holeY + innerH} L ${holeX + innerW} ${holeY + innerH} L ${holeX + innerW} ${sy} A ${ri} ${ri} 0 0 0 ${holeX} ${sy} Z`;
+  const inner = buildArchOpeningHoleD(holeX, holeY, innerW, innerH, springY);
   return `${outer} ${inner}`;
 }
 
@@ -508,6 +621,20 @@ export function buildRoundedOuterFrameRingD(
   cornerMm: number,
   shape: 'rounded_rect' | 'rounded_top' | 'rounded_bottom',
 ): string {
+  const { outer, inner } = roundedOuterFramePaths(windowW, windowH, holeX, holeY, innerW, innerH, cornerMm, shape);
+  return `${outer} ${inner}`;
+}
+
+function roundedOuterFramePaths(
+  windowW: number,
+  windowH: number,
+  holeX: number,
+  holeY: number,
+  innerW: number,
+  innerH: number,
+  cornerMm: number,
+  shape: 'rounded_rect' | 'rounded_top' | 'rounded_bottom',
+): { outer: string; inner: string } {
   const rIn = Math.min(cornerMm, innerW / 2, innerH / 2);
   const rOut = rIn + Math.min(holeX, holeY, windowW - holeX - innerW, windowH - holeY - innerH);
   const tl = shape !== 'rounded_bottom' ? rOut : 0;
@@ -524,7 +651,33 @@ export function buildRoundedOuterFrameRingD(
   const iw = innerW;
   const ih = innerH;
   const inner = `M ${ix + ibl} ${iy + ih} L ${ix + iw - ibr} ${iy + ih} Q ${ix + iw} ${iy + ih} ${ix + iw} ${iy + ih - ibr} L ${ix + iw} ${iy + itl} Q ${ix + iw} ${iy} ${ix + iw - itr} ${iy} L ${ix + itl} ${iy} Q ${ix} ${iy} ${ix} ${iy + itl} L ${ix} ${iy + ih - ibl} Q ${ix} ${iy + ih} ${ix + ibl} ${iy + ih} Z`;
-  return `${outer} ${inner}`;
+  return { outer, inner };
+}
+
+export function buildRoundedOuterFrameOuterBoundaryD(
+  windowW: number,
+  windowH: number,
+  holeX: number,
+  holeY: number,
+  innerW: number,
+  innerH: number,
+  cornerMm: number,
+  shape: 'rounded_rect' | 'rounded_top' | 'rounded_bottom',
+): string {
+  return roundedOuterFramePaths(windowW, windowH, holeX, holeY, innerW, innerH, cornerMm, shape).outer;
+}
+
+export function buildRoundedOuterFrameInnerBoundaryD(
+  windowW: number,
+  windowH: number,
+  holeX: number,
+  holeY: number,
+  innerW: number,
+  innerH: number,
+  cornerMm: number,
+  shape: 'rounded_rect' | 'rounded_top' | 'rounded_bottom',
+): string {
+  return roundedOuterFramePaths(windowW, windowH, holeX, holeY, innerW, innerH, cornerMm, shape).inner;
 }
 
 export function needsShapedOuterFrame(config: WindowConfig): boolean {

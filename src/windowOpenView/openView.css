@@ -103,9 +103,24 @@
 }
 
 .wov-print-plan-only {
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
   border-top: 1px dashed #e2e8f0;
+}
+
+.wov-print-plan-only .wov-plan-title {
+  font-size: 5.5pt;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.15rem;
+  letter-spacing: 0.01em;
+}
+
+.wov-print-plan-only .wov-plan-svg {
+  display: block;
+  margin: 0 auto;
 }
 
 .wov-print-block-title {

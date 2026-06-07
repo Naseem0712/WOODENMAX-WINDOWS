@@ -29,16 +29,20 @@ import {
 } from '../utils/partitionPanelGeometry';
 import { effectiveFourGlassMeetingMm } from '../utils/slidingGeometry';
 import { getFixedPanelVerticalDivisionsMm } from '../utils/fixedPanelDivisions';
-import { openingInnerClipStyle } from './casement/CasementOutlineOverlay';
-import { OpeningShapedFrame } from './casement/OpeningShapedFrame';
+import { OpeningShapedFrame, OpeningShapedFrameOutlines } from './casement/OpeningShapedFrame';
 import { ArchHeadLayer } from './casement/ArchHeadLayer';
 import { GridMullionHandle } from './casement/GridMullionHandle';
-import { InterlockButtJointLines, MiteredProfileOutlines, SlidingTrackOuterOutline, mullionEdgeStyle } from './profile/ProfileJointLines';
+import { InterlockButtJointLines, MiteredProfileOutlines, MullionJointLines, OpeningInnerOutlineSegments, SlidingTrackOuterOutline } from './profile/ProfileJointLines';
+import { PROFILE_VISUAL_OVERLAP_MM, SLIDING_TRACK_BLEED, resolveProfileBleed, slidingInterlockJointVisible, type HideInnerEdges, type ProfileBleedMm } from '../constants/profileVisual';
 import {
   resolveHiddenMullionSegments,
   resolveCasementMergedCells,
   isHSegHidden,
   isVSegHidden,
+  casementCellHideInnerEdges,
+  casementDoorVisualBounds,
+  casementOpeningInnerLineHideRanges,
+  gridMullionJointLineProps,
   type MergedCasementCell,
 } from '../utils/casementGridMullions';
 import {
@@ -447,7 +451,13 @@ const MiteredFrame: React.FC<{
     scale: number;
     color: string;
     texture?: string;
-}> = React.memo(({ width, height, profileSize = 0, topSize, bottomSize, leftSize, rightSize, scale, color, texture }) => {
+    hideInnerEdges?: HideInnerEdges;
+    buttEdges?: HideInnerEdges;
+    showInner?: boolean;
+    outlineZIndex?: number;
+    /** When false, only profile fill is drawn (outlines rendered separately on top). */
+    showOutlines?: boolean;
+}> = React.memo(({ width, height, profileSize = 0, topSize, bottomSize, leftSize, rightSize, scale, color, texture, hideInnerEdges, buttEdges, showInner = true, outlineZIndex = 20, showOutlines = true }) => {
     const ts = mmToPx(topSize ?? profileSize, scale);
     const bs = mmToPx(bottomSize ?? profileSize, scale);
     const ls = mmToPx(leftSize ?? profileSize, scale);
@@ -478,7 +488,6 @@ const MiteredFrame: React.FC<{
         const baseDivStyle: React.CSSProperties = {
             position: 'absolute',
             boxSizing: 'border-box',
-            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.25)',
             ...backgroundStyle,
         };
 
@@ -541,7 +550,9 @@ const MiteredFrame: React.FC<{
                         clipPath: clipRight,
                     }}
                 />
-                <MiteredProfileOutlines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} />
+                {showOutlines ? (
+                  <MiteredProfileOutlines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} hideInnerEdges={hideInnerEdges} buttEdges={buttEdges} showInner={showInner} showOuter showMiterCorners outlineZIndex={outlineZIndex} />
+                ) : null}
             </div>
         );
     }
@@ -550,7 +561,6 @@ const MiteredFrame: React.FC<{
         const solidBase: React.CSSProperties = {
             position: 'absolute',
             boxSizing: 'border-box',
-            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.25)',
             backgroundColor: baseHex,
         };
         const texOverlay: React.CSSProperties = {
@@ -578,31 +588,28 @@ const MiteredFrame: React.FC<{
                 <div style={{ ...texOverlay, backgroundPosition: posLeft, top: 0, left: 0, width: clipLs, height: '100%', zIndex: 4, clipPath: clipLeft }} />
                 <div style={{ ...solidBase, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 2, clipPath: clipRight }} />
                 <div style={{ ...texOverlay, backgroundPosition: posRight, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 4, clipPath: clipRight }} />
-                <MiteredProfileOutlines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} />
+                {showOutlines ? (
+                  <MiteredProfileOutlines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} hideInnerEdges={hideInnerEdges} buttEdges={buttEdges} showInner={showInner} showOuter showMiterCorners outlineZIndex={outlineZIndex} />
+                ) : null}
             </div>
         );
     }
 
-    // Solid: CSS borders give clean 45° mitred corners at joints (border-radius 0).
+    const solidBase: React.CSSProperties = {
+        position: 'absolute',
+        boxSizing: 'border-box',
+        backgroundColor: baseHex,
+    };
+
     return (
         <div className="absolute" style={{ width: wPx, height: hPx, borderRadius: 0 }}>
-            <div
-                style={{
-                    position: 'absolute',
-                    inset: 0,
-                    boxSizing: 'border-box',
-                    borderStyle: 'solid',
-                    borderColor: baseHex,
-                    borderRadius: 0,
-                    borderTopWidth: ts,
-                    borderBottomWidth: bs,
-                    borderLeftWidth: ls,
-                    borderRightWidth: rs,
-                    backgroundColor: 'transparent',
-                    boxShadow: 'inset 0 2px 5px rgba(255,255,255,0.12), inset 0 -3px 8px rgba(0,0,0,0.15)',
-                }}
-            />
-            <MiteredProfileOutlines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} />
+            <div style={{ ...solidBase, top: 0, left: 0, width: '100%', height: clipTs, zIndex: 1, clipPath: clipTop }} />
+            <div style={{ ...solidBase, bottom: 0, left: 0, width: '100%', height: clipBs, zIndex: 1, clipPath: clipBottom }} />
+            <div style={{ ...solidBase, top: 0, left: 0, width: clipLs, height: '100%', zIndex: 2, clipPath: clipLeft }} />
+            <div style={{ ...solidBase, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 2, clipPath: clipRight }} />
+            {showOutlines ? (
+              <MiteredProfileOutlines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} hideInnerEdges={hideInnerEdges} buttEdges={buttEdges} showInner={showInner} showOuter showMiterCorners outlineZIndex={outlineZIndex} />
+            ) : null}
         </div>
     );
 });
@@ -623,10 +630,13 @@ const SlidingShutter: React.FC<{
     cadLabel?: string;
     laneLabel?: string;
     zLayer?: number;
-    /** Visual-only overlap so shutters sit “into” frame/mullions. */
-    bleedMm?: number;
+    /** Visual-only overlap into frame / track (top+bottom default for sliding). */
+    bleed?: number | ProfileBleedMm;
     interlockMm?: number;
     meetingMm?: number;
+    /** Draw 90° interlock seam on this side (omit on lower-z shutter at a meeting overlap). */
+    drawLeftJoint?: boolean;
+    drawRightJoint?: boolean;
     placementPickActive?: boolean;
     onPickPlacement?: () => void;
 }> = React.memo(({
@@ -645,18 +655,20 @@ const SlidingShutter: React.FC<{
     cadLabel,
     laneLabel,
     zLayer: _zLayer,
-    bleedMm = 0,
+    bleed = SLIDING_TRACK_BLEED,
     interlockMm = 0,
     meetingMm = 0,
+    drawLeftJoint,
+    drawRightJoint,
     placementPickActive = false,
     onPickPlacement,
 }) => {
     
     const glassWidth = width - leftProfile - rightProfile;
     const glassHeight = height - topProfile - bottomProfile;
-    const bleed = Math.max(0, Number(bleedMm) || 0);
-    const wPx = mmToPx(width + 2 * bleed, scale);
-    const hPx = mmToPx(height + 2 * bleed, scale);
+    const { top: bt, bottom: bb, left: bl, right: br } = resolveProfileBleed(bleed, PROFILE_VISUAL_OVERLAP_MM);
+    const wPx = mmToPx(width + bl + br, scale);
+    const hPx = mmToPx(height + bt + bb, scale);
     const lPx = mmToPx(leftProfile, scale);
     const tPx = mmToPx(topProfile, scale);
     const rPx = mmToPx(rightProfile, scale);
@@ -664,21 +676,32 @@ const SlidingShutter: React.FC<{
     const shutterColor = config.profileColor.startsWith('#') ? adjustHexColor(config.profileColor, 0.08) : config.profileColor;
     const leftButt = (interlockMm > 0 && leftProfile === interlockMm) || (meetingMm > 0 && leftProfile === meetingMm);
     const rightButt = (interlockMm > 0 && rightProfile === interlockMm) || (meetingMm > 0 && rightProfile === meetingMm);
+    const showLeftJoint = leftButt && (drawLeftJoint ?? true);
+    const showRightJoint = rightButt && (drawRightJoint ?? true);
+    const frameHideInner: HideInnerEdges = {
+      top: bt > 0,
+      bottom: bb > 0,
+      left: showLeftJoint,
+      right: showRightJoint,
+    };
+    const frameButt: HideInnerEdges = {
+      left: showLeftJoint,
+      right: showRightJoint,
+    };
 
     return (
         <div
           className="absolute left-0 top-0"
           style={{
-            // visual-only bleed so shutter overlaps mullion/frame and hides tiny gaps
-            left: mmToPx(-bleed, scale),
-            top: mmToPx(-bleed, scale),
+            left: mmToPx(-bl, scale),
+            top: mmToPx(-bt, scale),
             width: wPx,
             height: hPx,
           }}
         >
              <MiteredFrame 
-                width={width + 2 * bleed}
-                height={height + 2 * bleed}
+                width={width + bl + br}
+                height={height + bt + bb}
                 topSize={topProfile}
                 bottomSize={bottomProfile}
                 leftSize={leftProfile}
@@ -686,13 +709,15 @@ const SlidingShutter: React.FC<{
                 scale={scale}
                 color={shutterColor}
                 texture={profileOverlayTexture(config)}
+                hideInnerEdges={frameHideInner}
+                buttEdges={frameButt}
              />
-             {leftButt ? (
+             {showLeftJoint ? (
                <div
                  className="pointer-events-none absolute"
                  style={{
-                   left: mmToPx(bleed, scale),
-                   top: mmToPx(bleed, scale),
+                   left: mmToPx(bl, scale),
+                   top: mmToPx(bt, scale),
                    width: mmToPx(width, scale),
                    height: mmToPx(height, scale),
                  }}
@@ -707,12 +732,12 @@ const SlidingShutter: React.FC<{
                  />
                </div>
              ) : null}
-             {rightButt ? (
+             {showRightJoint ? (
                <div
                  className="pointer-events-none absolute"
                  style={{
-                   left: mmToPx(bleed, scale),
-                   top: mmToPx(bleed, scale),
+                   left: mmToPx(bl, scale),
+                   top: mmToPx(bt, scale),
                    width: mmToPx(width, scale),
                    height: mmToPx(height, scale),
                  }}
@@ -758,7 +783,12 @@ const SlidingShutter: React.FC<{
             </div>
             <div
                 className="absolute overflow-hidden"
-                style={{ left: lPx, top: tPx, right: rPx, bottom: bPx }}
+                style={{
+                  left: mmToPx(bl, scale) + lPx,
+                  top: mmToPx(bt, scale) + tPx,
+                  right: mmToPx(br, scale) + rPx,
+                  bottom: mmToPx(bb, scale) + bPx,
+                }}
             >
                 <GlassPanel
                     config={config}
@@ -784,7 +814,7 @@ const SlidingShutter: React.FC<{
             {placementPickActive && onPickPlacement ? (
               <button
                 type="button"
-                className="absolute inset-0 z-[45] cursor-pointer rounded-sm bg-indigo-500/15 ring-2 ring-inset ring-indigo-400/70 hover:bg-indigo-500/25"
+                className="pointer-events-auto absolute inset-0 z-[45] cursor-pointer rounded-sm bg-indigo-500/15 ring-2 ring-inset ring-indigo-400/70 hover:bg-indigo-500/25"
                 aria-label="Place handle on this shutter"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -944,6 +974,10 @@ const createWindowElements = (
     const profileElements: React.ReactNode[] = [];
     const glassElements: React.ReactNode[] = [];
     const handleElements: React.ReactNode[] = [];
+    const doorElements: React.ReactNode[] = [];
+    const openingOutlineElements: React.ReactNode[] = [];
+    const shapedFrameOutlineElements: React.ReactNode[] = [];
+    const mullionOutlineElements: React.ReactNode[] = [];
     const placementPickActive = Boolean(callbacks.handlePlacement && callbacks.onPlaceHandleOnPanel);
     const pickPlacement = (panelId: string, metrics: HandlePanelFrameMetrics) => {
       callbacks.onPlaceHandleOnPanel?.(panelId, metrics);
@@ -960,6 +994,7 @@ const createWindowElements = (
       handleElements.push(
         <div
           key={`handle-${panelId}`}
+          className="pointer-events-auto"
           style={{
             position: 'absolute',
             zIndex: 55,
@@ -992,6 +1027,33 @@ const createWindowElements = (
       (windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR) &&
       needsShapedOuterFrame(config);
 
+    const shapedOutlineHideRanges =
+      shapedOuterFrame && (windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR)
+        ? (() => {
+            const vDivs = config.verticalDividers ?? [];
+            const hDivs = config.horizontalDividers ?? [];
+            const archTopLocal = isArchTopOutline(config);
+            const springYmmLocal = archTopLocal
+              ? archSpringYMmForOpening(config, innerAreaWidth, innerAreaHeight)
+              : 0;
+            const springRel = springYmmLocal / Math.max(innerAreaHeight, 1);
+            const effectiveHDivs =
+              archTopLocal && hDivs.length > 0 ? [springRel, ...hDivs.slice(1)] : hDivs;
+            return casementOpeningInnerLineHideRanges(
+              config,
+              windowType,
+              effectiveHDivs.length + 1,
+              vDivs.length + 1,
+              resolveHiddenMullionSegments(config),
+              innerAreaWidth,
+              innerAreaHeight,
+              vDivs,
+              effectiveHDivs,
+              dims.mullion,
+            );
+          })()
+        : undefined;
+
     if (windowType !== WindowType.GLASS_PARTITION && windowType !== WindowType.CORNER && windowType !== WindowType.MIRROR && windowType !== WindowType.LOUVERS) {
         const verticalFrame = dims.outerFrameVertical > 0 ? dims.outerFrameVertical : dims.outerFrame;
         if (shapedOuterFrame) {
@@ -1007,10 +1069,42 @@ const createWindowElements = (
               innerH={innerAreaHeight}
               scale={scale}
               color={profileColor}
+              fillOnly
+            />,
+          );
+          shapedFrameOutlineElements.push(
+            <OpeningShapedFrameOutlines
+              key="outer-frame-shaped-outlines"
+              config={config}
+              windowW={w}
+              windowH={numHeight}
+              holeX={holeX1}
+              holeY={holeY1}
+              innerW={innerAreaWidth}
+              innerH={innerAreaHeight}
+              scale={scale}
+              hideRanges={shapedOutlineHideRanges}
+              frameProfileMm={dims.outerFrame}
             />,
           );
         } else {
-          profileElements.push(<MiteredFrame key="outer-frame" width={w} height={numHeight} topSize={dims.outerFrame} bottomSize={dims.outerFrame} leftSize={verticalFrame} rightSize={verticalFrame} scale={scale} color={profileColor} texture={pt} />);
+          const suppressOpeningInner =
+            windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR;
+          profileElements.push(
+            <MiteredFrame
+              key="outer-frame"
+              width={w}
+              height={numHeight}
+              topSize={dims.outerFrame}
+              bottomSize={dims.outerFrame}
+              leftSize={verticalFrame}
+              rightSize={verticalFrame}
+              scale={scale}
+              color={profileColor}
+              texture={pt}
+              showInner={!suppressOpeningInner}
+            />,
+          );
         }
     }
 
@@ -1107,7 +1201,6 @@ const createWindowElements = (
     }
 
     const innerContent: React.ReactNode[] = [];
-    const archHeadOverlay: React.ReactNode[] = [];
     let archSpringYmm = 0;
     if (innerAreaWidth > 0 && innerAreaHeight > 0) {
        switch (windowType) {
@@ -1357,7 +1450,6 @@ const createWindowElements = (
                 }
                 
                 if (shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
-                    const bleedMm = 8;
                     const panelWidth = (innerAreaWidth + 3 * interlock) / 4;
                     const panels = [
                         { id: 0, type: 'glass', x: 0, z: 5 }, // Fixed Left (Outer Track)
@@ -1397,6 +1489,19 @@ const createWindowElements = (
                           );
                         }
 
+                        const leftButtProf = (interlock > 0 && leftProf === interlock) || (meeting > 0 && leftProf === meeting);
+                        const rightButtProf = (interlock > 0 && rightProf === interlock) || (meeting > 0 && rightProf === meeting);
+                        const leftPeerId = p.id === 4 ? 1 : undefined;
+                        const rightPeerId = p.id === 1 ? 4 : undefined;
+                        const leftPeer = leftPeerId != null ? panels.find((q) => q.id === leftPeerId) : undefined;
+                        const rightPeer = rightPeerId != null ? panels.find((q) => q.id === rightPeerId) : undefined;
+                        const drawLeftJoint =
+                          leftButtProf &&
+                          (leftPeerId == null || slidingInterlockJointVisible(p.z, leftPeer?.z, p.id, leftPeerId));
+                        const drawRightJoint =
+                          rightButtProf &&
+                          (rightPeerId == null || slidingInterlockJointVisible(p.z, rightPeer?.z, p.id, rightPeerId));
+
                         innerContent.push(
                             <div key={p.id} className="absolute" style={{ left: mmToPx(p.x, scale), top: 0, zIndex: p.z }}>
                                 <SlidingShutter
@@ -1410,9 +1515,10 @@ const createWindowElements = (
                                     isFixed={fixedShutters[p.id]} isSliding={!fixedShutters[p.id]}
                                     cadLabel={`S${p.id + 1}`}
                                     zLayer={p.z}
-                                    bleedMm={bleedMm}
                                     interlockMm={interlock}
                                     meetingMm={meeting}
+                                    drawLeftJoint={drawLeftJoint}
+                                    drawRightJoint={drawRightJoint}
                                     placementPickActive={placementPickActive}
                                     onPickPlacement={() => pickPlacement(panelId, frameMetrics)}
                                 />
@@ -1421,7 +1527,6 @@ const createWindowElements = (
                     });
 
                 } else if (shutterConfig === ShutterConfigType.FOUR_GLASS) {
-                    const bleedMm = 8;
                     const shutterWidth = (innerAreaWidth + (2 * interlock) + meeting) / 4;
                     const positions = [ 0, shutterWidth - interlock, (2*shutterWidth) - interlock - meeting, (3*shutterWidth) - (2*interlock) - meeting ];
                     const profiles = [ { l: dims.shutterHandle, r: interlock }, { l: interlock, r: meeting }, { l: meeting, r: interlock }, { l: interlock, r: dims.shutterHandle } ];
@@ -1451,6 +1556,12 @@ const createWindowElements = (
                         topProf: dims.shutterTop,
                         bottomProf: dims.shutterBottom,
                       };
+                      const zFor = (idx: number) => ((idx === 1 || idx === 2) ? 10 : 5);
+                      const leftButtProf = (interlock > 0 && p.l === interlock) || (meeting > 0 && p.l === meeting);
+                      const rightButtProf = (interlock > 0 && p.r === interlock) || (meeting > 0 && p.r === meeting);
+                      const myZ = zFor(i);
+                      const drawLeftJoint = leftButtProf && slidingInterlockJointVisible(myZ, i > 0 ? zFor(i - 1) : undefined, i, i - 1);
+                      const drawRightJoint = rightButtProf && slidingInterlockJointVisible(myZ, i < 3 ? zFor(i + 1) : undefined, i, i + 1);
                       return (
                       <div
                         key={i}
@@ -1472,16 +1583,16 @@ const createWindowElements = (
                           isSliding={!fixedShutters[i]}
                           cadLabel={`S${i + 1}`}
                           zLayer={(i === 1 || i === 2) ? 10 : 5}
-                          bleedMm={bleedMm}
                           interlockMm={interlock}
                           meetingMm={meeting}
+                          drawLeftJoint={drawLeftJoint}
+                          drawRightJoint={drawRightJoint}
                           placementPickActive={placementPickActive}
                           onPickPlacement={() => pickPlacement(panelId, frameMetrics)}
                         />
                       </div>
                     ); }));
                 } else {
-                    const bleedMm = 8;
                     const hasMesh = shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH;
                     const numShutters = hasMesh ? 3 : (shutterConfig === ShutterConfigType.TWO_GLASS ? 2 : 3);
                     const shutterDivider = hasMesh ? 2 : numShutters;
@@ -1516,11 +1627,15 @@ const createWindowElements = (
                           );
                         }
 
-                        const z = hasMesh
-                          ? (isMeshShutter ? 15 : (i === 1 ? 10 : 5))
-                          : (numShutters === 2 ? (i === 1 ? 10 : 5) : (i === 1 ? 10 : 5));
+                        const zFor = (idx: number) =>
+                          hasMesh ? (idx === numShutters - 1 ? 15 : idx === 1 ? 10 : 5) : (numShutters === 2 ? (idx === 1 ? 10 : 5) : (idx === 1 ? 10 : 5));
+                        const myZ = zFor(i);
+                        const leftButtProf = (interlock > 0 && leftProf === interlock) || (meeting > 0 && leftProf === meeting);
+                        const rightButtProf = (interlock > 0 && rightProf === interlock) || (meeting > 0 && rightProf === meeting);
+                        const drawLeftJoint = leftButtProf && slidingInterlockJointVisible(myZ, i > 0 ? zFor(i - 1) : undefined, i, i - 1);
+                        const drawRightJoint = rightButtProf && slidingInterlockJointVisible(myZ, i < numShutters - 1 ? zFor(i + 1) : undefined, i, i + 1);
                         return (
-                          <div key={i} className="absolute" style={{ left: mmToPx(leftPosition, scale), top: 0, zIndex: z }}>
+                          <div key={i} className="absolute" style={{ left: mmToPx(leftPosition, scale), top: 0, zIndex: myZ }}>
                             <SlidingShutter
                               panelId={panelId}
                               config={config}
@@ -1535,10 +1650,11 @@ const createWindowElements = (
                               isFixed={fixedShutters[i]}
                               isSliding={!fixedShutters[i]}
                               cadLabel={`S${i + 1}`}
-                              zLayer={z}
-                              bleedMm={bleedMm}
+                              zLayer={myZ}
                               interlockMm={interlock}
                               meetingMm={meeting}
+                              drawLeftJoint={drawLeftJoint}
+                              drawRightJoint={drawRightJoint}
                               placementPickActive={placementPickActive}
                               onPickPlacement={() => pickPlacement(panelId, frameMetrics)}
                             />
@@ -1602,17 +1718,90 @@ const createWindowElements = (
                 };
                 const glassLayer: React.ReactNode[] = [];
                 const doorLayer: React.ReactNode[] = [];
+                const hMullionLayer: React.ReactNode[] = [];
+                const vMullionLayer: React.ReactNode[] = [];
+
+                const archMullionProfileLayer: React.ReactNode[] = [];
 
                 if (archTop && springYmm > 0) {
-                  archHeadOverlay.push(
-                    <ArchHeadLayer
-                      key="arch-head-layer"
-                      config={config}
+                  const archShellStyle: React.CSSProperties = {
+                    left: 0,
+                    top: 0,
+                    width: innerAreaWidth * scale,
+                    height: springYmm * scale,
+                  };
+                  glassLayer.unshift(
+                    <div
+                      key="arch-head-glass"
+                      className="pointer-events-none absolute"
+                      style={{ ...archShellStyle, zIndex: 2 }}
+                    >
+                      <ArchHeadLayer
+                        part="glass"
+                        config={config}
+                        innerW={innerAreaWidth}
+                        springYmm={springYmm}
+                        scale={scale}
+                        mullionMm={dims.mullion}
+                        profileColor={profileColor}
+                      />
+                    </div>,
+                  );
+                  archMullionProfileLayer.push(
+                    <div
+                      key="arch-head-profiles"
+                      className="pointer-events-none absolute"
+                      style={{ ...archShellStyle, zIndex: 6 }}
+                    >
+                      <ArchHeadLayer
+                        part="profiles"
+                        config={config}
+                        innerW={innerAreaWidth}
+                        springYmm={springYmm}
+                        scale={scale}
+                        mullionMm={dims.mullion}
+                        profileColor={profileColor}
+                      />
+                    </div>,
+                  );
+                  mullionOutlineElements.push(
+                    <div
+                      key="arch-head-outlines"
+                      className="pointer-events-none absolute"
+                      style={archShellStyle}
+                    >
+                      <ArchHeadLayer
+                        part="outlines"
+                        config={config}
+                        innerW={innerAreaWidth}
+                        springYmm={springYmm}
+                        scale={scale}
+                        mullionMm={dims.mullion}
+                        profileColor={profileColor}
+                      />
+                    </div>,
+                  );
+                }
+
+                if (!shapedOuterFrame) {
+                  openingOutlineElements.push(
+                    <OpeningInnerOutlineSegments
+                      key="opening-inner-outline"
                       innerW={innerAreaWidth}
-                      springYmm={springYmm}
+                      innerH={innerAreaHeight}
+                      hideRanges={casementOpeningInnerLineHideRanges(
+                        config,
+                        windowType,
+                        gridRowsEffective,
+                        gridCols,
+                        hiddenSegs,
+                        innerAreaWidth,
+                        innerAreaHeight,
+                        verticalDividers,
+                        effectiveHDivs,
+                        dims.mullion,
+                      )}
                       scale={scale}
-                      mullionMm={dims.mullion}
-                      profileColor={profileColor}
                     />,
                   );
                 }
@@ -1654,6 +1843,7 @@ const createWindowElements = (
                             handleElements.push(
                               <div
                                 key={`handle-${r}-${c}`}
+                                className="pointer-events-auto"
                                 style={{
                                   position: 'absolute',
                                   zIndex: 55,
@@ -1691,17 +1881,27 @@ const createWindowElements = (
                                   topProf: casementProf,
                                   bottomProf: casementProf,
                                 };
-                                doorLayer.push(
-                                  <div key={`cell-${r}-${c}`} className="absolute z-[6]" style={{left: mmToPx(cellX, scale), top: mmToPx(cellY, scale), width: mmToPx(cellW, scale), height: mmToPx(cellH, scale)}}>
-                                    <MiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} texture={pt} />
-                                    <div className="absolute overflow-hidden" style={{ left: mmToPx(dims.casementShutter, scale), top: mmToPx(dims.casementShutter, scale), right: mmToPx(dims.casementShutter, scale), bottom: mmToPx(dims.casementShutter, scale) }}>
-                                      <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={cellW - 2 * dims.casementShutter} glassHeight={cellH - 2 * dims.casementShutter} scale={scale} />
+                                const hideInnerEdges = casementCellHideInnerEdges(r, c, gridRowsEffective, gridCols, hiddenSegs);
+                                const visual = casementDoorVisualBounds(cellX, cellY, cellW, cellH, r, c, gridRowsEffective, gridCols, hiddenSegs, PROFILE_VISUAL_OVERLAP_MM, dims.mullion);
+                                const doorWPx = mmToPx(visual.cellW, scale);
+                                const doorHPx = mmToPx(visual.cellH, scale);
+                                const doorProfPx = mmToPx(dims.casementShutter, scale);
+                                doorElements.push(
+                                  <div key={`cell-${r}-${c}`} className="absolute" style={{left: mmToPx(visual.cellX, scale), top: mmToPx(visual.cellY, scale), width: doorWPx, height: doorHPx}}>
+                                    <div className="absolute overflow-hidden" style={{ zIndex: 1, left: doorProfPx, top: doorProfPx, right: doorProfPx, bottom: doorProfPx }}>
+                                      <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={visual.cellW - 2 * dims.casementShutter} glassHeight={visual.cellH - 2 * dims.casementShutter} scale={scale} />
+                                    </div>
+                                    <div className="absolute inset-0" style={{ zIndex: 2 }}>
+                                      <MiteredFrame width={visual.cellW} height={visual.cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} texture={pt} hideInnerEdges={hideInnerEdges} showOutlines={false} />
+                                    </div>
+                                    <div className="pointer-events-none absolute inset-0" style={{ zIndex: 5 }}>
+                                      <MiteredProfileOutlines widthPx={doorWPx} heightPx={doorHPx} topPx={doorProfPx} bottomPx={doorProfPx} leftPx={doorProfPx} rightPx={doorProfPx} hideInnerEdges={hideInnerEdges} showOuter showMiterCorners outlineZIndex={30} />
                                     </div>
                                     <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none"><svg viewBox="0 0 100 100" className="w-1/2 h-1/2" style={{transform: c % 2 === 0 ? 'scaleX(1)' : 'scaleX(-1)'}}><path d="M 10 10 L 10 90 L 90 90" stroke="white" strokeDasharray="4" strokeWidth="2" fill="none"/></svg></div>
                                     {placementPickActive ? (
                                       <button
                                         type="button"
-                                        className="absolute inset-0 z-[45] cursor-pointer bg-indigo-500/15 ring-2 ring-inset ring-indigo-400/70 hover:bg-indigo-500/25"
+                                        className="pointer-events-auto absolute inset-0 z-[45] cursor-pointer bg-indigo-500/15 ring-2 ring-inset ring-indigo-400/70 hover:bg-indigo-500/25"
                                         aria-label="Place handle on this door"
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -1734,6 +1934,7 @@ const createWindowElements = (
                                 handleElements.push(
                                   <div
                                     key={`handle-vent-${r}-${c}`}
+                                    className="pointer-events-auto"
                                     style={{
                                       position: 'absolute',
                                       zIndex: 55,
@@ -1769,17 +1970,27 @@ const createWindowElements = (
                                   topProf: casementProf,
                                   bottomProf: casementProf,
                                 };
-                                doorLayer.push(
-                                  <div key={`cell-${r}-${c}`} className="absolute z-[6]" style={{left: mmToPx(cellX, scale), top: mmToPx(cellY, scale), width: mmToPx(cellW, scale), height: mmToPx(cellH, scale)}}>
-                                    <MiteredFrame width={cellW} height={cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} texture={pt} />
-                                    <div className="absolute overflow-hidden" style={{ left: mmToPx(dims.casementShutter, scale), top: mmToPx(dims.casementShutter, scale), right: mmToPx(dims.casementShutter, scale), bottom: mmToPx(dims.casementShutter, scale) }}>
-                                      <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={cellW - 2*dims.casementShutter} glassHeight={cellH - 2*dims.casementShutter} scale={scale}/>
+                                const hideInnerEdges = casementCellHideInnerEdges(r, c, gridRowsEffective, gridCols, hiddenSegs);
+                                const visual = casementDoorVisualBounds(cellX, cellY, cellW, cellH, r, c, gridRowsEffective, gridCols, hiddenSegs, PROFILE_VISUAL_OVERLAP_MM, dims.mullion);
+                                const doorWPx = mmToPx(visual.cellW, scale);
+                                const doorHPx = mmToPx(visual.cellH, scale);
+                                const doorProfPx = mmToPx(dims.casementShutter, scale);
+                                doorElements.push(
+                                  <div key={`cell-${r}-${c}`} className="absolute" style={{left: mmToPx(visual.cellX, scale), top: mmToPx(visual.cellY, scale), width: doorWPx, height: doorHPx}}>
+                                    <div className="absolute overflow-hidden" style={{ zIndex: 1, left: doorProfPx, top: doorProfPx, right: doorProfPx, bottom: doorProfPx }}>
+                                      <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={visual.cellW - 2*dims.casementShutter} glassHeight={visual.cellH - 2*dims.casementShutter} scale={scale}/>
+                                    </div>
+                                    <div className="absolute inset-0" style={{ zIndex: 2 }}>
+                                      <MiteredFrame width={visual.cellW} height={visual.cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} texture={pt} hideInnerEdges={hideInnerEdges} showOutlines={false} />
+                                    </div>
+                                    <div className="pointer-events-none absolute inset-0" style={{ zIndex: 5 }}>
+                                      <MiteredProfileOutlines widthPx={doorWPx} heightPx={doorHPx} topPx={doorProfPx} bottomPx={doorProfPx} leftPx={doorProfPx} rightPx={doorProfPx} hideInnerEdges={hideInnerEdges} showOuter showMiterCorners outlineZIndex={30} />
                                     </div>
                                     <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none"><svg viewBox="0 0 100 100" className="w-1/2 h-1/2" style={{transform: c % 2 === 0 ? 'scaleX(1)' : 'scaleX(-1)'}}><path d="M 10 10 L 10 90 L 90 90" stroke="white" strokeDasharray="4" strokeWidth="2" fill="none"/></svg></div>
                                     {placementPickActive ? (
                                       <button
                                         type="button"
-                                        className="absolute inset-0 z-[45] cursor-pointer bg-indigo-500/15 ring-2 ring-inset ring-indigo-400/70 hover:bg-indigo-500/25"
+                                        className="pointer-events-auto absolute inset-0 z-[45] cursor-pointer bg-indigo-500/15 ring-2 ring-inset ring-indigo-400/70 hover:bg-indigo-500/25"
                                         aria-label="Place handle on this door"
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -1831,8 +2042,6 @@ const createWindowElements = (
                     }
                 }
 
-                innerContent.push(...glassLayer, ...doorLayer);
-
                 const onMoveH = callbacks.onMoveHorizontalDivider;
                 const onMoveV = callbacks.onMoveVerticalDivider;
                 const onDelHSeg = callbacks.onRemoveHMullionSegment ?? ((hi: number, col: number) => callbacks.onRemoveHorizontalDivider(hi));
@@ -1847,14 +2056,18 @@ const createWindowElements = (
                     const segWidth = (xEnd - xStart) * innerAreaWidth;
                     const yMm = pos * innerAreaHeight;
                     const isSpring = archTop && hi === 0;
-                    innerContent.push(
+                    const leftPx = segLeft * scale;
+                    const topPx = (yMm - dims.mullion / 2) * scale;
+                    const widthPx = segWidth * scale;
+                    const heightPx = dims.mullion * scale;
+                    hMullionLayer.push(
                       <GridMullionHandle
                         key={`hseg-${hi}-${c}`}
                         orientation="horizontal"
-                        leftPx={segLeft * scale}
-                        topPx={(yMm - dims.mullion / 2) * scale}
-                        widthPx={segWidth * scale}
-                        heightPx={dims.mullion * scale}
+                        leftPx={leftPx}
+                        topPx={topPx}
+                        widthPx={widthPx}
+                        heightPx={heightPx}
                         positionMm={yMm}
                         scale={scale}
                         profileColor={profileColor}
@@ -1863,6 +2076,8 @@ const createWindowElements = (
                         measureFromBottom={isSpring}
                         totalHeightMm={isSpring ? innerAreaHeight : undefined}
                         hideDelete={isSpring}
+                        zIndex={4}
+                        showJointLines={false}
                         onDragEnd={
                           onMoveH
                             ? (mm) => {
@@ -1874,6 +2089,21 @@ const createWindowElements = (
                         onDelete={() => onDelHSeg(hi, c)}
                         deleteTitle={isSpring ? 'Spring line — drag to adjust height' : 'Remove this horizontal segment'}
                       />,
+                    );
+                    mullionOutlineElements.push(
+                      <div
+                        key={`hseg-outline-${hi}-${c}`}
+                        className="pointer-events-none absolute"
+                        style={{ left: leftPx, top: topPx, width: widthPx, height: heightPx }}
+                      >
+                        <MullionJointLines
+                          widthPx={widthPx}
+                          heightPx={heightPx}
+                          orientation="horizontal"
+                          hideTopEdge={isSpring}
+                          {...gridMullionJointLineProps('horizontal', c, 0, gridCols, gridRowsEffective, scale)}
+                        />
+                      </div>,
                     );
                   }
                 });
@@ -1887,19 +2117,26 @@ const createWindowElements = (
                     const segTop = yStart * innerAreaHeight;
                     const segHeight = (yEnd - yStart) * innerAreaHeight;
                     const xMm = pos * innerAreaWidth;
-                    innerContent.push(
+                    const leftPx = (xMm - dims.mullion / 2) * scale;
+                    const topPx = segTop * scale;
+                    const widthPx = dims.mullion * scale;
+                    const heightPx = segHeight * scale;
+                    const segmentTopAtSpring = archTop && r > 0 && Math.abs(yStart - springRel) < 1e-6;
+                    vMullionLayer.push(
                       <GridMullionHandle
                         key={`vseg-${vi}-${r}`}
                         orientation="vertical"
-                        leftPx={(xMm - dims.mullion / 2) * scale}
-                        topPx={segTop * scale}
-                        widthPx={dims.mullion * scale}
-                        heightPx={segHeight * scale}
+                        leftPx={leftPx}
+                        topPx={topPx}
+                        widthPx={widthPx}
+                        heightPx={heightPx}
                         positionMm={xMm}
                         scale={scale}
                         profileColor={profileColor}
                         texture={pt}
                         draggable={Boolean(onMoveV)}
+                        zIndex={4}
+                        showJointLines={false}
                         onDragEnd={
                           onMoveV
                             ? (mm) => {
@@ -1912,8 +2149,26 @@ const createWindowElements = (
                         deleteTitle="Remove this vertical segment"
                       />,
                     );
+                    mullionOutlineElements.push(
+                      <div
+                        key={`vseg-outline-${vi}-${r}`}
+                        className="pointer-events-none absolute"
+                        style={{ left: leftPx, top: topPx, width: widthPx, height: heightPx }}
+                      >
+                        <MullionJointLines
+                          widthPx={widthPx}
+                          heightPx={heightPx}
+                          orientation="vertical"
+                          {...gridMullionJointLineProps('vertical', 0, r, gridCols, gridRowsEffective, scale, PROFILE_VISUAL_OVERLAP_MM, {
+                            segmentTopAtSpring,
+                          })}
+                        />
+                      </div>,
+                    );
                   }
                 });
+
+                innerContent.push(...hMullionLayer, ...vMullionLayer, ...glassLayer, ...archMullionProfileLayer, ...doorLayer);
 
                 break;
             }
@@ -1928,7 +2183,26 @@ const createWindowElements = (
                 );
 
                 if (partitionPanels.hasTopChannel) {
-                  innerContent.push(<ProfilePiece key="track-top" color={profileColor} texture={pt} style={{ top: 0, left: 0, width: innerAreaWidth * scale, height: dims.topTrack * scale, zIndex: 4 }} />);
+                  innerContent.push(
+                    <div
+                      key="track-top"
+                      className="absolute"
+                      style={{
+                        top: 0,
+                        left: 0,
+                        width: innerAreaWidth * scale,
+                        height: dims.topTrack * scale,
+                        zIndex: 4,
+                        backgroundColor: profileColor.startsWith('#') ? profileColor : undefined,
+                      }}
+                    >
+                      <SlidingTrackOuterOutline
+                        widthPx={innerAreaWidth * scale}
+                        heightPx={dims.topTrack * scale}
+                        edge="top"
+                      />
+                    </div>,
+                  );
                 }
                 
                 const panelAreaY = partitionPanels.hasTopChannel ? dims.topTrack : 0;
@@ -1958,18 +2232,24 @@ const createWindowElements = (
 
                     if (partitionPanels.hasTopChannel) {
                       innerContent.push(
-                        <ProfilePiece
+                        <div
                           key={`track-bottom-${i}`}
-                          color={profileColor}
-                          texture={pt}
+                          className="absolute"
                           style={{
                             left: panelX * scale,
                             top: (py + ph - dims.bottomTrack) * scale,
                             width: currentPanelWidth * scale,
                             height: dims.bottomTrack * scale,
                             zIndex: 4,
+                            backgroundColor: profileColor.startsWith('#') ? profileColor : undefined,
                           }}
-                        />
+                        >
+                          <SlidingTrackOuterOutline
+                            widthPx={currentPanelWidth * scale}
+                            heightPx={dims.bottomTrack * scale}
+                            edge="bottom"
+                          />
+                        </div>,
                       );
                     }
 
@@ -1978,6 +2258,7 @@ const createWindowElements = (
                         handleElements.push(
                           <div
                             key={`handle-part-${i}`}
+                            className="pointer-events-auto"
                             style={{
                               position: 'absolute',
                               zIndex: 55,
@@ -2017,23 +2298,59 @@ const createWindowElements = (
                       fr = e.right;
                     }
 
+                    const isSlidingLike = type === 'sliding' || type === 'fold';
+                    const overlap = PROFILE_VISUAL_OVERLAP_MM;
+                    const bleedLeft = isFramed && i === 0 ? overlap : 0;
+                    const bleedRight = isFramed && i === partitionPanels.count - 1 ? overlap : 0;
+                    const bleedTop = isFramed && isSlidingLike && partitionPanels.hasTopChannel ? overlap : 0;
+                    const bleedBottom = isFramed && isSlidingLike && partitionPanels.hasTopChannel ? overlap : 0;
+                    const panelHideInner: HideInnerEdges = {
+                      left: bleedLeft > 0,
+                      right: bleedRight > 0,
+                      top: bleedTop > 0,
+                      bottom: bleedBottom > 0,
+                    };
+                    const frameW = currentPanelWidth + bleedLeft + bleedRight;
+                    const frameH = ph + bleedTop + bleedBottom;
+
                     innerContent.push(
                         <div key={`panel-${i}`} className="absolute" style={{left: mmToPx(panelX, scale), top: mmToPx(py, scale), width: mmToPx(currentPanelWidth, scale), height: mmToPx(ph, scale), zIndex}}>
                           {isFramed && type === 'fold' && (
-                            <MiteredFrame
-                              width={currentPanelWidth}
-                              height={ph}
-                              topSize={ft}
-                              bottomSize={fb}
-                              leftSize={fl}
-                              rightSize={fr}
-                              scale={scale}
-                              color={profileColor}
-                              texture={pt}
-                            />
+                            <div
+                              className="absolute"
+                              style={{
+                                left: mmToPx(-bleedLeft, scale),
+                                top: mmToPx(-bleedTop, scale),
+                                width: mmToPx(frameW, scale),
+                                height: mmToPx(frameH, scale),
+                              }}
+                            >
+                              <MiteredFrame
+                                width={frameW}
+                                height={frameH}
+                                topSize={ft}
+                                bottomSize={fb}
+                                leftSize={fl}
+                                rightSize={fr}
+                                scale={scale}
+                                color={profileColor}
+                                texture={pt}
+                                hideInnerEdges={panelHideInner}
+                              />
+                            </div>
                           )}
                           {isFramed && type !== 'fold' && (
-                            <MiteredFrame width={currentPanelWidth} height={ph} profileSize={frameSize} scale={scale} color={profileColor} texture={pt} />
+                            <div
+                              className="absolute"
+                              style={{
+                                left: mmToPx(-bleedLeft, scale),
+                                top: mmToPx(-bleedTop, scale),
+                                width: mmToPx(frameW, scale),
+                                height: mmToPx(frameH, scale),
+                              }}
+                            >
+                              <MiteredFrame width={frameW} height={frameH} profileSize={frameSize} scale={scale} color={profileColor} texture={pt} hideInnerEdges={panelHideInner} />
+                            </div>
                           )}
                           <div
                             className="absolute overflow-hidden"
@@ -2070,7 +2387,7 @@ const createWindowElements = (
         }
     }
 
-    return { profileElements, glassElements, handleElements, innerContent, archHeadOverlay, archSpringYmm, innerAreaWidth, innerAreaHeight, holeX1, holeY1, geometry };
+    return { profileElements, glassElements, handleElements, innerContent, doorElements, openingOutlineElements, shapedFrameOutlineElements, mullionOutlineElements, archSpringYmm, innerAreaWidth, innerAreaHeight, holeX1, holeY1, geometry };
 };
 
 const RenderedWindow: React.FC<{
@@ -2085,13 +2402,22 @@ const RenderedWindow: React.FC<{
     const numHeight = Number(height) || 0;
     const innerStyle =
       windowType === WindowType.CASEMENT || windowType === WindowType.VENTILATOR
-        ? openingInnerClipStyle(config, elements.innerAreaWidth, elements.innerAreaHeight, scale)
+        ? ({ overflow: 'visible' } as React.CSSProperties)
         : {};
 
     return (
         <div className="relative shadow-lg" style={{ width: mmToPx(numWidth, scale), height: mmToPx(numHeight, scale) }}>
           {elements.glassElements}
+          <div className="pointer-events-none absolute inset-0 z-[2]">
+            {elements.profileElements}
+          </div>
+          {elements.shapedFrameOutlineElements.length > 0 ? (
+            <div className="pointer-events-none absolute inset-0 z-[22]">
+              {elements.shapedFrameOutlineElements}
+            </div>
+          ) : null}
           {elements.innerAreaWidth > 0 && elements.innerAreaHeight > 0 && (
+            <>
             <div
               className="absolute z-[5]"
               style={{
@@ -2103,22 +2429,34 @@ const RenderedWindow: React.FC<{
               }}
             >
                 {elements.innerContent}
-                {elements.handleElements}
             </div>
-          )}
-          {elements.profileElements}
-          {elements.archHeadOverlay.length > 0 && elements.archSpringYmm > 0 && (
             <div
-              className="pointer-events-none absolute z-[15]"
+              className="pointer-events-none absolute z-[8]"
               style={{
                 top: mmToPx(elements.holeY1, scale),
                 left: mmToPx(elements.holeX1, scale),
                 width: mmToPx(elements.innerAreaWidth, scale),
-                height: mmToPx(elements.archSpringYmm, scale),
+                height: mmToPx(elements.innerAreaHeight, scale),
+                overflow: 'visible',
               }}
             >
-              {elements.archHeadOverlay}
+                {elements.openingOutlineElements}
+                {elements.mullionOutlineElements}
             </div>
+            <div
+              className="pointer-events-none absolute z-[10]"
+              style={{
+                top: mmToPx(elements.holeY1, scale),
+                left: mmToPx(elements.holeX1, scale),
+                width: mmToPx(elements.innerAreaWidth, scale),
+                height: mmToPx(elements.innerAreaHeight, scale),
+                overflow: 'visible',
+              }}
+            >
+                {elements.doorElements}
+                {elements.handleElements}
+            </div>
+            </>
           )}
           
           {showLabels && <>
