@@ -33,7 +33,7 @@ import { openingInnerClipStyle } from './casement/CasementOutlineOverlay';
 import { OpeningShapedFrame } from './casement/OpeningShapedFrame';
 import { ArchHeadLayer } from './casement/ArchHeadLayer';
 import { GridMullionHandle } from './casement/GridMullionHandle';
-import { InterlockButtJointLines, MiterJointLines, mullionEdgeStyle } from './profile/ProfileJointLines';
+import { InterlockButtJointLines, MiteredProfileOutlines, SlidingTrackOuterOutline, mullionEdgeStyle } from './profile/ProfileJointLines';
 import {
   resolveHiddenMullionSegments,
   resolveCasementMergedCells,
@@ -541,7 +541,7 @@ const MiteredFrame: React.FC<{
                         clipPath: clipRight,
                     }}
                 />
-                <MiterJointLines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} />
+                <MiteredProfileOutlines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} />
             </div>
         );
     }
@@ -578,7 +578,7 @@ const MiteredFrame: React.FC<{
                 <div style={{ ...texOverlay, backgroundPosition: posLeft, top: 0, left: 0, width: clipLs, height: '100%', zIndex: 4, clipPath: clipLeft }} />
                 <div style={{ ...solidBase, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 2, clipPath: clipRight }} />
                 <div style={{ ...texOverlay, backgroundPosition: posRight, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 4, clipPath: clipRight }} />
-                <MiterJointLines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} />
+                <MiteredProfileOutlines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} />
             </div>
         );
     }
@@ -602,7 +602,7 @@ const MiteredFrame: React.FC<{
                     boxShadow: 'inset 0 2px 5px rgba(255,255,255,0.12), inset 0 -3px 8px rgba(0,0,0,0.15)',
                 }}
             />
-            <MiterJointLines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} />
+            <MiteredProfileOutlines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} />
         </div>
     );
 });
@@ -1283,9 +1283,10 @@ const createWindowElements = (
                             height: trackBandPx,
                             zIndex: 2,
                             background: 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(0,0,0,0.15) 100%)',
-                            boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.22)',
                         }}
-                    />
+                    >
+                      <SlidingTrackOuterOutline widthPx={innerAreaWidth * scale} heightPx={trackBandPx} edge="top" />
+                    </div>
                 );
                 innerContent.push(
                     <div
@@ -1298,9 +1299,10 @@ const createWindowElements = (
                             height: trackBandPx,
                             zIndex: 2,
                             background: 'linear-gradient(0deg, rgba(255,255,255,0.22) 0%, rgba(0,0,0,0.15) 100%)',
-                            boxShadow: 'inset 0 1px 0 rgba(0,0,0,0.22)',
                         }}
-                    />
+                    >
+                      <SlidingTrackOuterOutline widthPx={innerAreaWidth * scale} heightPx={trackBandPx} edge="bottom" />
+                    </div>
                 );
                 for (let i = 1; i < laneCount; i++) {
                     const x = laneGapPx * i;

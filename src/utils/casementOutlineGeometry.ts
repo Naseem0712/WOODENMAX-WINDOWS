@@ -456,6 +456,29 @@ export function archOuterFrameProfileLengthsMm(
   };
 }
 
+export function buildArchOuterFrameOuterBoundaryD(
+  windowW: number,
+  windowH: number,
+  holeY: number,
+  springY: number,
+): string {
+  const sy = holeY + springY;
+  const ro = archRadiusMm(windowW, sy);
+  return `M 0 ${windowH} L ${windowW} ${windowH} L ${windowW} ${sy} A ${ro} ${ro} 0 0 0 0 ${sy} Z`;
+}
+
+export function buildArchOuterFrameInnerBoundaryD(
+  holeX: number,
+  holeY: number,
+  innerW: number,
+  innerH: number,
+  springY: number,
+): string {
+  const sy = holeY + springY;
+  const ri = archRadiusMm(innerW, springY);
+  return `M ${holeX} ${sy} L ${holeX} ${holeY + innerH} L ${holeX + innerW} ${holeY + innerH} L ${holeX + innerW} ${sy} A ${ri} ${ri} 0 0 0 ${holeX} ${sy} Z`;
+}
+
 /** SVG even-odd ring: outer window boundary minus inner opening (arch-top). */
 export function buildArchOuterFrameRingD(
   windowW: number,

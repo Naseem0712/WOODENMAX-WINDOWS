@@ -41,7 +41,7 @@ import { OpenViewPrintBlock } from '../windowOpenView/OpenViewPrintBlock';
 import { getOpenViewPrintConfigs } from '../windowOpenView/supportsOpenView';
 import { ArchHeadLayer } from './casement/ArchHeadLayer';
 import { OpeningShapedFrame } from './casement/OpeningShapedFrame';
-import { InterlockButtJointLines, MiterJointLines, MullionJointLines, mullionEdgeStyle } from './profile/ProfileJointLines';
+import { InterlockButtJointLines, MiteredProfileOutlines, MullionJointLines, SlidingTrackOuterOutline, mullionEdgeStyle } from './profile/ProfileJointLines';
 import { archSpringYMmForOpening, isArchTopOutline } from '../utils/casementOutlineGeometry';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
@@ -333,7 +333,7 @@ const PrintableMiteredFrame: React.FC<{
                 <div style={{ ...baseDivStyle, ...tileBase, backgroundPosition: posBottom, bottom: 0, left: 0, width: '100%', height: clipBs, zIndex: 1, clipPath: clipBottom }} />
                 <div style={{ ...baseDivStyle, ...tileBase, backgroundPosition: posLeft, top: 0, left: 0, width: clipLs, height: '100%', zIndex: 2, clipPath: clipLeft }} />
                 <div style={{ ...baseDivStyle, ...tileBase, backgroundPosition: posRight, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 2, clipPath: clipRight }} />
-                <MiterJointLines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} variant="print" />
+                <MiteredProfileOutlines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} variant="print" />
             </div>
         );
     }
@@ -370,7 +370,7 @@ const PrintableMiteredFrame: React.FC<{
                 <div style={{ ...texOverlay, backgroundPosition: posLeft, top: 0, left: 0, width: clipLs, height: '100%', zIndex: 4, clipPath: clipLeft }} />
                 <div style={{ ...solidBase, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 2, clipPath: clipRight }} />
                 <div style={{ ...texOverlay, backgroundPosition: posRight, top: 0, right: 0, width: clipRs, height: '100%', zIndex: 4, clipPath: clipRight }} />
-                <MiterJointLines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} variant="print" />
+                <MiteredProfileOutlines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} variant="print" />
             </div>
         );
     }
@@ -392,7 +392,7 @@ const PrintableMiteredFrame: React.FC<{
                     backgroundColor: 'transparent',
                 }}
             />
-            <MiterJointLines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} variant="print" />
+            <MiteredProfileOutlines widthPx={wPx} heightPx={hPx} topPx={clipTs} bottomPx={clipBs} leftPx={clipLs} rightPx={clipRs} variant="print" />
         </div>
     );
 };
@@ -900,30 +900,40 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
 
                         const slidingTrackBands = (
                           <>
-                            <PrintProfilePiece
+                            <div
                               key="sliding-track-top"
-                              color={profileColor}
-                              texture={pt}
-                              style={{
-                                left: 0,
-                                top: 0,
-                                width: innerAreaWidth * scale,
-                                height: trackBandPx,
-                                zIndex: 2,
-                              }}
-                            />
-                            <PrintProfilePiece
+                              className="absolute"
+                              style={{ left: 0, top: 0, width: innerAreaWidth * scale, height: trackBandPx, zIndex: 2 }}
+                            >
+                              <PrintProfilePiece
+                                color={profileColor}
+                                texture={pt}
+                                style={{ left: 0, top: 0, width: '100%', height: '100%' }}
+                              />
+                              <SlidingTrackOuterOutline
+                                widthPx={innerAreaWidth * scale}
+                                heightPx={trackBandPx}
+                                edge="top"
+                                variant="print"
+                              />
+                            </div>
+                            <div
                               key="sliding-track-bottom"
-                              color={profileColor}
-                              texture={pt}
-                              style={{
-                                left: 0,
-                                bottom: 0,
-                                width: innerAreaWidth * scale,
-                                height: trackBandPx,
-                                zIndex: 2,
-                              }}
-                            />
+                              className="absolute"
+                              style={{ left: 0, bottom: 0, width: innerAreaWidth * scale, height: trackBandPx, zIndex: 2 }}
+                            >
+                              <PrintProfilePiece
+                                color={profileColor}
+                                texture={pt}
+                                style={{ left: 0, top: 0, width: '100%', height: '100%' }}
+                              />
+                              <SlidingTrackOuterOutline
+                                widthPx={innerAreaWidth * scale}
+                                heightPx={trackBandPx}
+                                edge="bottom"
+                                variant="print"
+                              />
+                            </div>
                             {Array.from({ length: laneCount - 1 }, (_, laneIdx) => {
                               const i = laneIdx + 1;
                               const x = laneGapPx * i;
