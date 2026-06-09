@@ -11,6 +11,8 @@ type Props = {
   /** 0–1 open amount for plan (default 50%) */
   openAmount?: number;
   swingSide?: DoorSwingSide;
+  /** Smaller plan for package print secondary slot */
+  compact?: boolean;
 };
 
 /** Plan-only print block — main elevation comes from PrintableWindow (canvas design). */
@@ -18,6 +20,7 @@ export const OpenViewPrintBlock: React.FC<Props> = ({
   config,
   openAmount = 0.5,
   swingSide = 'outside',
+  compact = false,
 }) => {
   const spec = useMemo(
     () => computeOpenViewSpec(config, openAmount, { swingSide }),
@@ -31,7 +34,7 @@ export const OpenViewPrintBlock: React.FC<Props> = ({
       <PlanSchematic
         spec={spec}
         variant="print"
-        widthPx={130}
+        widthPx={compact ? 54 : 130}
         swingSide={swingSide}
         openAmount={openAmount}
       />

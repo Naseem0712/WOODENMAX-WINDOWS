@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import type { ProfileSeries, WindowConfig, HardwareItem, QuotationItem, WindowQuotationItem, VentilatorCell, GlassSpecialType, SavedColor, VentilatorCellType, PartitionPanelType, PartitionPanelConfig, QuotationSettings, HandleConfig, CornerSideConfig, LaminatedGlassConfig, DguGlassConfig, BatchAddItem, GlassGridConfig, LouverBayCrossAlign, DesignLayoutUnit, DesignLayoutActiveUnit } from './types';
 import { FixedPanelPosition, ShutterConfigType, TrackType, GlassType, AreaType, WindowType, MirrorShape } from './types';
 import { ControlsPanel } from './components/ControlsPanel';
-import { DesignLayoutCanvas } from './components/DesignLayoutCanvas';
 import { WindowCanvas } from './components/WindowCanvas';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { QuotationPanel } from './components/QuotationPanel';
@@ -29,11 +28,25 @@ import { DEFAULT_MATERIAL_RATES } from './constants/materialRates';
 import { computeHardwareCostForQuotation } from './utils/quotationHardwareCost';
 import { applyDesignerCorrectionToQuotationItem } from './utils/applyDesignerCorrectionToQuotationItem';
 import {
+  applyAppearanceFromPrimary,
+  appearanceFingerprint,
+  clearDesignLayoutSession,
+  computeLayoutEstimateRows,
+  computeLayoutPlacements,
+  layoutBounds,
+  layoutPrimaryLabel,
+  loadDesignLayoutSession,
+  saveDesignLayoutSession,
+  syncLayoutCompanionTitles,
+} from './utils/designLayout';
+import {
   isOutlineBandCell,
   buildArchGridHorizontalDividers,
   isArchTopOutline,
   applyArchStraightBottomLayout,
   resolveCasementOutline,
+  getPlainCasementVentilatorFields,
+  sanitizeCasementOpeningIfNotUserSet,
 } from './utils/casementOutlineGeometry';
 import {
   allHSegmentsHidden,
@@ -51,6 +64,17 @@ import { recalculateQuoteLine as recalculateRailingQuoteLine } from './railing/q
 import { displayDesignTitle as railingDisplayTitle } from './railing/utils';
 import type { QuotationLine } from './railing/types';
 import { isWindowQuotationItem } from './utils/quotationItemKinds';
+import { resolveProfileColorLabel } from './utils/profileColorLabel';
+import {
+  buildWindowPackageQuotationItem,
+  isWindowPackageQuotationItem,
+  normalizeWindowPackageItem,
+  reconstructDesignLayoutFromPackage,
+} from './utils/windowPackageQuotation';
+import {
+  loadSessionPrintElevationPhoto,
+  saveSessionPrintElevationPhoto,
+} from './utils/printElevationPhoto';
 import { supportsOpenView } from './windowOpenView/supportsOpenView';
 import {
   getLouverBaySeparatorMm,
@@ -72,6 +96,9 @@ function normalizeQuotationItemFromStorage(raw: unknown): QuotationItem | null {
       title: typeof o.title === 'string' ? o.title : 'Glass railing',
       railingLine: recalculateRailingQuoteLine(structuredClone(o.railingLine as QuotationLine)),
     };
+  }
+  if (o.kind === 'window_package' && Array.isArray(o.units) && typeof o.id === 'string') {
+    return normalizeWindowPackageItem(structuredClone(o) as unknown as import('./types').WindowPackageQuotationItem);
   }
   if (o.config && typeof o.id === 'string') {
     return {
@@ -1179,6 +1206,10 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
                 newState.rightConfig = state.rightConfig || defaultCornerSideConfig;
             }
 
+            if (newType === WindowType.CASEMENT || newType === WindowType.VENTILATOR) {
+                Object.assign(newState, getPlainCasementVentilatorFields());
+            }
+
             return newState;
         }
         case 'SET_PARTITION_PANEL_COUNT': {
@@ -1470,7 +1501,12 @@ const getInitialConfig = (): ConfigState => {
           });
       }
 
-            const base = withLouverOuterSynced(finalConfig, 50);
+            const base = withLouverOuterSynced(
+              sanitizeCasementOpeningIfNotUserSet(finalConfig),
+              50,
+            );
+            const sessionPhoto = loadSessionPrintElevationPhoto();
+            if (sessionPhoto) base.printElevationPhoto = sessionPhoto;
             const d = loadHomeownerDefaults();
             return d ? (applyHomeownerDefaultsToConfig(base as any, d) as any) : base;
     }
@@ -1528,9 +1564,18 @@ interface DesignerViewProps {
   layoutCompanions: DesignLayoutUnit[];
   activeLayoutUnitId: DesignLayoutActiveUnit;
   onActiveLayoutUnitChange: (id: DesignLayoutActiveUnit) => void;
-  onAddLayoutUnit: (unit: DesignLayoutUnit) => void;
+  onAddLayoutUnits: (units: DesignLayoutUnit[]) => void;
   onRemoveLayoutUnit: (id: string) => void;
   onUpdateLayoutUnit: (id: string, partial: Partial<DesignLayoutUnit>) => void;
+  onSaveLayoutAllToQuotation: () => void;
+  layoutPrimaryForCanvas: WindowConfig;
+  layoutCompanionsForCanvas: DesignLayoutUnit[];
+  layoutEstimate?: import('./utils/designLayout').LayoutEstimateRow[];
+  onLayoutUnitRateChange: (unitId: string, rate: number | '') => void;
+  printElevationPhoto?: string;
+  onPrintElevationPhotoChange: (dataUrl: string | undefined) => void;
+  printVisualWidthMm: number;
+  printVisualHeightMm: number;
 }
 
 const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
@@ -1554,9 +1599,18 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
     layoutCompanions,
     activeLayoutUnitId,
     onActiveLayoutUnitChange,
-    onAddLayoutUnit,
+    onAddLayoutUnits,
     onRemoveLayoutUnit,
     onUpdateLayoutUnit,
+    onSaveLayoutAllToQuotation,
+    layoutPrimaryForCanvas,
+    layoutCompanionsForCanvas,
+    layoutEstimate,
+    onLayoutUnitRateChange,
+    printElevationPhoto,
+    onPrintElevationPhotoChange,
+    printVisualWidthMm,
+    printVisualHeightMm,
   } = props;
 
   // Keep model in view after refresh — avoid scroll jumping to empty inflated height.
@@ -1568,6 +1622,11 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
 
   const quotationOpeningMm2 = useMemo(() => getWindowQuotationAreaMm2(windowConfig), [windowConfig]);
   const openViewAvailable = useMemo(() => supportsOpenView(windowConfig), [windowConfig]);
+
+  const layoutPlacements = useMemo(() => {
+    if (layoutCompanionsForCanvas.length === 0) return undefined;
+    return computeLayoutPlacements(layoutPrimaryForCanvas, windowTitle, layoutCompanionsForCanvas);
+  }, [layoutPrimaryForCanvas, windowTitle, layoutCompanionsForCanvas]);
 
   return (
     <>
@@ -1669,9 +1728,10 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
                         layoutCompanions={layoutCompanions}
                         activeLayoutUnitId={activeLayoutUnitId}
                         onActiveLayoutUnitChange={onActiveLayoutUnitChange}
-                        onAddLayoutUnit={onAddLayoutUnit}
+                        onAddLayoutUnits={onAddLayoutUnits}
                         onRemoveLayoutUnit={onRemoveLayoutUnit}
                         onUpdateLayoutUnit={onUpdateLayoutUnit}
+                        onSaveLayoutAllToQuotation={onSaveLayoutAllToQuotation}
                         windowTitle={windowTitle}
                       />
                     </ErrorBoundary>
@@ -1683,12 +1743,26 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
                 ref={canvasViewportRef}
                 className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain custom-scrollbar touch-pan-y"
               >
-                <div className="box-border flex w-full min-h-full flex-col items-center justify-center gap-4 px-4 py-6">
+                <div className="box-border flex w-full min-h-full flex-col items-center justify-center gap-2 px-4 py-6">
+                  {layoutCompanions.length > 0 ? (
+                    <p className="text-center text-[11px] text-slate-400">
+                      Window par click karein ya 1,2,3… select karein —{' '}
+                      <strong className="text-indigo-300">
+                        {activeLayoutUnitId === 'primary'
+                          ? windowTitle || 'Window 1'
+                          : layoutCompanions.find((c) => c.id === activeLayoutUnitId)?.title ?? 'Unit'}
+                      </strong>{' '}
+                      edit ho rahi hai
+                    </p>
+                  ) : null}
                   <ErrorBoundary title="Canvas crashed">
                     <WindowCanvas
                       key={canvasKey}
                       fitViewportRef={canvasViewportRef}
                       config={windowConfig}
+                      layoutPlacements={layoutPlacements}
+                      activeLayoutUnitId={activeLayoutUnitId}
+                      onSelectLayoutUnit={onActiveLayoutUnitChange}
                       onRemoveVerticalDivider={handleRemoveVerticalDivider}
                       onRemoveHorizontalDivider={handleRemoveHorizontalDivider}
                       onRemoveHMullionSegment={handleRemoveHMullionSegment}
@@ -1700,17 +1774,9 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
                       enableDoorHandleDrag={userModeState.mode === 'homeowner'}
                     />
                   </ErrorBoundary>
-                  {layoutCompanions.length > 0 ? (
-                    <DesignLayoutCanvas
-                      primary={windowConfig}
-                      primaryTitle={windowTitle}
-                      companions={layoutCompanions}
-                      activeUnitId={activeLayoutUnitId}
-                    />
-                  ) : null}
                 </div>
               </SpringScrollArea>
-              <div className="no-print relative z-20 hidden shrink-0 lg:block lg:shadow-[0_-10px_40px_rgba(0,0,0,0.35)]">
+              <div className="no-print relative z-20 hidden max-h-[min(32vh,240px)] shrink-0 overflow-y-auto overscroll-y-contain border-t border-slate-700 custom-scrollbar lg:block lg:shadow-[0_-8px_24px_rgba(0,0,0,0.3)]">
                 <QuotationPanel
                   idPrefix="desktop-"
                   width={Number(windowConfig.width) || 0}
@@ -1734,14 +1800,22 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
                   onViewQuotation={onViewQuotation}
                   bulkCorrectionLineCount={bulkCorrectionLineCount}
                   onApplyBulkCorrection={onApplyBulkCorrection}
+                  layoutEstimate={layoutEstimate}
+                  activeLayoutUnitId={activeLayoutUnitId}
+                  onLayoutUnitRateChange={onLayoutUnitRateChange}
+                  onSaveLayoutAll={onSaveLayoutAllToQuotation}
+                  printElevationPhoto={printElevationPhoto}
+                  onPrintElevationPhotoChange={onPrintElevationPhotoChange}
+                  printVisualWidthMm={printVisualWidthMm}
+                  printVisualHeightMm={printVisualHeightMm}
                 />
               </div>
-              <div className="no-print grid grid-cols-2 gap-3 border-t-2 border-slate-700 bg-slate-800 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
-                  <Button onClick={handleOpenConfigure} variant="secondary" className="min-h-[48px] justify-center text-sm font-semibold">
-                    <AdjustmentsIcon className="mr-2 h-5 w-5 shrink-0" /> Configure
+              <div className="no-print grid grid-cols-2 gap-2 border-t border-slate-700 bg-slate-800 px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:hidden">
+                  <Button onClick={handleOpenConfigure} variant="secondary" className="!h-10 !min-h-0 justify-center !px-2 !text-xs !font-semibold !shadow-none">
+                    <AdjustmentsIcon className="mr-1.5 h-4 w-4 shrink-0" /> Configure
                   </Button>
-                  <Button onClick={handleOpenQuote} variant="secondary" className="min-h-[48px] justify-center text-sm font-semibold">
-                    <ListBulletIcon className="mr-2 h-5 w-5 shrink-0" /> Quotation
+                  <Button onClick={handleOpenQuote} variant="secondary" className="!h-10 !min-h-0 justify-center !px-2 !text-xs !font-semibold !shadow-none">
+                    <ListBulletIcon className="mr-1.5 h-4 w-4 shrink-0" /> Quote
                   </Button>
               </div>
             </div>
@@ -1762,9 +1836,10 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
                  layoutCompanions={layoutCompanions}
                  activeLayoutUnitId={activeLayoutUnitId}
                  onActiveLayoutUnitChange={onActiveLayoutUnitChange}
-                 onAddLayoutUnit={onAddLayoutUnit}
+                 onAddLayoutUnits={onAddLayoutUnits}
                  onRemoveLayoutUnit={onRemoveLayoutUnit}
                  onUpdateLayoutUnit={onUpdateLayoutUnit}
+                 onSaveLayoutAllToQuotation={onSaveLayoutAllToQuotation}
                  windowTitle={windowTitle}
                />
              </ErrorBoundary>
@@ -1778,7 +1853,7 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
               <div className="h-1.5 w-12 rounded-full bg-slate-600" />
             </div>
             <SpringScrollArea className="min-h-0 flex-1 overflow-y-auto custom-scrollbar touch-pan-y">
-              <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quotationOpeningMm2={quotationOpeningMm2} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} onClose={handleCloseMobilePanels} bulkCorrectionLineCount={bulkCorrectionLineCount} onApplyBulkCorrection={onApplyBulkCorrection} />
+              <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quotationOpeningMm2={quotationOpeningMm2} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} onClose={handleCloseMobilePanels} bulkCorrectionLineCount={bulkCorrectionLineCount} onApplyBulkCorrection={onApplyBulkCorrection} layoutEstimate={layoutEstimate} activeLayoutUnitId={activeLayoutUnitId} onLayoutUnitRateChange={onLayoutUnitRateChange} onSaveLayoutAll={onSaveLayoutAllToQuotation} printElevationPhoto={printElevationPhoto} onPrintElevationPhotoChange={onPrintElevationPhotoChange} printVisualWidthMm={printVisualWidthMm} printVisualHeightMm={printVisualHeightMm} />
             </SpringScrollArea>
         </div>
     </div>
@@ -1819,8 +1894,13 @@ const App: React.FC = () => {
   }, [getFlag, setFlag, userModeState.mode]);
 
   const [windowConfigState, dispatch] = useReducer(configReducer, getInitialConfig());
-  const [layoutCompanions, setLayoutCompanions] = useState<DesignLayoutUnit[]>([]);
-  const [activeLayoutUnitId, setActiveLayoutUnitId] = useState<DesignLayoutActiveUnit>('primary');
+  const [layoutCompanions, setLayoutCompanions] = useState<DesignLayoutUnit[]>(() => {
+    return loadDesignLayoutSession()?.companions ?? [];
+  });
+  const [activeLayoutUnitId, setActiveLayoutUnitId] = useState<DesignLayoutActiveUnit>(() => {
+    return loadDesignLayoutSession()?.activeUnitId ?? 'primary';
+  });
+  const [layoutPrimarySnapshot, setLayoutPrimarySnapshot] = useState<WindowConfig | null>(null);
   const frozenPrimaryConfigRef = useRef<ConfigState | null>(null);
   const { windowType } = windowConfigState;
 
@@ -2115,7 +2195,11 @@ const App: React.FC = () => {
 
     const restored = getSnapshotForType(newType);
     if (restored) {
-      dispatch({ type: 'LOAD_CONFIG', payload: restored.config });
+      const config = sanitizeCasementOpeningIfNotUserSet({
+        ...restored.config,
+        windowType: newType,
+      } as ConfigState);
+      dispatch({ type: 'LOAD_CONFIG', payload: config });
       setSeries(restored.series);
     } else {
       dispatch({ type: 'SET_WINDOW_TYPE', payload: newType });
@@ -2284,6 +2368,58 @@ const App: React.FC = () => {
     return state as ConfigState;
   }, []);
 
+  const layoutCompanionsForCanvas = useMemo(() => {
+    if (activeLayoutUnitId === 'primary') return layoutCompanions;
+    return layoutCompanions.map((c) =>
+      c.id === activeLayoutUnitId ? { ...c, config: windowConfig } : c,
+    );
+  }, [layoutCompanions, activeLayoutUnitId, windowConfig]);
+
+  const layoutPrimaryForCanvas = useMemo(() => {
+    if (activeLayoutUnitId === 'primary') return windowConfig;
+    if (layoutPrimarySnapshot) return layoutPrimarySnapshot;
+    return windowConfig;
+  }, [activeLayoutUnitId, windowConfig, layoutPrimarySnapshot]);
+
+  const layoutGetUnitConfig = useCallback(
+    (id: DesignLayoutActiveUnit) => {
+      if (id === 'primary') return layoutPrimaryForCanvas;
+      if (id === activeLayoutUnitId) return windowConfig;
+      return layoutCompanions.find((c) => c.id === id)?.config ?? layoutPrimaryForCanvas;
+    },
+    [layoutPrimaryForCanvas, activeLayoutUnitId, windowConfig, layoutCompanions],
+  );
+
+  useEffect(() => {
+    if (activeLayoutUnitId === 'primary') {
+      frozenPrimaryConfigRef.current = windowConfigState;
+      setLayoutPrimarySnapshot(windowConfig);
+    }
+  }, [activeLayoutUnitId, windowConfig, windowConfigState]);
+
+  useEffect(() => {
+    if (layoutCompanions.length === 0 && activeLayoutUnitId === 'primary') {
+      clearDesignLayoutSession();
+      return;
+    }
+    saveDesignLayoutSession({ companions: layoutCompanions, activeUnitId: activeLayoutUnitId });
+  }, [layoutCompanions, activeLayoutUnitId]);
+
+  const layoutSessionRestoredRef = useRef(false);
+  useEffect(() => {
+    if (layoutSessionRestoredRef.current) return;
+    layoutSessionRestoredRef.current = true;
+    if (activeLayoutUnitId === 'primary' || layoutCompanions.length === 0) return;
+    const unit = layoutCompanions.find((c) => c.id === activeLayoutUnitId);
+    if (!unit) {
+      setActiveLayoutUnitId('primary');
+      return;
+    }
+    frozenPrimaryConfigRef.current = windowConfigState;
+    setLayoutPrimarySnapshot({ ...windowConfigState, series });
+    dispatch({ type: 'LOAD_CONFIG_STATE', payload: configStateFromWindowConfig(unit.config) });
+  }, []);
+
   // --- PERSISTENCE EFFECTS ---
   useEffect(() => {
     try {
@@ -2298,6 +2434,10 @@ const App: React.FC = () => {
         }
         if (stateToSave.glassTexture) {
             stateToSave.glassTexture = ''; // Do not persist texture data
+        }
+        if (stateToSave.printElevationPhoto) {
+            saveSessionPrintElevationPhoto(stateToSave.printElevationPhoto);
+            delete stateToSave.printElevationPhoto;
         }
         window.localStorage.setItem('woodenmax-current-config', JSON.stringify(stateToSave));
     } catch (error) {
@@ -2581,6 +2721,7 @@ const App: React.FC = () => {
 
       if (activeLayoutUnitId === 'primary' && nextId !== 'primary') {
         frozenPrimaryConfigRef.current = windowConfigState;
+        setLayoutPrimarySnapshot(windowConfig);
       }
 
       if (nextId === 'primary') {
@@ -2590,10 +2731,13 @@ const App: React.FC = () => {
       } else {
         const unit = companions.find((c) => c.id === nextId);
         if (unit) {
-          if (unit.config.series?.id && unit.config.series.id !== series?.id) {
-            handleSeriesSelect(unit.config.series.id);
+          const primaryCfg =
+            activeLayoutUnitId === 'primary' ? windowConfig : layoutPrimarySnapshot ?? windowConfig;
+          const cfg = applyAppearanceFromPrimary(primaryCfg, unit.config);
+          if (cfg.series?.id && cfg.series.id !== series?.id) {
+            handleSeriesSelect(cfg.series.id);
           }
-          dispatch({ type: 'LOAD_CONFIG_STATE', payload: configStateFromWindowConfig(unit.config) });
+          dispatch({ type: 'LOAD_CONFIG_STATE', payload: configStateFromWindowConfig(cfg) });
         }
       }
 
@@ -2610,22 +2754,70 @@ const App: React.FC = () => {
     ],
   );
 
-  const handleAddLayoutUnit = useCallback(
-    (unit: DesignLayoutUnit) => {
-      setLayoutCompanions((prev) => [...prev, unit]);
-      handleActiveLayoutUnitChange(unit.id);
+  const handleAddLayoutUnits = useCallback(
+    (units: DesignLayoutUnit[]) => {
+      if (units.length === 0) return;
+
+      setLayoutCompanions((prev) => {
+        let next = prev;
+        if (activeLayoutUnitId !== 'primary') {
+          next = prev.map((c) =>
+            c.id === activeLayoutUnitId ? { ...c, config: windowConfig } : c,
+          );
+        }
+        return [...next, ...units];
+      });
+
+      if (activeLayoutUnitId === 'primary') {
+        frozenPrimaryConfigRef.current = windowConfigState;
+        setLayoutPrimarySnapshot(windowConfig);
+      }
+
+      const last = units[units.length - 1];
+      if (last.config.series?.id && last.config.series.id !== series?.id) {
+        handleSeriesSelect(last.config.series.id);
+      }
+      dispatch({ type: 'LOAD_CONFIG_STATE', payload: configStateFromWindowConfig(last.config) });
+      setActiveLayoutUnitId(last.id);
     },
-    [handleActiveLayoutUnitChange],
+    [
+      activeLayoutUnitId,
+      windowConfig,
+      windowConfigState,
+      series?.id,
+      handleSeriesSelect,
+      configStateFromWindowConfig,
+      layoutPrimarySnapshot,
+    ],
   );
+
+  const primaryAppearanceKey = useMemo(
+    () => appearanceFingerprint(layoutPrimaryForCanvas),
+    [layoutPrimaryForCanvas],
+  );
+
+  useEffect(() => {
+    if (layoutCompanions.length === 0) return;
+    const primary = layoutPrimaryForCanvas;
+    setLayoutCompanions((prev) =>
+      prev.map((c) => ({
+        ...c,
+        config: applyAppearanceFromPrimary(primary, c.config),
+      })),
+    );
+  }, [primaryAppearanceKey]);
 
   const handleRemoveLayoutUnit = useCallback(
     (id: string) => {
-      setLayoutCompanions((prev) => prev.filter((c) => c.id !== id));
       if (activeLayoutUnitId === id) {
-        handleActiveLayoutUnitChange('primary');
+        if (frozenPrimaryConfigRef.current) {
+          dispatch({ type: 'LOAD_CONFIG_STATE', payload: frozenPrimaryConfigRef.current });
+        }
+        setActiveLayoutUnitId('primary');
       }
+      setLayoutCompanions((prev) => prev.filter((c) => c.id !== id));
     },
-    [activeLayoutUnitId, handleActiveLayoutUnitChange],
+    [activeLayoutUnitId],
   );
 
   const handleUpdateLayoutUnit = useCallback((id: string, partial: Partial<DesignLayoutUnit>) => {
@@ -2742,6 +2934,12 @@ const App: React.FC = () => {
   const handleResetDesign = useCallback(() => {
     if (window.confirm("Are you sure you want to reset the current design? All changes will be lost.")) {
         clearSnapshotForType(windowConfigState.windowType);
+        setLayoutCompanions([]);
+        setActiveLayoutUnitId('primary');
+        clearDesignLayoutSession();
+        saveSessionPrintElevationPhoto(undefined);
+        frozenPrimaryConfigRef.current = null;
+        setLayoutPrimarySnapshot(null);
         dispatch({ type: 'RESET_DESIGN' });
     }
   }, [windowConfigState.windowType]);
@@ -2751,27 +2949,162 @@ const App: React.FC = () => {
     [series.hardwareItems, windowConfig]
   );
 
-  const handleSaveToQuotation = useCallback(() => {
-    const colorName = savedColors.find(c => c.value === windowConfig.profileColor)?.name;
-    const configForQuotation = JSON.parse(JSON.stringify(windowConfig));
-
-    const newItem: QuotationItem = {
+  const buildQuotationItemFromConfig = useCallback(
+    (cfg: WindowConfig, title: string, rateOverride?: number): WindowQuotationItem => {
+      const hw = cfg.series?.hardwareItems ?? series.hardwareItems;
+      const configForQuotation = JSON.parse(JSON.stringify(cfg)) as WindowConfig;
+      const printElevationPhoto = configForQuotation.printElevationPhoto;
+      delete configForQuotation.printElevationPhoto;
+      return {
         id: uuidv4(),
-        title: windowTitle || 'Untitled Window',
+        title: title || 'Untitled Window',
         config: configForQuotation,
         quantity: Number(quantity) || 1,
         areaType,
-        rate: Number(rate) || 0,
-        hardwareCost: hardwareCostPerWindow,
-        hardwareItems: JSON.parse(JSON.stringify(series.hardwareItems)),
-        profileColorName: colorName || (windowConfig.profileColor.startsWith('data:') ? 'Custom Texture' : windowConfig.profileColor),
-    };
-    setQuotationItems(prev => applySlidingBasicRateProtection([...prev, newItem]));
+        rate: rateOverride !== undefined ? rateOverride : Number(rate) || 0,
+        hardwareCost: computeHardwareCostForQuotation(cfg, hw),
+        hardwareItems: JSON.parse(JSON.stringify(hw)),
+        profileColorName: resolveProfileColorLabel(cfg.profileColor, undefined, savedColors),
+        printElevationPhoto: printElevationPhoto || undefined,
+      };
+    },
+    [savedColors, series.hardwareItems, quantity, areaType, rate],
+  );
+
+  const handleSaveToQuotation = useCallback(() => {
+    const newItem = buildQuotationItemFromConfig(windowConfig, windowTitle || 'Untitled Window');
+    setQuotationItems((prev) => applySlidingBasicRateProtection([...prev, newItem]));
     alert(`"${newItem.title}" saved to quotation! You now have ${quotationItems.length + 1} item(s).`);
-  }, [windowTitle, windowConfig, quantity, areaType, rate, hardwareCostPerWindow, series.hardwareItems, savedColors, quotationItems.length, applySlidingBasicRateProtection]);
+  }, [windowTitle, windowConfig, buildQuotationItemFromConfig, quotationItems.length, applySlidingBasicRateProtection]);
+
+  const buildPackageItemFromCurrentLayout = useCallback(
+    (existingId?: string) => {
+      const primaryLabel = layoutPrimaryLabel(windowTitle);
+      const syncedCompanions = syncLayoutCompanionTitles(
+        primaryLabel,
+        layoutCompanionsForCanvas,
+      );
+      const placements = computeLayoutPlacements(
+        layoutPrimaryForCanvas,
+        primaryLabel,
+        syncedCompanions,
+      );
+      return normalizeWindowPackageItem(
+        buildWindowPackageQuotationItem({
+          placements,
+          companions: syncedCompanions,
+          globalRate: Number(rate) || 0,
+          quantity: Number(quantity) || 1,
+          areaType,
+          packageTitle: primaryLabel,
+          savedColors,
+          defaultHardwareItems: series.hardwareItems,
+          hardwareCostFor: (cfg, hw) => computeHardwareCostForQuotation(cfg, hw),
+          printElevationPhoto: windowConfig.printElevationPhoto,
+          existingId,
+        }),
+      );
+    },
+    [
+      layoutPrimaryForCanvas,
+      windowTitle,
+      layoutCompanionsForCanvas,
+      rate,
+      quantity,
+      areaType,
+      savedColors,
+      series.hardwareItems,
+      windowConfig.printElevationPhoto,
+    ],
+  );
+
+  const handleSaveLayoutAllToQuotation = useCallback(() => {
+    if (layoutCompanionsForCanvas.length === 0) return;
+    const editingPackage =
+      editingItemId != null &&
+      quotationItems.some(
+        (i) => i.id === editingItemId && isWindowPackageQuotationItem(i),
+      );
+    const packageItem = buildPackageItemFromCurrentLayout(
+      editingPackage ? editingItemId! : undefined,
+    );
+
+    if (editingPackage) {
+      setQuotationItems((prev) =>
+        applySlidingBasicRateProtection(
+          prev.map((item) => (item.id === editingItemId ? packageItem : item)),
+        ),
+      );
+      setEditingItemId(null);
+      alert(`"${packageItem.title}" updated successfully!`);
+      return;
+    }
+
+    setQuotationItems((prev) => applySlidingBasicRateProtection([...prev, packageItem]));
+    alert(
+      `Combined package (${packageItem.units.length} units) saved! You now have ${quotationItems.length + 1} item(s).`,
+    );
+  }, [
+    layoutCompanionsForCanvas,
+    editingItemId,
+    quotationItems,
+    buildPackageItemFromCurrentLayout,
+    quotationItems.length,
+    applySlidingBasicRateProtection,
+  ]);
+
+  const handlePrintElevationPhotoChange = useCallback(
+    (dataUrl: string | undefined) => {
+      dispatch({
+        type: 'SET_FIELD',
+        field: 'printElevationPhoto',
+        payload: dataUrl ?? undefined,
+      });
+      saveSessionPrintElevationPhoto(dataUrl);
+    },
+    [dispatch],
+  );
+
+  const printVisualSizeMm = useMemo(() => {
+    if (layoutCompanionsForCanvas.length > 0) {
+      const placements = computeLayoutPlacements(
+        layoutPrimaryForCanvas,
+        windowTitle || 'Window 1',
+        layoutCompanionsForCanvas,
+      );
+      const b = layoutBounds(placements);
+      return { w: b.widthMm, h: b.heightMm };
+    }
+    return {
+      w: Number(windowConfig.width) || 1500,
+      h: Number(windowConfig.height) || 1200,
+    };
+  }, [layoutCompanionsForCanvas, layoutPrimaryForCanvas, windowTitle, windowConfig.width, windowConfig.height]);
+
+  const layoutEstimate = useMemo(() => {
+    if (layoutCompanionsForCanvas.length === 0) return undefined;
+    const placements = computeLayoutPlacements(
+      layoutPrimaryForCanvas,
+      windowTitle || 'Window 1',
+      layoutCompanionsForCanvas,
+    );
+    return computeLayoutEstimateRows(
+      placements,
+      layoutCompanionsForCanvas,
+      Number(rate) || 0,
+      (cfg) => computeHardwareCostForQuotation(cfg, cfg.series?.hardwareItems ?? series.hardwareItems),
+    );
+  }, [layoutCompanionsForCanvas, layoutPrimaryForCanvas, windowTitle, rate, series.hardwareItems]);
+
+  const handleLayoutUnitRateChange = useCallback((unitId: string, unitRate: number | '') => {
+    if (unitId === 'primary') {
+      setRate(unitRate);
+      return;
+    }
+    handleUpdateLayoutUnit(unitId, { rate: unitRate });
+  }, [handleUpdateLayoutUnit, setRate]);
 
   const handleBatchSave = useCallback((items: BatchAddItem[]) => {
-    const colorName = savedColors.find(c => c.value === windowConfig.profileColor)?.name;
     const baseConfigForQuotation = JSON.parse(JSON.stringify(windowConfig));
 
     const newQuotationItems: QuotationItem[] = items
@@ -2794,7 +3127,7 @@ const App: React.FC = () => {
           rate: Number(item.rate) || 0,
           hardwareCost: hardwareCostPerWindow,
           hardwareItems: JSON.parse(JSON.stringify(series.hardwareItems)),
-          profileColorName: colorName || (windowConfig.profileColor.startsWith('data:') ? 'Custom Texture' : windowConfig.profileColor),
+          profileColorName: resolveProfileColorLabel(itemConfig.profileColor, undefined, savedColors),
         };
     });
 
@@ -2850,9 +3183,76 @@ const App: React.FC = () => {
       return;
     }
 
-    const { series, ...configState } = itemToEdit.config;
+    if (isWindowPackageQuotationItem(itemToEdit)) {
+      try {
+        const restored = reconstructDesignLayoutFromPackage(itemToEdit);
+        const { series: ser, ...configState } = restored.primaryConfig;
+        dispatch({ type: 'LOAD_CONFIG', payload: configState });
+        if (ser?.id) {
+          const matched = availableSeries.find((s) => s.id === ser.id);
+          setSeries(
+            matched
+              ? { ...matched, hardwareItems: ser.hardwareItems ?? restored.primaryHardwareItems }
+              : ser,
+          );
+        } else if (restored.primaryHardwareItems.length > 0) {
+          setSeries((prev) => ({ ...prev, hardwareItems: restored.primaryHardwareItems }));
+        }
+        const itemPhoto = itemToEdit.printElevationPhoto;
+        dispatch({
+          type: 'SET_FIELD',
+          field: 'printElevationPhoto',
+          payload: itemPhoto,
+        });
+        saveSessionPrintElevationPhoto(itemPhoto);
+        setLayoutCompanions(restored.companions);
+        setActiveLayoutUnitId('primary');
+        saveDesignLayoutSession({ companions: restored.companions, activeUnitId: 'primary' });
+        frozenPrimaryConfigRef.current = null;
+        setLayoutPrimarySnapshot(null);
+        setWindowTitle(restored.primaryTitle);
+        setQuantity(itemToEdit.quantity);
+        setRate(restored.primaryRate);
+        setAreaType(itemToEdit.areaType);
+        setEditingItemId(id);
+        setQuotationBulkTargetIds([]);
+        setIsPreviewing(false);
+        setIsQuotationModalOpen(false);
+        setActiveMobilePanel('none');
+        navigate(`/design/${restored.primaryConfig.windowType}`);
+      } catch (err) {
+        console.error('Failed to restore package for edit', err);
+        alert('Could not open this package for editing.');
+      }
+      return;
+    }
+
+    if (!isWindowQuotationItem(itemToEdit)) return;
+
+    const { series: ser, ...configState } = itemToEdit.config;
     dispatch({ type: 'LOAD_CONFIG', payload: configState });
-    setSeries(series);
+    if (ser?.id) {
+      const matched = availableSeries.find((s) => s.id === ser.id);
+      setSeries(
+        matched
+          ? { ...matched, hardwareItems: ser.hardwareItems ?? itemToEdit.hardwareItems }
+          : ser,
+      );
+    } else if (itemToEdit.hardwareItems?.length) {
+      setSeries((prev) => ({ ...prev, hardwareItems: itemToEdit.hardwareItems }));
+    }
+    const itemPhoto = itemToEdit.printElevationPhoto;
+    dispatch({
+      type: 'SET_FIELD',
+      field: 'printElevationPhoto',
+      payload: itemPhoto,
+    });
+    saveSessionPrintElevationPhoto(itemPhoto);
+    setLayoutCompanions([]);
+    setActiveLayoutUnitId('primary');
+    saveDesignLayoutSession({ companions: [], activeUnitId: 'primary' });
+    frozenPrimaryConfigRef.current = null;
+    setLayoutPrimarySnapshot(null);
     setWindowTitle(itemToEdit.title);
     setQuantity(itemToEdit.quantity);
     setRate(itemToEdit.rate);
@@ -2863,15 +3263,34 @@ const App: React.FC = () => {
     setIsQuotationModalOpen(false);
     setActiveMobilePanel('none');
     navigate(`/design/${itemToEdit.config.windowType}`);
-  }, [quotationItems, navigate]);
+  }, [quotationItems, navigate, availableSeries, dispatch]);
 
   const handleUpdateQuotationItem = useCallback(() => {
     if (!editingItemId) return;
 
-    const colorName = savedColors.find(c => c.value === windowConfig.profileColor)?.name;
-    const configForQuotation = JSON.parse(JSON.stringify(windowConfig));
+    const existing = quotationItems.find((i) => i.id === editingItemId);
+    if (existing && isWindowPackageQuotationItem(existing)) {
+      if (layoutCompanionsForCanvas.length === 0) {
+        alert('This package has no layout windows to update.');
+        return;
+      }
+      const packageItem = buildPackageItemFromCurrentLayout(editingItemId);
+      setQuotationItems((prev) =>
+        applySlidingBasicRateProtection(
+          prev.map((item) => (item.id === editingItemId ? packageItem : item)),
+        ),
+      );
+      setEditingItemId(null);
+      alert(`"${packageItem.title}" updated successfully!`);
+      return;
+    }
+
+    const configForQuotation = JSON.parse(JSON.stringify(windowConfig)) as WindowConfig;
+    const printElevationPhoto = configForQuotation.printElevationPhoto;
+    delete configForQuotation.printElevationPhoto;
 
     const updatedItem: QuotationItem = {
+        kind: 'window',
         id: editingItemId,
         title: windowTitle || 'Untitled Window',
         config: configForQuotation,
@@ -2880,25 +3299,45 @@ const App: React.FC = () => {
         rate: Number(rate) || 0,
         hardwareCost: hardwareCostPerWindow,
         hardwareItems: JSON.parse(JSON.stringify(series.hardwareItems)),
-        profileColorName: colorName || (windowConfig.profileColor.startsWith('data:') ? 'Custom Texture' : windowConfig.profileColor),
+        profileColorName: resolveProfileColorLabel(windowConfig.profileColor, undefined, savedColors),
+        printElevationPhoto: printElevationPhoto || undefined,
     };
 
     setQuotationItems(prev => applySlidingBasicRateProtection(prev.map(item => item.id === editingItemId ? updatedItem : item)));
     
     setEditingItemId(null);
     alert(`"${updatedItem.title}" updated successfully!`);
-  }, [editingItemId, savedColors, windowConfig, windowTitle, quantity, areaType, rate, hardwareCostPerWindow, series.hardwareItems, applySlidingBasicRateProtection]);
+  }, [
+    editingItemId,
+    quotationItems,
+    layoutCompanionsForCanvas.length,
+    buildPackageItemFromCurrentLayout,
+    savedColors,
+    windowConfig,
+    windowTitle,
+    quantity,
+    areaType,
+    rate,
+    hardwareCostPerWindow,
+    series.hardwareItems,
+    applySlidingBasicRateProtection,
+  ]);
 
   const handleCancelEdit = useCallback(() => {
     if (window.confirm("Are you sure you want to cancel editing? Any changes will be lost.")) {
         setEditingItemId(null);
+        setLayoutCompanions([]);
+        setActiveLayoutUnitId('primary');
+        saveDesignLayoutSession({ companions: [], activeUnitId: 'primary' });
+        frozenPrimaryConfigRef.current = null;
+        setLayoutPrimarySnapshot(null);
         dispatch({ type: 'RESET_DESIGN' });
         setWindowTitle('Window 1');
         setQuantity(1);
         setRate(550);
         setAreaType(AreaType.SQFT);
     }
-  }, []);
+  }, [dispatch]);
 
   const handleEditCorrectionFromSelection = useCallback(() => {
     if (quotationBulkTargetIds.length === 0) return;
@@ -3034,7 +3473,8 @@ const App: React.FC = () => {
     materialRates: quotationSettings.materialRates,
     openingMm2: getWindowQuotationAreaMm2(windowConfig),
     onHomeownerLiveBaseRate: handleHomeownerLiveBaseRate,
-  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onSetPartitionPreset, onSetPartitionWidthFractions, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onUpdatePartitionPanel, onAddLouverBay, onRemoveLouverBay, onUpdateLouverBayDim, onUpdateLouverBayPosition, onSetLouverBayLayout, onClearLouverBays, handleLaminatedConfigChange, handleDguConfigChange, handleUpdateMirrorConfig, handleResetDesign, activeCornerSide, quotationSettings.materialRates, handleHomeownerLiveBaseRate]);
+    layoutGetUnitConfig,
+  }), [windowConfig, setConfig, setSideConfig, handleSetGridSize, availableSeries, handleSeriesSelect, handleSeriesSave, handleSeriesDelete, addFixedPanel, removeFixedPanel, updateFixedPanelSize, handleHardwareChange, addHardwareItem, removeHardwareItem, toggleDoorPosition, handleVentilatorCellClick, savedColors, handleUpdateHandle, onSetPartitionPanelCount, onSetPartitionPreset, onSetPartitionWidthFractions, onCyclePartitionPanelType, onSetPartitionHasTopChannel, onCyclePartitionPanelFraming, onUpdatePartitionPanel, onAddLouverBay, onRemoveLouverBay, onUpdateLouverBayDim, onUpdateLouverBayPosition, onSetLouverBayLayout, onClearLouverBays, handleLaminatedConfigChange, handleDguConfigChange, handleUpdateMirrorConfig, handleResetDesign, activeCornerSide, quotationSettings.materialRates, handleHomeownerLiveBaseRate, layoutGetUnitConfig]);
 
   const handleOpenConfigure = () => setActiveMobilePanel('configure');
   const handleOpenQuote = () => setActiveMobilePanel('quotation');
@@ -3181,6 +3621,7 @@ const App: React.FC = () => {
             selectedLineIds={quotationBulkTargetIds}
             onSelectedLineIdsChange={setQuotationBulkTargetIds}
             onEditCorrection={handleEditCorrectionFromSelection}
+            savedColors={savedColors}
           />
         </Suspense>
       )}
@@ -3283,9 +3724,18 @@ const App: React.FC = () => {
                     layoutCompanions={layoutCompanions}
                     activeLayoutUnitId={activeLayoutUnitId}
                     onActiveLayoutUnitChange={handleActiveLayoutUnitChange}
-                    onAddLayoutUnit={handleAddLayoutUnit}
+                    onAddLayoutUnits={handleAddLayoutUnits}
                     onRemoveLayoutUnit={handleRemoveLayoutUnit}
                     onUpdateLayoutUnit={handleUpdateLayoutUnit}
+                    onSaveLayoutAllToQuotation={handleSaveLayoutAllToQuotation}
+                    layoutPrimaryForCanvas={layoutPrimaryForCanvas}
+                    layoutCompanionsForCanvas={layoutCompanionsForCanvas}
+                    layoutEstimate={layoutEstimate}
+                    onLayoutUnitRateChange={handleLayoutUnitRateChange}
+                    printElevationPhoto={windowConfig.printElevationPhoto}
+                    onPrintElevationPhotoChange={handlePrintElevationPhotoChange}
+                    printVisualWidthMm={printVisualSizeMm.w}
+                    printVisualHeightMm={printVisualSizeMm.h}
                 />
             ) : (
                 <GuidesViewer 

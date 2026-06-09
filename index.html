@@ -259,6 +259,10 @@
     body > footer.site-footer p {
         margin: 0.08rem 0;
     }
+    select option {
+        background-color: #0f172a;
+        color: #f8fafc;
+    }
     .custom-scrollbar::-webkit-scrollbar {
         width: 8px;
         height: 8px;
@@ -561,6 +565,182 @@
       break-before: page;
     }
 
+    /* Compact quotation line — fixed elevation square + flowing details */
+    .print-item-layout {
+      display: grid;
+      grid-template-columns: 54mm minmax(0, 1fr);
+      gap: 3mm;
+      align-items: start;
+    }
+    .print-visual-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5mm;
+      width: 54mm;
+      flex-shrink: 0;
+    }
+    .print-slot-elevation {
+      width: 52mm;
+      height: 52mm;
+      border: 0.2mm solid #999;
+      background: #fff;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+    .print-slot-elevation-photo {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .print-slot-elevation-inner {
+      flex-shrink: 0;
+      line-height: 0;
+    }
+    .print-slot-secondary {
+      width: 52mm;
+      min-height: 18mm;
+      max-height: 32mm;
+      overflow: hidden;
+      border: 0.2mm solid #ddd;
+      background: #fafafa;
+      box-sizing: border-box;
+      padding: 1mm;
+    }
+    .print-slot-secondary-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1mm;
+      justify-content: center;
+      align-items: flex-start;
+    }
+    .print-slot-secondary-grid .wov-print-block {
+      transform: scale(0.92);
+      transform-origin: top center;
+    }
+    .print-visual-footer {
+      margin: 0;
+      text-align: center;
+      line-height: 1.2;
+    }
+    .print-slot-size-chart {
+      width: 52mm;
+      border: 0.2mm solid #ddd;
+      padding: 1mm 1.25mm;
+      background: #fff;
+      box-sizing: border-box;
+    }
+    .print-size-chart-title {
+      margin: 0 0 0.75mm;
+      font-size: 6pt;
+      font-weight: 700;
+      color: #374151;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .print-size-chart table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 6pt;
+      line-height: 1.35;
+    }
+    .print-size-chart td {
+      padding: 0.2mm 0;
+      vertical-align: top;
+    }
+    .print-size-chart td:first-child {
+      font-weight: 600;
+      padding-right: 2mm;
+      white-space: nowrap;
+      color: #374151;
+    }
+    .print-size-chart td:last-child {
+      text-align: right;
+      color: #111;
+    }
+    .print-package-units-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 2mm;
+      margin-top: 2mm;
+    }
+    .print-package-unit-card {
+      break-inside: avoid;
+      page-break-inside: avoid;
+      border: 0.2mm solid #ddd;
+      padding: 1.5mm;
+      font-size: 7pt;
+      background: #fafafa;
+      line-height: 1.25;
+    }
+    .print-package-unit-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 6.5pt;
+      margin-top: 1mm;
+      line-height: 1.35;
+    }
+    .print-package-unit-table td {
+      padding: 0.15mm 0;
+      vertical-align: top;
+    }
+    .print-package-unit-table td:first-child {
+      font-weight: 600;
+      padding-right: 2.5mm;
+      white-space: nowrap;
+      width: 28%;
+      color: #374151;
+    }
+    .print-package-total {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 3mm;
+      margin-top: 2mm;
+      padding-top: 2mm;
+      border-top: 0.35mm solid #666;
+      font-size: 7pt;
+      font-weight: bold;
+    }
+    .print-qty-amount-col {
+      width: 11%;
+      max-width: 22mm;
+      white-space: nowrap;
+    }
+    .print-qty-amount-cell {
+      width: 11%;
+      max-width: 22mm;
+      padding: 2px 4px !important;
+      vertical-align: top;
+    }
+    .print-qty-amount {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: flex-end;
+      gap: 1.5mm 2mm;
+      line-height: 1.2;
+    }
+    .print-qty {
+      font-size: 7pt;
+      color: #374151;
+      white-space: nowrap;
+    }
+    .print-line-total {
+      font-size: 8pt;
+      font-weight: 700;
+      color: #000;
+      white-space: nowrap;
+    }
+    .print-item-package {
+      break-inside: auto;
+      page-break-inside: auto;
+    }
+
     .print-preview-active textarea.print-editable {
         border-color: #94a3b8 !important; /* Lighter border for editing */
         background-color: #f8fafc !important; /* Light background for editing */
@@ -798,7 +978,7 @@
       })();
     </script>
     <script type="module" src="/src/index.tsx"></script>
-    <footer class="site-footer text-center text-[11px] leading-snug text-slate-400 py-1.5 px-2 bg-slate-900 no-print space-y-0.5">
+    <footer class="site-footer hidden text-center text-[11px] leading-snug text-slate-400 py-1.5 px-2 bg-slate-900 no-print space-y-0.5" aria-hidden="true">
         <p>&copy; 2026 WoodenMax Architectural Elements. All rights reserved. Designed by WoodenMax.</p>
         <p><a href="https://www.woodenmax.in" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-400">www.woodenmax.in</a> · <a href="https://www.woodenmax.in/products/aluminium-windows" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-400">Aluminium windows</a> · <a href="https://www.woodenmax.in/catalog" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-400">Catalogue</a></p>
         <p><a href="mailto:info@woodenmax.com" class="hover:text-indigo-400">info@woodenmax.com</a></p>

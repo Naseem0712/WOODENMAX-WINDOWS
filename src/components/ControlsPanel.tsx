@@ -28,6 +28,7 @@ import {
   applyArchStraightBottomLayout,
   applyRoundedBandLayout,
   defaultArchStraightBottomMm,
+  DEFAULT_CASEMENT_OUTLINE,
   isOutlineBandCell,
   isRoundedOutline,
   maxArchStraightBottomMm,
@@ -109,9 +110,11 @@ interface ControlsPanelProps {
   layoutCompanions?: import('../types').DesignLayoutUnit[];
   activeLayoutUnitId?: import('../types').DesignLayoutActiveUnit;
   onActiveLayoutUnitChange?: (id: import('../types').DesignLayoutActiveUnit) => void;
-  onAddLayoutUnit?: (unit: import('../types').DesignLayoutUnit) => void;
+  onAddLayoutUnits?: (units: import('../types').DesignLayoutUnit[]) => void;
   onRemoveLayoutUnit?: (id: string) => void;
   onUpdateLayoutUnit?: (id: string, partial: Partial<import('../types').DesignLayoutUnit>) => void;
+  onSaveLayoutAllToQuotation?: () => void;
+  layoutGetUnitConfig?: (id: import('../types').DesignLayoutActiveUnit) => WindowConfig;
   windowTitle?: string;
 }
 
@@ -484,6 +487,20 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
             <DimensionInput id={`${idPrefix}total-height`} name="total-height" label="Total Height" value_mm={config.height} onChange_mm={v => setConfig('height', v)} placeholder="e.g., 1200" />
         )}
       </CollapsibleCard>
+
+      {!isCorner && props.onAddLayoutUnits && props.onActiveLayoutUnitChange ? (
+        <DesignLayoutPanel
+          primaryTitle={props.windowTitle ?? 'Window 1'}
+          activeUnitId={props.activeLayoutUnitId ?? 'primary'}
+          companions={props.layoutCompanions ?? []}
+          getUnitConfig={props.layoutGetUnitConfig ?? (() => config)}
+          onActiveUnitChange={props.onActiveLayoutUnitChange}
+          onAddUnits={props.onAddLayoutUnits}
+          onRemoveUnit={props.onRemoveLayoutUnit ?? (() => {})}
+          onUpdateUnit={props.onUpdateLayoutUnit ?? (() => {})}
+          onSaveAllToQuotation={props.onSaveLayoutAllToQuotation}
+        />
+      ) : null}
       
       {isCorner && (
          <CollapsibleCard title="Corner Window Setup" isOpen={openCard === 'Corner Window Setup'} onToggle={() => handleToggleCard('Corner Window Setup')}>
@@ -790,7 +807,22 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
                 value={resolveCasementOutline(displayConfig).shape}
                 onChange={(e) => {
                   const shape = e.target.value as ReturnType<typeof resolveCasementOutline>['shape'];
-                  const next = { ...resolveCasementOutline(displayConfig), shape };
+                  if (shape === 'rect') {
+                    setConfig('casementOutline', {
+                      ...DEFAULT_CASEMENT_OUTLINE,
+                      openingShapeUserSet: false,
+                    });
+                    setGridSize(1, 1);
+                    setConfig('horizontalDividers', []);
+                    setConfig('verticalDividers', []);
+                    setConfig('doorPositions', []);
+                    return;
+                  }
+                  const next = {
+                    ...resolveCasementOutline(displayConfig),
+                    shape,
+                    openingShapeUserSet: true,
+                  };
                   setConfig('casementOutline', next);
                   if (shape === 'arch_top') {
                     const { innerW, innerH } = computeInnerHoleDims({
@@ -1739,19 +1771,6 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         </div>
       </CollapsibleCard>
       )}
-
-      {props.onAddLayoutUnit && props.onActiveLayoutUnitChange ? (
-        <DesignLayoutPanel
-          primaryTitle={props.windowTitle ?? 'Window 1'}
-          activeUnitId={props.activeLayoutUnitId ?? 'primary'}
-          companions={props.layoutCompanions ?? []}
-          onActiveUnitChange={props.onActiveLayoutUnitChange}
-          onAddUnit={props.onAddLayoutUnit}
-          onRemoveUnit={props.onRemoveLayoutUnit ?? (() => {})}
-          onUpdateUnit={props.onUpdateLayoutUnit ?? (() => {})}
-          currentConfig={config}
-        />
-      ) : null}
 
     </div>
   );

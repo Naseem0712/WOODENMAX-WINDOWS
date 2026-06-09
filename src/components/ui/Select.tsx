@@ -30,7 +30,7 @@ export const Select: React.FC<SelectProps> = ({ label, id, children, onWheel: _o
         <select
           ref={selectRef}
           id={id}
-          className="w-full pl-3 pr-10 py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm appearance-none"
+          className="w-full pl-3 pr-10 py-2 bg-slate-800 border border-slate-600 rounded-md shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm appearance-none [color-scheme:dark]"
           {...props}
         >
           {children}

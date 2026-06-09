@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import type { QuotationItem, QuotationSettings, BOM } from '../types';
+import type { QuotationItem, QuotationSettings, BOM, SavedColor, WindowConfig } from '../types';
 import { ShutterConfigType, WindowType } from '../types';
 import { Button } from './ui/Button';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -26,7 +26,9 @@ import { quoteBasisForLine, quoteRateForLine, recalculateQuoteLine as recalculat
 import { migrateBackup, parseBackupJson } from '../railing/backup';
 import { displayDesignTitle as railingDisplayTitle } from '../railing/utils';
 import { isWindowQuotationItem } from '../utils/quotationItemKinds';
+import { isWindowPackageQuotationItem, packageCombinedArea } from '../utils/windowPackageQuotation';
 import { getWindowQuotationAreaMm2 } from '../utils/louverBays';
+import { pastePlainTextIntoTextarea } from '../utils/quotationText';
 
 interface QuotationListModalProps {
   isOpen: boolean;
@@ -42,6 +44,18 @@ interface QuotationListModalProps {
   onSelectedLineIdsChange: (ids: string[]) => void;
   /** Opens designer with first selected line; user changes in Configure, then applies from quotation bar. */
   onEditCorrection: () => void;
+  savedColors?: SavedColor[];
+}
+
+function windowConfigsFromQuotationItem(item: QuotationItem): WindowConfig[] {
+  if (item.kind === 'railing') return [];
+  if (isWindowPackageQuotationItem(item)) return item.units.map((u) => u.config);
+  if (isWindowQuotationItem(item)) return [item.config];
+  return [];
+}
+
+function quotationItemMatchesWindowType(item: QuotationItem, windowType: WindowType): boolean {
+  return windowConfigsFromQuotationItem(item).some((c) => c.windowType === windowType);
 }
 
 const Section: React.FC<{title: string, children: React.ReactNode, className?: string}> = ({title, children, className}) => (
@@ -83,6 +97,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
   selectedLineIds,
   onSelectedLineIdsChange,
   onEditCorrection,
+  savedColors,
 }) => {
   const openPrintPreview = () => {
     onTogglePreview(true);
@@ -98,7 +113,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
   const visibleItems = useMemo(() => {
     if (typeFilter === 'all') return items;
     if (typeFilter === 'railing') return items.filter((i) => i.kind === 'railing');
-    return items.filter((i) => i.kind !== 'railing' && i.config.windowType === typeFilter);
+    return items.filter((i) => i.kind !== 'railing' && quotationItemMatchesWindowType(i, typeFilter));
   }, [items, typeFilter]);
   const makingChargePerSqFt = Number(settings.materialRates.makingChargePerSqFt) || 120;
   const materialCostSummary = useMemo(
@@ -115,25 +130,25 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
     let usesSlimInterlock = false;
 
     for (const item of source) {
-      if (item.kind === 'railing') continue;
-      const config = item.config;
-      if (config.windowType === WindowType.SLIDING) {
-        usesSliding = true;
-        if (config.shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH || config.shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
-          usesMesh = true;
+      for (const config of windowConfigsFromQuotationItem(item)) {
+        if (config.windowType === WindowType.SLIDING) {
+          usesSliding = true;
+          if (config.shutterConfig === ShutterConfigType.TWO_GLASS_ONE_MESH || config.shutterConfig === ShutterConfigType.FOUR_GLASS_TWO_MESH) {
+            usesMesh = true;
+          }
+          const isReinf = /reinf|reinforcement/i.test(`${config.series.name} ${config.series.id}`);
+          if (!isReinf) usesSlimInterlock = true;
         }
-        const isReinf = /reinf|reinforcement/i.test(`${config.series.name} ${config.series.id}`);
-        if (!isReinf) usesSlimInterlock = true;
-      }
 
-      if (config.glassSpecialType === 'laminated') {
-        const key = `${Number(config.laminatedGlassConfig?.glass1Thickness) || 0}+${Number(config.laminatedGlassConfig?.glass2Thickness) || 0}`;
-        glassLaminated.add(key);
-      } else if (config.glassSpecialType === 'dgu') {
-        const key = `${Number(config.dguGlassConfig?.glass1Thickness) || 0}+${Number(config.dguGlassConfig?.airGap) || 0}+${Number(config.dguGlassConfig?.glass2Thickness) || 0}`;
-        glassDgu.add(key);
-      } else {
-        glassClear.add(String(Number(config.glassThickness) || 0));
+        if (config.glassSpecialType === 'laminated') {
+          const key = `${Number(config.laminatedGlassConfig?.glass1Thickness) || 0}+${Number(config.laminatedGlassConfig?.glass2Thickness) || 0}`;
+          glassLaminated.add(key);
+        } else if (config.glassSpecialType === 'dgu') {
+          const key = `${Number(config.dguGlassConfig?.glass1Thickness) || 0}+${Number(config.dguGlassConfig?.airGap) || 0}+${Number(config.dguGlassConfig?.glass2Thickness) || 0}`;
+          glassDgu.add(key);
+        } else {
+          glassClear.add(String(Number(config.glassThickness) || 0));
+        }
       }
     }
 
@@ -253,6 +268,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
           items={items}
           settings={settings}
           setSettings={setSettings}
+          savedColors={savedColors}
         />
       </ErrorBoundary>
     );
@@ -642,7 +658,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
 
   return (
     <div 
-        className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4"
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-70 p-2 sm:p-4"
         onClick={onClose}
         aria-modal="true"
         role="dialog"
@@ -651,31 +667,41 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
         className="flex max-h-[90vh] min-h-0 w-full max-w-7xl flex-col overflow-hidden rounded-lg bg-slate-800 shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        <div className="p-4 border-b border-slate-700 no-print">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-2xl font-bold text-white">Quotation Generator</h2>
-            <div className="flex items-center gap-2">
+        <div className="border-b border-slate-700 p-2.5 no-print sm:p-4">
+          <div className="flex items-start justify-between gap-2">
+            <h2 className="min-w-0 text-lg font-bold leading-tight text-white sm:text-2xl">Quotation</h2>
+            <div className="flex shrink-0 items-center gap-1.5">
               <Button
                 onClick={() => setIsActionPanelOpen((prev) => !prev)}
                 variant="secondary"
-                className="min-w-[148px] justify-center"
+                className="!h-8 !min-h-0 !px-2 !py-1 !text-[11px] !shadow-none sm:!px-3 sm:!text-xs"
               >
-                <ChevronDownIcon className={`w-5 h-5 mr-2 transition-transform ${isActionPanelOpen ? 'rotate-180' : ''}`} />
-                {isActionPanelOpen ? 'Minimize Tools' : 'Show Tools'}
+                <ChevronDownIcon className={`mr-1 h-4 w-4 shrink-0 transition-transform ${isActionPanelOpen ? 'rotate-180' : ''}`} />
+                {isActionPanelOpen ? 'Hide' : 'Tools'}
               </Button>
-              <Button onClick={onClose} variant="secondary" className="p-2 rounded-full h-10 w-10">
-                  <XMarkIcon className="w-6 h-6" />
+              <Button onClick={onClose} variant="secondary" className="!h-8 !w-8 !min-h-0 !p-0 rounded-full">
+                  <XMarkIcon className="h-5 w-5" />
               </Button>
             </div>
           </div>
           {isActionPanelOpen && (
-            <div className="mt-3 flex items-center gap-2 flex-wrap justify-start sm:justify-end">
-              <Button onClick={handleGenerateBom} variant="secondary"><ClipboardDocumentListIcon className="w-5 h-5 mr-2"/> Export Materials (BOM)</Button>
-              <Button onClick={handleExportStockNeed} variant="secondary"><ClipboardDocumentListIcon className="w-5 h-5 mr-2"/> Export Stock Need</Button>
-              <Button onClick={handleExport} variant="secondary"><DownloadIcon className="w-5 h-5 mr-2"/> Export JSON</Button>
-              <Button onClick={() => importQuotationInputRef.current?.click()} variant="secondary"><UploadIcon className="w-5 h-5 mr-2"/> Import JSON</Button>
+            <div className="mt-2 flex max-w-full flex-wrap gap-1.5 sm:mt-3 sm:gap-2">
+              <Button onClick={handleGenerateBom} variant="secondary" className="!h-8 !min-h-0 !px-2 !py-1 !text-[11px] !shadow-none sm:!text-xs">
+                <ClipboardDocumentListIcon className="mr-1 h-3.5 w-3.5 shrink-0"/> BOM
+              </Button>
+              <Button onClick={handleExportStockNeed} variant="secondary" className="!h-8 !min-h-0 !px-2 !py-1 !text-[11px] !shadow-none sm:!text-xs">
+                <ClipboardDocumentListIcon className="mr-1 h-3.5 w-3.5 shrink-0"/> Stock
+              </Button>
+              <Button onClick={handleExport} variant="secondary" className="!h-8 !min-h-0 !px-2 !py-1 !text-[11px] !shadow-none sm:!text-xs">
+                <DownloadIcon className="mr-1 h-3.5 w-3.5 shrink-0"/> Export
+              </Button>
+              <Button onClick={() => importQuotationInputRef.current?.click()} variant="secondary" className="!h-8 !min-h-0 !px-2 !py-1 !text-[11px] !shadow-none sm:!text-xs">
+                <UploadIcon className="mr-1 h-3.5 w-3.5 shrink-0"/> Import
+              </Button>
               <input type="file" ref={importQuotationInputRef} onChange={handleImport} className="hidden" accept="application/json" />
-              <Button onClick={openPrintPreview}><PrinterIcon className="w-5 h-5 mr-2"/> Print Preview</Button>
+              <Button onClick={openPrintPreview} className="!h-8 !min-h-0 !px-2 !py-1 !text-[11px] !shadow-none sm:!text-xs">
+                <PrinterIcon className="mr-1 h-3.5 w-3.5 shrink-0"/> Print
+              </Button>
             </div>
           )}
         </div>
@@ -772,6 +798,56 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                           {visibleItems.map((item) => {
                               const globalIndex = items.findIndex((i) => i.id === item.id) + 1;
 
+                              if (isWindowPackageQuotationItem(item)) {
+                                const totalCost = quotationItemSubtotalContribution(item);
+                                const combinedArea = packageCombinedArea(item);
+                                return (
+                                  <div key={item.id} className="bg-slate-900/50 p-3 rounded-lg flex flex-col md:flex-row md:items-center gap-4">
+                                    <label className="flex items-center gap-2 cursor-pointer shrink-0 no-print">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedLineIds.includes(item.id)}
+                                        onChange={() => toggleSelect(item.id)}
+                                        className="rounded border-slate-500"
+                                        aria-label={`Select ${item.title}`}
+                                      />
+                                      <span className="font-bold text-slate-300">#{globalIndex}</span>
+                                    </label>
+                                    <div className="flex-grow min-w-0">
+                                      <h4 className="font-bold text-md text-white">{item.title}</h4>
+                                      <p className="text-xs text-slate-300">
+                                        <span className="text-violet-300/90">Combined package</span>
+                                        {' · '}
+                                        {item.units.length} windows · {combinedArea.toFixed(2)} {item.areaType}
+                                      </p>
+                                      <p className="text-xs text-slate-500 mt-1">
+                                        {item.units.map((u) => u.title).join(' · ')}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-4 text-xs whitespace-nowrap">
+                                      <div className="text-right">
+                                        <p className="text-slate-400">Qty</p>
+                                        <p className="font-semibold text-slate-200">{item.quantity}</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-slate-400">Package total</p>
+                                        <p className="font-bold text-lg text-green-400">
+                                          ₹{Math.round(totalCost).toLocaleString('en-IN')}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Button variant="secondary" onClick={() => onEdit(item.id)} className="p-2 h-9 w-9 flex-shrink-0 no-print" aria-label={`Edit ${item.title}`}>
+                                        <PencilIcon className="w-4 h-4" />
+                                      </Button>
+                                      <Button variant="danger" onClick={() => onRemove(item.id)} className="p-2 h-9 w-9 flex-shrink-0 no-print" aria-label={`Delete ${item.title}`}>
+                                        <TrashIcon className="w-4 h-4"/>
+                                      </Button>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
                               if (item.kind === 'railing') {
                                 const rl = item.railingLine;
                                 const basis = quoteBasisForLine(rl);
@@ -828,6 +904,8 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                                   </div>
                                 );
                               }
+
+                              if (!isWindowQuotationItem(item)) return null;
 
                               const conversionFactor = item.areaType === 'sqft' ? 304.8 : 1000;
                               const singleArea =
@@ -921,8 +999,15 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                   <Section title="Details & Terms">
                       <TextArea id="modal-quotation-description" name="modal-quotation-description" label="Description" value={settings.description} onChange={e => setSettings({...settings, description: e.target.value})} maxLength={1500} />
                       <p className="text-[11px] text-slate-400 -mt-2">Use **text** or *text* to make text bold in preview/print.</p>
-                      <TextArea id="modal-quotation-terms" name="modal-quotation-terms" label="Terms & Conditions" value={settings.terms} onChange={e => setSettings({...settings, terms: e.target.value})} className="min-h-[12rem]" />
-                      <p className="text-[11px] text-slate-400 -mt-2">Enter as plain text: new lines and spaces stay as typed. Use *bold* or **bold** for bold in print/preview. Number points yourself (1., 2., …).</p>
+                      <TextArea
+                        id="modal-quotation-terms"
+                        name="modal-quotation-terms"
+                        label="Terms & Conditions"
+                        value={settings.terms}
+                        onChange={e => setSettings({...settings, terms: e.target.value})}
+                        onPaste={(e) => pastePlainTextIntoTextarea(e, (terms) => setSettings({ ...settings, terms }))}
+                        className="min-h-[12rem]"
+                      />
                   </Section>
                   <Section title="Bank & Signature">
                       <div className="grid grid-cols-2 gap-4">

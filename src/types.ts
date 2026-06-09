@@ -34,6 +34,8 @@ export type CasementOutlineShape =
 
 export interface CasementOutlineConfig {
   shape: CasementOutlineShape;
+  /** True when user explicitly chose arch/rounded opening shape in controls (not auto-restored). */
+  openingShapeUserSet?: boolean;
   cornerRadiusMm: number | '';
   /** Straight rectangular zone height from bottom of inner opening (mm). Spring transom sits on top of this. */
   archStraightBottomMm: number | '';
@@ -301,6 +303,8 @@ export interface WindowConfig {
   profileColor: string;
   /** Optional wood-grain / finish image layered over `profileColor` (hex) with multiply blend. */
   profileTexture?: string;
+  /** Optional site photo / sketch — replaces canvas elevation in print/PDF only. */
+  printElevationPhoto?: string;
   glassGrid: GlassGridConfig;
   legacyGlassGrid?: { rows: number, cols: number }; // For migration
   
@@ -376,6 +380,8 @@ export interface WindowQuotationItem {
   hardwareCost: number;
   hardwareItems: HardwareItem[];
   profileColorName?: string;
+  /** Replaces rendered elevation in print when set. */
+  printElevationPhoto?: string;
 }
 
 /** Glass railing line merged into the same View Quotation / PDF as windows. */
@@ -386,7 +392,38 @@ export interface RailingQuotationItem {
   railingLine: QuotationLine;
 }
 
-export type QuotationItem = WindowQuotationItem | RailingQuotationItem;
+/** One unit inside a multi-window façade package quotation line. */
+export interface WindowPackageUnitLine {
+  id: string;
+  title: string;
+  config: WindowConfig;
+  rate: number;
+  hardwareCost: number;
+  hardwareItems: HardwareItem[];
+  profileColorName?: string;
+  xMm: number;
+  yMm: number;
+  widthMm: number;
+  heightMm: number;
+}
+
+/** Combined façade — one print / quotation line with per-unit breakdown + package total. */
+export interface WindowPackageQuotationItem {
+  kind: 'window_package';
+  id: string;
+  title: string;
+  quantity: number;
+  areaType: AreaType;
+  units: WindowPackageUnitLine[];
+  layoutMinXMm: number;
+  layoutMinYMm: number;
+  layoutWidthMm: number;
+  layoutHeightMm: number;
+  /** Replaces combined layout elevation in print when set. */
+  printElevationPhoto?: string;
+}
+
+export type QuotationItem = WindowQuotationItem | RailingQuotationItem | WindowPackageQuotationItem;
 
 export interface MaterialRateSettings {
   aluminiumProfilePerKg: number;
@@ -582,15 +619,37 @@ export interface UserModeState {
   flags?: Record<string, boolean>;
 }
 
+export type DesignLayoutSide = 'right' | 'left' | 'top' | 'bottom';
+
+/** Cross-axis alignment when attaching beside (left/right) or above/below another unit. */
+export type DesignLayoutCrossAlign = 'top' | 'center' | 'bottom';
+
 /** Extra window unit in a multi-window façade layout (session design). */
 export interface DesignLayoutUnit {
   id: string;
   title: string;
   config: WindowConfig;
-  /** Horizontal gap from previous unit's right edge (mm). First companion uses gap from primary. */
-  gapFromPrevMm: number;
-  /** Vertical offset of top edge from primary window top (mm). 0 = level-aligned tops. */
-  offsetTopFromPrimaryMm: number;
+  /** Anchor unit — primary or an earlier companion in the list. */
+  anchorUnitId: DesignLayoutActiveUnit;
+  /** Which side of the anchor this unit attaches to. */
+  side: DesignLayoutSide;
+  /** Clear gap along the attachment axis (mm). */
+  gapMm: number;
+  /** Cross-axis alignment vs anchor (top/center/bottom). */
+  crossAlign: DesignLayoutCrossAlign;
+  /** Optional cross-axis offset (mm) — overrides crossAlign when set. */
+  crossOffsetMm?: number | '';
+  /** Per-unit base rate (₹/area unit). Empty = use quotation panel global rate. */
+  rate?: number | '';
+  /** @deprecated use gapMm — migrated on load */
+  gapFromPrevMm?: number;
+  /** @deprecated use crossOffsetMm — migrated on load */
+  offsetTopFromPrimaryMm?: number;
 }
 
 export type DesignLayoutActiveUnit = 'primary' | string;
+
+export interface DesignLayoutSession {
+  companions: DesignLayoutUnit[];
+  activeUnitId: DesignLayoutActiveUnit;
+}

@@ -59,6 +59,8 @@ import {
   layoutLouverBayRects,
 } from '../utils/louverBays';
 import { FoldDoorOpeningGraphic } from './FoldDoorOpeningVisual';
+import type { LayoutUnitPlacement } from '../utils/designLayout';
+import { layoutBounds } from '../utils/designLayout';
 
 function profileOverlayTexture(config: WindowConfig): string | undefined {
   return config.profileColor.startsWith('#') ? config.profileTexture || undefined : undefined;
@@ -78,7 +80,45 @@ interface WindowCanvasProps {
   /** Optional: enable interactive door-handle dragging (Homeowner mode). */
   onUpdateHandle?: (panelId: string, newConfig: HandleConfig | null) => void;
   enableDoorHandleDrag?: boolean;
+  /** Multi-window façade — all units rendered in this canvas at layout positions. */
+  layoutPlacements?: LayoutUnitPlacement[];
+  activeLayoutUnitId?: string;
+  onSelectLayoutUnit?: (unitId: string) => void;
 }
+
+function dimsFromSeries(series: WindowConfig['series']) {
+  const d = series?.dimensions;
+  return {
+    outerFrame: Number(d?.outerFrame) || 0,
+    outerFrameVertical: Number(d?.outerFrameVertical) || 0,
+    fixedFrame: Number(d?.fixedFrame) || 0,
+    shutterHandle: Number(d?.shutterHandle) || 0,
+    shutterInterlock: Number(d?.shutterInterlock) || 0,
+    shutterTop: Number(d?.shutterTop) || 0,
+    shutterBottom: Number(d?.shutterBottom) || 0,
+    shutterMeeting: Number(d?.shutterMeeting) || 0,
+    casementShutter: Number(d?.casementShutter) || 0,
+    mullion: Number(d?.mullion) || 0,
+    louverBlade: Number(d?.louverBlade) || 0,
+    topTrack: Number(d?.topTrack) || 0,
+    bottomTrack: Number(d?.bottomTrack) || 0,
+  };
+}
+
+const noop = () => {};
+const INACTIVE_CANVAS_CALLBACKS = {
+  onRemoveHorizontalDivider: noop,
+  onRemoveVerticalDivider: noop,
+  onRemoveHMullionSegment: noop,
+  onRemoveVMullionSegment: noop,
+  onMoveHorizontalDivider: noop,
+  onMoveVerticalDivider: noop,
+  onToggleElevationDoor: noop,
+  onUpdateHandle: undefined,
+  enableDoorHandleDrag: false,
+  handlePlacement: null,
+  onPlaceHandleOnPanel: undefined,
+};
 
 /** Convert mm at current canvas scale to CSS px; rounded so frame borders and glass insets stay aligned. */
 const mmToPx = (mm: number, scale: number) => Math.round(mm * scale * 100) / 100;
@@ -614,6 +654,9 @@ const MiteredFrame: React.FC<{
     );
 });
 
+/** z-order inside door/shutter cells — profile fill + CAD lines always above glass. */
+const DOOR_CELL_Z = { glass: 0, frameFill: 4, frameLines: 8, swingHint: 3, pickOverlay: 45 } as const;
+
 const SlidingShutter: React.FC<{
     config: WindowConfig;
     panelId: string;
@@ -691,7 +734,7 @@ const SlidingShutter: React.FC<{
 
     return (
         <div
-          className="absolute left-0 top-0"
+          className="absolute left-0 top-0 isolate"
           style={{
             left: mmToPx(-bl, scale),
             top: mmToPx(-bt, scale),
@@ -699,6 +742,38 @@ const SlidingShutter: React.FC<{
             height: hPx,
           }}
         >
+             <div
+                className="absolute overflow-hidden"
+                style={{
+                  zIndex: DOOR_CELL_Z.glass,
+                  left: mmToPx(bl, scale) + lPx,
+                  top: mmToPx(bt, scale) + tPx,
+                  right: mmToPx(br, scale) + rPx,
+                  bottom: mmToPx(bb, scale) + bPx,
+                }}
+            >
+                <GlassPanel
+                    config={config}
+                    panelId={panelId}
+                    style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }}
+                    glassWidth={glassWidth}
+                    glassHeight={glassHeight}
+                    scale={scale}
+                >
+                    {isMesh && (
+                        <div
+                            className="w-full h-full"
+                            style={{
+                                backgroundColor: 'rgba(92, 101, 112, 0.35)',
+                                backgroundImage:
+                                    'repeating-linear-gradient(0deg, rgba(24,24,24,0.30) 0px, rgba(24,24,24,0.30) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(90deg, rgba(24,24,24,0.30) 0px, rgba(24,24,24,0.30) 1px, transparent 1px, transparent 3px)',
+                            }}
+                        />
+                    )}
+                    <ShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
+                </GlassPanel>
+            </div>
+             <div className="absolute inset-0" style={{ zIndex: DOOR_CELL_Z.frameFill }}>
              <MiteredFrame 
                 width={width + bl + br}
                 height={height + bt + bb}
@@ -712,6 +787,7 @@ const SlidingShutter: React.FC<{
                 hideInnerEdges={frameHideInner}
                 buttEdges={frameButt}
              />
+             </div>
              {showLeftJoint ? (
                <div
                  className="pointer-events-none absolute"
@@ -780,36 +856,6 @@ const SlidingShutter: React.FC<{
               >
                 {isMesh ? 'Mesh' : 'Glass'} {cadLabel ? `· ${cadLabel}` : ''}
               </div>
-            </div>
-            <div
-                className="absolute overflow-hidden"
-                style={{
-                  left: mmToPx(bl, scale) + lPx,
-                  top: mmToPx(bt, scale) + tPx,
-                  right: mmToPx(br, scale) + rPx,
-                  bottom: mmToPx(bb, scale) + bPx,
-                }}
-            >
-                <GlassPanel
-                    config={config}
-                    panelId={panelId}
-                    style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }}
-                    glassWidth={glassWidth}
-                    glassHeight={glassHeight}
-                    scale={scale}
-                >
-                    {isMesh && (
-                        <div
-                            className="w-full h-full"
-                            style={{
-                                backgroundColor: 'rgba(92, 101, 112, 0.35)',
-                                backgroundImage:
-                                    'repeating-linear-gradient(0deg, rgba(24,24,24,0.30) 0px, rgba(24,24,24,0.30) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(90deg, rgba(24,24,24,0.30) 0px, rgba(24,24,24,0.30) 1px, transparent 1px, transparent 3px)',
-                            }}
-                        />
-                    )}
-                    <ShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : null} />
-                </GlassPanel>
             </div>
             {placementPickActive && onPickPlacement ? (
               <button
@@ -1887,21 +1933,22 @@ const createWindowElements = (
                                 const doorHPx = mmToPx(visual.cellH, scale);
                                 const doorProfPx = mmToPx(dims.casementShutter, scale);
                                 doorElements.push(
-                                  <div key={`cell-${r}-${c}`} className="absolute" style={{left: mmToPx(visual.cellX, scale), top: mmToPx(visual.cellY, scale), width: doorWPx, height: doorHPx}}>
-                                    <div className="absolute overflow-hidden" style={{ zIndex: 1, left: doorProfPx, top: doorProfPx, right: doorProfPx, bottom: doorProfPx }}>
+                                  <div key={`cell-${r}-${c}`} className="absolute isolate" style={{left: mmToPx(visual.cellX, scale), top: mmToPx(visual.cellY, scale), width: doorWPx, height: doorHPx}}>
+                                    <div className="absolute overflow-hidden" style={{ zIndex: DOOR_CELL_Z.glass, left: doorProfPx, top: doorProfPx, right: doorProfPx, bottom: doorProfPx }}>
                                       <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={visual.cellW - 2 * dims.casementShutter} glassHeight={visual.cellH - 2 * dims.casementShutter} scale={scale} />
                                     </div>
-                                    <div className="absolute inset-0" style={{ zIndex: 2 }}>
+                                    <div className="absolute inset-0" style={{ zIndex: DOOR_CELL_Z.frameFill }}>
                                       <MiteredFrame width={visual.cellW} height={visual.cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} texture={pt} hideInnerEdges={hideInnerEdges} showOutlines={false} />
                                     </div>
-                                    <div className="pointer-events-none absolute inset-0" style={{ zIndex: 5 }}>
+                                    <div className="pointer-events-none absolute inset-0" style={{ zIndex: DOOR_CELL_Z.frameLines }}>
                                       <MiteredProfileOutlines widthPx={doorWPx} heightPx={doorHPx} topPx={doorProfPx} bottomPx={doorProfPx} leftPx={doorProfPx} rightPx={doorProfPx} hideInnerEdges={hideInnerEdges} showOuter showMiterCorners outlineZIndex={30} />
                                     </div>
-                                    <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none"><svg viewBox="0 0 100 100" className="w-1/2 h-1/2" style={{transform: c % 2 === 0 ? 'scaleX(1)' : 'scaleX(-1)'}}><path d="M 10 10 L 10 90 L 90 90" stroke="white" strokeDasharray="4" strokeWidth="2" fill="none"/></svg></div>
+                                    <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none" style={{ zIndex: DOOR_CELL_Z.swingHint }}><svg viewBox="0 0 100 100" className="w-1/2 h-1/2" style={{transform: c % 2 === 0 ? 'scaleX(1)' : 'scaleX(-1)'}}><path d="M 10 10 L 10 90 L 90 90" stroke="white" strokeDasharray="4" strokeWidth="2" fill="none"/></svg></div>
                                     {placementPickActive ? (
                                       <button
                                         type="button"
-                                        className="pointer-events-auto absolute inset-0 z-[45] cursor-pointer bg-indigo-500/15 ring-2 ring-inset ring-indigo-400/70 hover:bg-indigo-500/25"
+                                        className="pointer-events-auto absolute inset-0 cursor-pointer bg-indigo-500/15 ring-2 ring-inset ring-indigo-400/70 hover:bg-indigo-500/25"
+                                        style={{ zIndex: DOOR_CELL_Z.pickOverlay }}
                                         aria-label="Place handle on this door"
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -1976,21 +2023,22 @@ const createWindowElements = (
                                 const doorHPx = mmToPx(visual.cellH, scale);
                                 const doorProfPx = mmToPx(dims.casementShutter, scale);
                                 doorElements.push(
-                                  <div key={`cell-${r}-${c}`} className="absolute" style={{left: mmToPx(visual.cellX, scale), top: mmToPx(visual.cellY, scale), width: doorWPx, height: doorHPx}}>
-                                    <div className="absolute overflow-hidden" style={{ zIndex: 1, left: doorProfPx, top: doorProfPx, right: doorProfPx, bottom: doorProfPx }}>
+                                  <div key={`cell-${r}-${c}`} className="absolute isolate" style={{left: mmToPx(visual.cellX, scale), top: mmToPx(visual.cellY, scale), width: doorWPx, height: doorHPx}}>
+                                    <div className="absolute overflow-hidden" style={{ zIndex: DOOR_CELL_Z.glass, left: doorProfPx, top: doorProfPx, right: doorProfPx, bottom: doorProfPx }}>
                                       <GlassPanel panelId={`cell-door-${r}-${c}`} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={visual.cellW - 2*dims.casementShutter} glassHeight={visual.cellH - 2*dims.casementShutter} scale={scale}/>
                                     </div>
-                                    <div className="absolute inset-0" style={{ zIndex: 2 }}>
+                                    <div className="absolute inset-0" style={{ zIndex: DOOR_CELL_Z.frameFill }}>
                                       <MiteredFrame width={visual.cellW} height={visual.cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} texture={pt} hideInnerEdges={hideInnerEdges} showOutlines={false} />
                                     </div>
-                                    <div className="pointer-events-none absolute inset-0" style={{ zIndex: 5 }}>
+                                    <div className="pointer-events-none absolute inset-0" style={{ zIndex: DOOR_CELL_Z.frameLines }}>
                                       <MiteredProfileOutlines widthPx={doorWPx} heightPx={doorHPx} topPx={doorProfPx} bottomPx={doorProfPx} leftPx={doorProfPx} rightPx={doorProfPx} hideInnerEdges={hideInnerEdges} showOuter showMiterCorners outlineZIndex={30} />
                                     </div>
-                                    <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none"><svg viewBox="0 0 100 100" className="w-1/2 h-1/2" style={{transform: c % 2 === 0 ? 'scaleX(1)' : 'scaleX(-1)'}}><path d="M 10 10 L 10 90 L 90 90" stroke="white" strokeDasharray="4" strokeWidth="2" fill="none"/></svg></div>
+                                    <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none" style={{ zIndex: DOOR_CELL_Z.swingHint }}><svg viewBox="0 0 100 100" className="w-1/2 h-1/2" style={{transform: c % 2 === 0 ? 'scaleX(1)' : 'scaleX(-1)'}}><path d="M 10 10 L 10 90 L 90 90" stroke="white" strokeDasharray="4" strokeWidth="2" fill="none"/></svg></div>
                                     {placementPickActive ? (
                                       <button
                                         type="button"
-                                        className="pointer-events-auto absolute inset-0 z-[45] cursor-pointer bg-indigo-500/15 ring-2 ring-inset ring-indigo-400/70 hover:bg-indigo-500/25"
+                                        className="pointer-events-auto absolute inset-0 cursor-pointer bg-indigo-500/15 ring-2 ring-inset ring-indigo-400/70 hover:bg-indigo-500/25"
+                                        style={{ zIndex: DOOR_CELL_Z.pickOverlay }}
                                         aria-label="Place handle on this door"
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -2314,11 +2362,27 @@ const createWindowElements = (
                     const frameH = ph + bleedTop + bleedBottom;
 
                     innerContent.push(
-                        <div key={`panel-${i}`} className="absolute" style={{left: mmToPx(panelX, scale), top: mmToPx(py, scale), width: mmToPx(currentPanelWidth, scale), height: mmToPx(ph, scale), zIndex}}>
+                        <div key={`panel-${i}`} className="absolute isolate" style={{left: mmToPx(panelX, scale), top: mmToPx(py, scale), width: mmToPx(currentPanelWidth, scale), height: mmToPx(ph, scale), zIndex}}>
+                          <div
+                            className="absolute overflow-hidden"
+                            style={
+                              isFramed
+                                ? { zIndex: DOOR_CELL_Z.glass, left: mmToPx(fl, scale), top: mmToPx(ft, scale), right: mmToPx(fr, scale), bottom: mmToPx(fb, scale) }
+                                : { zIndex: DOOR_CELL_Z.glass, top: 0, left: 0, right: 0, bottom: 0 }
+                            }
+                          >
+                            <GlassPanel panelId={panelId} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={currentPanelWidth - (isFramed ? fl + fr : 0)} glassHeight={ph - (isFramed ? ft + fb : 0)} scale={scale}>
+                               {type === 'fold' && (
+                                 <FoldDoorOpeningGraphic leaves={foldLeaves ?? 2} variant="canvas" profileColor={profileColor} />
+                               )}
+                               <ShutterIndicator type={type} foldLeaves={foldLeaves} />
+                            </GlassPanel>
+                          </div>
                           {isFramed && type === 'fold' && (
                             <div
                               className="absolute"
                               style={{
+                                zIndex: DOOR_CELL_Z.frameFill,
                                 left: mmToPx(-bleedLeft, scale),
                                 top: mmToPx(-bleedTop, scale),
                                 width: mmToPx(frameW, scale),
@@ -2343,6 +2407,7 @@ const createWindowElements = (
                             <div
                               className="absolute"
                               style={{
+                                zIndex: DOOR_CELL_Z.frameFill,
                                 left: mmToPx(-bleedLeft, scale),
                                 top: mmToPx(-bleedTop, scale),
                                 width: mmToPx(frameW, scale),
@@ -2352,21 +2417,6 @@ const createWindowElements = (
                               <MiteredFrame width={frameW} height={frameH} profileSize={frameSize} scale={scale} color={profileColor} texture={pt} hideInnerEdges={panelHideInner} />
                             </div>
                           )}
-                          <div
-                            className="absolute overflow-hidden"
-                            style={
-                              isFramed
-                                ? { left: mmToPx(fl, scale), top: mmToPx(ft, scale), right: mmToPx(fr, scale), bottom: mmToPx(fb, scale) }
-                                : { top: 0, left: 0, right: 0, bottom: 0 }
-                            }
-                          >
-                            <GlassPanel panelId={panelId} config={config} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidth={currentPanelWidth - (isFramed ? fl + fr : 0)} glassHeight={ph - (isFramed ? ft + fb : 0)} scale={scale}>
-                               {type === 'fold' && (
-                                 <FoldDoorOpeningGraphic leaves={foldLeaves ?? 2} variant="canvas" profileColor={profileColor} />
-                               )}
-                               <ShutterIndicator type={type} foldLeaves={foldLeaves} />
-                            </GlassPanel>
-                          </div>
                         </div>
                     );
 
@@ -2483,6 +2533,9 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     fitViewportRef,
     onUpdateHandle,
     enableDoorHandleDrag,
+    layoutPlacements,
+    activeLayoutUnitId = 'primary',
+    onSelectLayoutUnit,
   } = props;
   const { width, height, series, profileColor, windowType } = config;
 
@@ -2493,10 +2546,19 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   const [isExporting, setIsExporting] = useState(false);
   const [viewportEl, setViewportEl] = useState<HTMLElement | null>(null);
 
-  const numWidth = windowType === WindowType.CORNER 
+  const isCompositeLayout = Boolean(layoutPlacements && layoutPlacements.length > 1);
+  const compositeBounds = useMemo(
+    () => (isCompositeLayout && layoutPlacements ? layoutBounds(layoutPlacements) : null),
+    [isCompositeLayout, layoutPlacements],
+  );
+
+  const numWidth = windowType === WindowType.CORNER && !isCompositeLayout
     ? (Number(config.leftWidth) || 0) + (Number(config.rightWidth) || 0) + (Number(config.cornerPostWidth) || 0)
     : Number(width) || 0;
   const numHeight = Number(height) || 0;
+
+  const fitWidthMm = compositeBounds?.widthMm ?? numWidth;
+  const fitHeightMm = compositeBounds?.heightMm ?? numHeight;
 
   /** px reserved for dimension labels drawn outside the frame bbox */
   const LABEL_LEFT_PX = 72;
@@ -2537,7 +2599,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
 
   useEffect(() => {
     setZoom(1);
-  }, [numWidth, numHeight, windowType]);
+  }, [windowType, isCompositeLayout, fitWidthMm, fitHeightMm, layoutPlacements?.length]);
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
@@ -2552,7 +2614,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   }, [fitViewportRef]);
 
   const fitScale = useMemo(() => {
-    if (numWidth <= 0 || numHeight <= 0) return 1;
+    if (fitWidthMm <= 0 || fitHeightMm <= 0) return 1;
     const vpH = window.visualViewport?.height ?? window.innerHeight;
     const cw = Math.max(
       160,
@@ -2568,8 +2630,8 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     );
     const drawW = Math.max(80, cw - CANVAS_PAD_PX * 2 - LABEL_LEFT_PX);
     const drawH = Math.max(80, ch - CANVAS_PAD_PX * 2 - LABEL_TOP_PX);
-    return Math.min(drawW / numWidth, drawH / numHeight);
-  }, [numWidth, numHeight, viewportSize.w, viewportSize.h, fitViewportRef]);
+    return Math.min(drawW / fitWidthMm, drawH / fitHeightMm);
+  }, [fitWidthMm, fitHeightMm, viewportSize.w, viewportSize.h, fitViewportRef]);
 
   const scale = fitScale * zoom;
 
@@ -2606,6 +2668,25 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     placement,
     config,
   ]);
+
+  const compositeElements = useMemo(() => {
+    if (!isCompositeLayout || !layoutPlacements || !compositeBounds) return null;
+    return layoutPlacements.map((placement) => {
+      const unitConfig = placement.config;
+      const unitDims = dimsFromSeries(unitConfig.series);
+      const isActive =
+        placement.id === activeLayoutUnitId ||
+        (placement.id === 'primary' && activeLayoutUnitId === 'primary');
+      const callbacks = isActive ? canvasCallbacks : INACTIVE_CANVAS_CALLBACKS;
+      return {
+        placement,
+        isActive,
+        elements: createWindowElements(unitConfig, scale, unitDims, callbacks),
+        unitDims,
+        unitConfig,
+      };
+    });
+  }, [isCompositeLayout, layoutPlacements, compositeBounds, activeLayoutUnitId, scale, canvasCallbacks]);
 
     const handleExportPng = () => {
         const element = renderedWindowRef.current;
@@ -2692,7 +2773,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     </div>
   );
 
-  if (numWidth <= 0 || numHeight <= 0) {
+  if (fitWidthMm <= 0 || fitHeightMm <= 0) {
     return (
       <div className="flex min-h-[200px] w-full items-center justify-center bg-transparent py-10">
         <p className="text-slate-500">Please enter valid dimensions to begin.</p>
@@ -2707,7 +2788,60 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     >
       <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none no-print"> WoodenMax </div>
        <div ref={renderedWindowRef} className="flex shrink-0 flex-col items-center justify-center">
-            {windowType === WindowType.CORNER && config.leftConfig && config.rightConfig ? (
+            {isCompositeLayout && compositeElements && compositeBounds ? (
+              <div
+                className="relative shadow-lg"
+                style={{
+                  width: mmToPx(compositeBounds.widthMm, scale),
+                  height: mmToPx(compositeBounds.heightMm, scale),
+                }}
+              >
+                {compositeElements.map(({ placement, isActive, elements, unitDims, unitConfig }) => (
+                  <div
+                    key={placement.id}
+                    className={`absolute ${isActive ? 'z-20' : 'z-10'}`}
+                    style={{
+                      left: mmToPx(placement.xMm - compositeBounds.minXMm, scale),
+                      top: mmToPx(placement.yMm - compositeBounds.minYMm, scale),
+                    }}
+                  >
+                    {!isActive ? (
+                      <button
+                        type="button"
+                        className="absolute inset-0 z-30 cursor-pointer rounded-sm bg-transparent"
+                        aria-label={`Select ${placement.title}`}
+                        onClick={() => onSelectLayoutUnit?.(placement.id)}
+                      />
+                    ) : null}
+                    <RenderedWindow
+                      config={unitConfig}
+                      elements={elements}
+                      scale={scale}
+                      showLabels={isActive}
+                      dims={unitDims}
+                    />
+                    {isActive ? (
+                      <div
+                        className="pointer-events-none absolute inset-0 rounded-sm ring-2 ring-indigo-400 ring-offset-1 ring-offset-slate-900"
+                        aria-hidden
+                      />
+                    ) : (
+                      <div className="pointer-events-none absolute -top-5 left-0 text-[10px] font-semibold text-slate-400">
+                        {placement.title} — click to edit
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <DimensionLabel
+                  value={Math.round(compositeBounds.widthMm)}
+                  className="-top-8 left-1/2 -translate-x-1/2"
+                />
+                <DimensionLabel
+                  value={Math.round(compositeBounds.heightMm)}
+                  className="top-1/2 -translate-y-1/2 -left-16 rotate-[-90deg]"
+                />
+              </div>
+            ) : windowType === WindowType.CORNER && config.leftConfig && config.rightConfig ? (
                 (() => {
                     const leftW = Number(config.leftWidth) || 0;
                     const rightW = Number(config.rightWidth) || 0;

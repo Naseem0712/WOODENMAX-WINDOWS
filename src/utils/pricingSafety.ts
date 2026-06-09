@@ -21,7 +21,10 @@ export const getMinimumMakingChargeForItems = (items: QuotationItem[]): number =
   let minimum = 0;
   for (const item of items) {
     if (item.kind === 'railing') continue;
-    switch (item.config.windowType) {
+    const configs =
+      item.kind === 'window_package' ? item.units.map((u) => u.config) : 'config' in item ? [item.config] : [];
+    for (const config of configs) {
+    switch (config.windowType) {
       case WindowType.SLIDING:
       case WindowType.CASEMENT:
         minimum = Math.max(minimum, 120);
@@ -32,6 +35,7 @@ export const getMinimumMakingChargeForItems = (items: QuotationItem[]): number =
         break;
       default:
         break;
+    }
     }
   }
   return minimum;

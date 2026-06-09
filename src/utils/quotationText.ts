@@ -1,3 +1,5 @@
+import type { ClipboardEvent } from 'react';
+
 export function normalizeWebsiteUrl(raw: string): string {
   const value = raw.trim();
   if (!value) return '';
@@ -8,6 +10,25 @@ export function normalizeWebsiteUrl(raw: string): string {
 /** Split pasted or typed multiline text without altering content. */
 export function splitQuotationLines(value: string): string[] {
   return value.split(/\r?\n/);
+}
+
+/** Paste clipboard as plain text only — no rich-text / HTML reformatting. */
+export function pastePlainTextIntoTextarea(
+  e: ClipboardEvent<HTMLTextAreaElement>,
+  onValue: (next: string) => void,
+): void {
+  e.preventDefault();
+  const text = e.clipboardData.getData('text/plain');
+  const el = e.currentTarget;
+  const start = el.selectionStart ?? 0;
+  const end = el.selectionEnd ?? 0;
+  const next = el.value.slice(0, start) + text + el.value.slice(end);
+  onValue(next);
+  const cursor = start + text.length;
+  requestAnimationFrame(() => {
+    el.selectionStart = cursor;
+    el.selectionEnd = cursor;
+  });
 }
 
 /** Inline *bold* or **bold** markers (print/preview only — storage stays plain text). */

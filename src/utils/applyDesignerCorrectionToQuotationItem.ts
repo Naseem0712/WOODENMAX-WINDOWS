@@ -1,6 +1,7 @@
 import type { ProfileSeries, QuotationItem, SavedColor, WindowConfig } from '../types';
 import { WindowType } from '../types';
 import { computeHardwareCostForQuotation } from './quotationHardwareCost';
+import { resolveProfileColorLabel } from './profileColorLabel';
 
 /**
  * Applies Configure-panel corrections (series, glass, colour, hardware) from the designer onto a quotation line.
@@ -38,9 +39,7 @@ export function applyDesignerCorrectionToQuotationItem(
   next.hardwareItems = JSON.parse(JSON.stringify(params.designerSeries.hardwareItems));
   next.hardwareCost = computeHardwareCostForQuotation(next.config, next.hardwareItems);
 
-  const colorName = params.savedColors.find((c) => c.value === d.profileColor)?.name;
-  next.profileColorName =
-    colorName || (d.profileColor.startsWith('data:') ? 'Custom Texture' : d.profileColor);
+  next.profileColorName = resolveProfileColorLabel(d.profileColor, undefined, params.savedColors);
 
   return next;
 }

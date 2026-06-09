@@ -19,6 +19,7 @@ function sanitizeConfig(config: DesignSnapshot['config']): DesignSnapshot['confi
     c.profileTexture = '';
   }
   if (c.glassTexture) c.glassTexture = '';
+  delete c.printElevationPhoto;
   return c;
 }
 

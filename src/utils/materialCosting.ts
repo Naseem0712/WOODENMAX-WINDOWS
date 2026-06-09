@@ -4,6 +4,7 @@ import { calculateUsageForConfig, packPieces } from './materialCalculator';
 import { countCasementProfileBands } from './casementBandCosting';
 import { computeHardwareCostForQuotation } from './quotationHardwareCost';
 import { getWindowQuotationAreaMm2 } from './louverBays';
+import { expandPackageToWindowItems, isWindowPackageQuotationItem } from './windowPackageQuotation';
 import { SLIDING_CUT_CONSTANTS } from './slidingCutFormula';
 import { resolveSeriesNumeric } from './profileDimensionKeys';
 
@@ -281,6 +282,18 @@ const getSlidingShutterDetails = (
   };
 };
 
+function flattenItemsForMaterialCost(items: QuotationItem[]): QuotationItem[] {
+  const flat: QuotationItem[] = [];
+  for (const item of items) {
+    if (isWindowPackageQuotationItem(item)) {
+      flat.push(...expandPackageToWindowItems(item));
+    } else {
+      flat.push(item);
+    }
+  }
+  return flat;
+}
+
 export function calculateMaterialCostSummary(
   items: QuotationItem[],
   rates: MaterialRateSettings,
@@ -288,10 +301,11 @@ export function calculateMaterialCostSummary(
 ): MaterialCostSummary {
   const byItemId: Record<string, MaterialCostPerItem> = {};
   const pools = new Map<string, AluminiumPool>();
+  const costingItems = flattenItemsForMaterialCost(items);
 
-  for (const item of items) {
+  for (const item of costingItems) {
     try {
-      if (!item?.config?.series) continue;
+      if (item.kind === 'railing' || !('config' in item) || !item?.config?.series) continue;
       const target = ensureItem(byItemId, item);
       const qty = Number(item.quantity) || 0;
       if (qty <= 0) continue;

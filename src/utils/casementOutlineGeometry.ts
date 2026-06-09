@@ -1,4 +1,5 @@
-import type { CasementOutlineConfig, WindowConfig } from '../types';
+import type { CasementOutlineConfig, WindowConfig, WindowType } from '../types';
+import { WindowType as WT } from '../types';
 
 export type CasementOutlineHost = { casementOutline?: CasementOutlineConfig };
 
@@ -12,6 +13,36 @@ export const DEFAULT_CASEMENT_OUTLINE: CasementOutlineConfig = {
   archInnerRingCount: 0,
   archInnerRingGapMm: 16,
 };
+
+/** Plain rectangular casement/ventilator — default when switching to these window types. */
+export function getPlainCasementVentilatorFields(): Pick<
+  WindowConfig,
+  | 'casementOutline'
+  | 'horizontalDividers'
+  | 'verticalDividers'
+  | 'doorPositions'
+  | 'ventilatorGrid'
+  | 'hiddenMullionSegments'
+> {
+  return {
+    casementOutline: { ...DEFAULT_CASEMENT_OUTLINE, openingShapeUserSet: false },
+    horizontalDividers: [],
+    verticalDividers: [],
+    doorPositions: [],
+    ventilatorGrid: [[{ type: 'glass' }]],
+    hiddenMullionSegments: undefined,
+  };
+}
+
+/** Drop arch/rounded outline unless the user explicitly chose it in Opening shape controls. */
+export function sanitizeCasementOpeningIfNotUserSet<T extends CasementOutlineHost & { windowType?: WindowType }>(
+  config: T,
+): T {
+  if (config.windowType !== WT.CASEMENT && config.windowType !== WT.VENTILATOR) return config;
+  const outline = resolveCasementOutline(config);
+  if (outline.shape === 'rect' || outline.openingShapeUserSet) return config;
+  return { ...config, ...getPlainCasementVentilatorFields() };
+}
 
 export function resolveCasementOutline(config: CasementOutlineHost): CasementOutlineConfig {
   const raw = config.casementOutline ?? {};
@@ -750,6 +781,7 @@ export function applyCasementDTypePreset(
   return {
     casementOutline: {
       shape: 'arch_top',
+      openingShapeUserSet: true,
       cornerRadiusMm: 40,
       archStraightBottomMm: straightBottom,
       archSpringRatio: springR,
@@ -866,6 +898,7 @@ export function applyRoundedBandLayout(
 export function applyCasementRoundedPreset(innerW = 0, innerH = 0): Partial<WindowConfig> {
   const casementOutline = {
     shape: 'rounded_rect' as const,
+    openingShapeUserSet: true,
     cornerRadiusMm: 152,
     archSpringRatio: 0.28,
     archRadialMullions: 0,

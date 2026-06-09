@@ -1,6 +1,7 @@
 
 import React, { useMemo, useRef, useState, useEffect, useId } from 'react';
-import type { QuotationItem, QuotationSettings, WindowConfig, HandleConfig, MaterialRateSettings, PartitionPanelConfig, WindowQuotationItem } from '../types';
+import type { QuotationItem, QuotationSettings, SavedColor, WindowConfig, HandleConfig, MaterialRateSettings, PartitionPanelConfig, WindowQuotationItem, WindowPackageQuotationItem, WindowPackageUnitLine } from '../types';
+import { resolveProfileColorLabel } from '../utils/profileColorLabel';
 import { Button } from './ui/Button';
 import { PrinterIcon } from './icons/PrinterIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -29,12 +30,20 @@ import { getElevationDimensionsMm, type ElevationSegment } from '../utils/elevat
 import { getQuotationHardwareUnitMultiplier } from '../utils/quotationHardwareCost';
 import { resolveFoldFrameEdges } from '../utils/foldDoorFrame';
 import { FoldDoorOpeningGraphic } from './FoldDoorOpeningVisual';
-import { normalizeWebsiteUrl, parseInlineBoldSegments, boldSegmentInner, isDoubleBoldSegment, isSingleBoldSegment, splitQuotationLines } from '../utils/quotationText';
+import { normalizeWebsiteUrl, parseInlineBoldSegments, boldSegmentInner, isDoubleBoldSegment, isSingleBoldSegment, splitQuotationLines, pastePlainTextIntoTextarea } from '../utils/quotationText';
 import { calculateMaterialCostSummary, formatItemWeightKg } from '../utils/materialCosting';
 import { getRawDiscountAmount } from '../utils/pricingSafety';
 import { DEFAULT_MATERIAL_RATES } from '../constants/materialRates';
 import { quotationItemSubtotalContribution } from '../utils/quotationTotals';
 import { getWindowQuotationAreaMm2 } from '../utils/louverBays';
+import { isWindowQuotationItem } from '../utils/quotationItemKinds';
+import {
+  expandPackageToWindowItems,
+  isWindowPackageQuotationItem,
+  packageCombinedArea,
+  packageCombinedSubtitle,
+  packageLayoutRowLabel,
+} from '../utils/windowPackageQuotation';
 import { RailingQuotationLinePrintBlock } from '../railing/components/RailingQuotationLinePrintBlock';
 import '../railing/quotation-print-embed.css';
 import { OpenViewPrintBlock } from '../windowOpenView/OpenViewPrintBlock';
@@ -70,6 +79,16 @@ interface PrintPreviewProps {
   items: QuotationItem[];
   settings: QuotationSettings;
   setSettings: (settings: QuotationSettings) => void;
+  savedColors?: SavedColor[];
+}
+
+function loadSavedColorsFromStorage(): SavedColor[] {
+  try {
+    const raw = window.localStorage.getItem('aluminium-window-colors');
+    return raw ? (JSON.parse(raw) as SavedColor[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 const mmToPx = (mm: number, scale: number) => Math.round(mm * scale * 100) / 100;
@@ -293,6 +312,9 @@ const PrintGlassGrid: React.FC<{
 };
 
 
+/** z-order inside door/shutter cells — profile fill + CAD lines always above glass. */
+const DOOR_CELL_Z = { glass: 0, frameFill: 4, frameLines: 8, swingHint: 3, pickOverlay: 45 } as const;
+
 const PrintableMiteredFrame: React.FC<{
     width: number;
     height: number;
@@ -440,10 +462,211 @@ const PrintableMirrorPanel: React.FC<{ style: React.CSSProperties }> = ({ style 
 };
 
 
-const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; weightKg?: number }> = ({
+/** Fixed print slots (mm) — elevation square + size chart + plan/CAD band. */
+const PRINT_ELEVATION_SLOT_MM = 52;
+const PRINT_PX_PER_MM = 96 / 25.4;
+
+/** Pixels per layout mm so elevation fills the square slot (PrintableWindow uses px/mm scale). */
+function fitScalePxPerMm(widthMm: number, heightMm: number, slotMm: number): number {
+  const w = Math.max(widthMm, 1);
+  const h = Math.max(heightMm, 1);
+  const slotPx = slotMm * PRINT_PX_PER_MM;
+  return Math.min(slotPx / w, slotPx / h);
+}
+
+const PrintElevationSlot: React.FC<{
+  widthMm: number;
+  heightMm: number;
+  photo?: string;
+  children: React.ReactNode;
+}> = ({ widthMm, heightMm, photo, children }) => {
+  const w = Math.max(widthMm, 1);
+  const h = Math.max(heightMm, 1);
+  const scale = fitScalePxPerMm(w, h, PRINT_ELEVATION_SLOT_MM);
+  return (
+    <div className="print-slot-elevation">
+      {photo ? (
+        <img src={photo} alt="Print elevation" className="print-slot-elevation-photo" />
+      ) : (
+        <div
+          className="print-slot-elevation-inner"
+          style={{ width: mmToPx(w, scale), height: mmToPx(h, scale) }}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const PrintWindowSizeChart: React.FC<{ config: WindowConfig }> = ({ config }) => {
+  const w = Number(config.width) || 0;
+  const h = Number(config.height) || 0;
+  const { columns, rows } = getElevationDimensionsMm(config);
+  const widthSegs = columns
+    .filter((c) => (c.sizeMm || 0) > 0)
+    .map((c) => Math.round(c.sizeMm || 0));
+  const heightSegs = rows
+    .filter((r) => (r.sizeMm || 0) > 0)
+    .map((r) => Math.round(r.sizeMm || 0));
+  const shutterWidths = columns
+    .filter(isShutterElevationColumn)
+    .map((c) => Math.round(c.sizeMm || 0));
+
+  return (
+    <div className="print-size-chart">
+      <p className="print-size-chart-title">Sizes (mm)</p>
+      <table>
+        <tbody>
+          <tr>
+            <td>Overall</td>
+            <td>{w} × {h}</td>
+          </tr>
+          {widthSegs.length > 1 ? (
+            <tr>
+              <td>Width</td>
+              <td>{widthSegs.join(' + ')}</td>
+            </tr>
+          ) : null}
+          {heightSegs.length > 1 ? (
+            <tr>
+              <td>Height</td>
+              <td>{heightSegs.join(' + ')}</td>
+            </tr>
+          ) : null}
+          {shutterWidths.length > 0 ? (
+            <tr>
+              <td>Door / shutter</td>
+              <td>{shutterWidths.join(', ')}</td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const PrintPackageSizeChart: React.FC<{ item: WindowPackageQuotationItem }> = ({ item }) => (
+  <div className="print-size-chart">
+    <p className="print-size-chart-title">Sizes (mm)</p>
+    <table>
+      <tbody>
+        {item.units.map((u) => (
+          <tr key={u.id}>
+            <td>{u.title}</td>
+            <td>{u.config.width} × {u.config.height}</td>
+          </tr>
+        ))}
+        <tr>
+          <td>{packageLayoutRowLabel(item)}</td>
+          <td>{Math.round(item.layoutWidthMm)} × {Math.round(item.layoutHeightMm)}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+);
+
+const PrintVisualStack: React.FC<{
+  elevation: React.ReactNode;
+  sizeChart?: React.ReactNode;
+  secondary?: React.ReactNode;
+  footer?: React.ReactNode;
+}> = ({ elevation, sizeChart, secondary, footer }) => (
+  <div className="print-visual-stack">
+    {elevation}
+    {sizeChart ? <div className="print-slot-size-chart">{sizeChart}</div> : null}
+    {secondary ? <div className="print-slot-secondary">{secondary}</div> : null}
+    {footer}
+  </div>
+);
+
+const PrintableLayoutPackage: React.FC<{ item: WindowPackageQuotationItem; fitSlotMm?: number }> = ({
+  item,
+  fitSlotMm,
+}) => {
+  const scale = fitSlotMm
+    ? fitScalePxPerMm(item.layoutWidthMm, item.layoutHeightMm, fitSlotMm)
+    : 220 / Math.max(item.layoutWidthMm, 1);
+  return (
+    <div
+      className="relative"
+      style={{
+        width: mmToPx(item.layoutWidthMm, scale),
+        height: mmToPx(item.layoutHeightMm, scale),
+        margin: 'auto',
+      }}
+    >
+      {item.units.map((u) => (
+        <div
+          key={u.id}
+          style={{
+            position: 'absolute',
+            left: mmToPx(u.xMm - item.layoutMinXMm, scale),
+            top: mmToPx(u.yMm - item.layoutMinYMm, scale),
+          }}
+        >
+          <PrintableWindow config={u.config} externalScale={scale} printCompact />
+        </div>
+      ))}
+    </div>
+  );
+};
+
+function unitLineAmount(
+  unit: WindowPackageUnitLine,
+  areaType: WindowPackageQuotationItem['areaType'],
+  quantity: number,
+): number {
+  const cf = areaType === 'sqmt' ? 1000 : 304.8;
+  const area = (getWindowQuotationAreaMm2(unit.config) / (cf * cf)) * quantity;
+  return area * unit.rate + unit.hardwareCost * quantity;
+}
+
+function unitArea(
+  unit: WindowPackageUnitLine,
+  areaType: WindowPackageQuotationItem['areaType'],
+  quantity: number,
+): number {
+  const cf = areaType === 'sqmt' ? 1000 : 304.8;
+  return (getWindowQuotationAreaMm2(unit.config) / (cf * cf)) * quantity;
+}
+
+function formatWindowTypeLabel(wt: WindowType): string {
+  return wt.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const PrintOpenViewsSecondary: React.FC<{
+  configs: WindowConfig[];
+  openAmount: number;
+  swingSide: 'inside' | 'outside';
+}> = ({ configs, openAmount, swingSide }) => {
+  const openConfigs = configs.flatMap((cfg) => getOpenViewPrintConfigs(cfg));
+  if (openConfigs.length === 0) return null;
+  return (
+    <div className="print-slot-secondary-grid">
+      {openConfigs.map((cfg, idx) => (
+        <OpenViewPrintBlock
+          key={`plan-${idx}`}
+          config={cfg}
+          openAmount={openAmount}
+          swingSide={swingSide}
+          compact
+        />
+      ))}
+    </div>
+  );
+};
+
+const PrintableWindow: React.FC<{
+  config: WindowConfig;
+  externalScale?: number;
+  weightKg?: number;
+  printCompact?: boolean;
+}> = ({
   config,
   externalScale,
   weightKg,
+  printCompact = false,
 }) => {
     if (config.windowType === WindowType.CORNER && config.leftConfig && config.rightConfig) {
         const leftW = Number(config.leftWidth) || 0;
@@ -732,7 +955,7 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
 
         return (
             <div
-              className="absolute"
+              className="absolute isolate"
               style={{
                 left: mmToPx(-bl, scale),
                 top: mmToPx(-bt, scale),
@@ -740,6 +963,21 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                 height: mmToPx(frameH, scale),
               }}
             >
+                <div
+                  className="absolute overflow-hidden"
+                  style={{
+                    zIndex: DOOR_CELL_Z.glass,
+                    left: mmToPx(bl, scale) + lPx,
+                    top: mmToPx(bt, scale) + tPx,
+                    right: mmToPx(br, scale) + rPx,
+                    bottom: mmToPx(bb, scale) + bPx,
+                  }}
+                >
+                    <GlassPanel panelId={panelId} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', ...meshStyle }} glassWidthPx={glassWidth*scale} glassHeightPx={glassHeight*scale}>
+                        <PrintShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : 'fixed'} />
+                    </GlassPanel>
+                </div>
+                <div className="absolute inset-0" style={{ zIndex: DOOR_CELL_Z.frameFill }}>
                 <PrintableMiteredFrame 
                     width={frameW} 
                     height={frameH} 
@@ -753,21 +991,17 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                     hideInnerEdges={frameHideInner}
                     buttEdges={frameButt}
                 />
+                </div>
                 {showLeftJoint ? (
-                  <div className="pointer-events-none absolute" style={{ left: mmToPx(bl, scale), top: mmToPx(bt, scale), width: wPx, height: hPx }}>
+                  <div className="pointer-events-none absolute" style={{ left: mmToPx(bl, scale), top: mmToPx(bt, scale), width: wPx, height: hPx, zIndex: DOOR_CELL_Z.frameLines }}>
                     <InterlockButtJointLines widthPx={wPx} heightPx={hPx} topPx={tPx} bottomPx={bPx} sidePx={lPx} side="left" variant="print" />
                   </div>
                 ) : null}
                 {showRightJoint ? (
-                  <div className="pointer-events-none absolute" style={{ left: mmToPx(bl, scale), top: mmToPx(bt, scale), width: wPx, height: hPx }}>
+                  <div className="pointer-events-none absolute" style={{ left: mmToPx(bl, scale), top: mmToPx(bt, scale), width: wPx, height: hPx, zIndex: DOOR_CELL_Z.frameLines }}>
                     <InterlockButtJointLines widthPx={wPx} heightPx={hPx} topPx={tPx} bottomPx={bPx} sidePx={rPx} side="right" variant="print" />
                   </div>
                 ) : null}
-                <div className="absolute overflow-hidden" style={{ left: mmToPx(bl, scale) + lPx, top: mmToPx(bt, scale) + tPx, right: mmToPx(br, scale) + rPx, bottom: mmToPx(bb, scale) + bPx }}>
-                    <GlassPanel panelId={panelId} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', ...meshStyle }} glassWidthPx={glassWidth*scale} glassHeightPx={glassHeight*scale}>
-                        <PrintShutterIndicator type={isFixed ? 'fixed' : isSliding ? 'sliding' : 'fixed'} />
-                    </GlassPanel>
-                </div>
             </div>
         );
     };
@@ -1372,14 +1606,14 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                                     const doorWPx = mmToPx(visual.cellW, scale);
                                     const doorHPx = mmToPx(visual.cellH, scale);
                                     const doorProfPx = mmToPx(dims.casementShutter, scale);
-                                    content = (<div key={`cell-${r}-${c}`} className="absolute" style={{left: mmToPx(visual.cellX, scale), top: mmToPx(visual.cellY, scale), width: doorWPx, height: doorHPx, zIndex: 24}}>
-                                        <div className="absolute overflow-hidden" style={{ zIndex: 1, left: doorProfPx, top: doorProfPx, right: doorProfPx, bottom: doorProfPx }}>
+                                    content = (<div key={`cell-${r}-${c}`} className="absolute isolate" style={{left: mmToPx(visual.cellX, scale), top: mmToPx(visual.cellY, scale), width: doorWPx, height: doorHPx, zIndex: 24}}>
+                                        <div className="absolute overflow-hidden" style={{ zIndex: DOOR_CELL_Z.glass, left: doorProfPx, top: doorProfPx, right: doorProfPx, bottom: doorProfPx }}>
                                           <GlassPanel panelId={`cell-door-${r}-${c}`} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }} glassWidthPx={(visual.cellW - 2*dims.casementShutter)*scale} glassHeightPx={(visual.cellH - 2*dims.casementShutter)*scale}><PrintShutterIndicator type="door"/></GlassPanel>
                                         </div>
-                                        <div className="absolute inset-0" style={{ zIndex: 2 }}>
+                                        <div className="absolute inset-0" style={{ zIndex: DOOR_CELL_Z.frameFill }}>
                                           <PrintableMiteredFrame width={visual.cellW} height={visual.cellH} profileSize={dims.casementShutter} scale={scale} color={profileColor} texture={pt} hideInnerEdges={hideInnerEdges} showOutlines={false} />
                                         </div>
-                                        <div className="pointer-events-none absolute inset-0" style={{ zIndex: 5 }}>
+                                        <div className="pointer-events-none absolute inset-0" style={{ zIndex: DOOR_CELL_Z.frameLines }}>
                                           <MiteredProfileOutlines widthPx={doorWPx} heightPx={doorHPx} topPx={doorProfPx} bottomPx={doorProfPx} leftPx={doorProfPx} rightPx={doorProfPx} variant="print" hideInnerEdges={hideInnerEdges} showOuter showMiterCorners outlineZIndex={30} />
                                         </div>
                                       </div>);
@@ -1591,9 +1825,29 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                             const frameH = ph + bleedTop + bleedBottom;
 
                             panels.push(
-                                <div key={`panel-${i}`} className="absolute" style={{left: mmToPx(panelX, scale), top: mmToPx(py, scale), width: mmToPx(currentPanelWidth, scale), height: mmToPx(ph, scale), zIndex}}>
+                                <div key={`panel-${i}`} className="absolute isolate" style={{left: mmToPx(panelX, scale), top: mmToPx(py, scale), width: mmToPx(currentPanelWidth, scale), height: mmToPx(ph, scale), zIndex}}>
+                                  <div
+                                    className="absolute overflow-hidden"
+                                    style={
+                                      isFramed
+                                        ? { zIndex: DOOR_CELL_Z.glass, left: mmToPx(fl, scale), top: mmToPx(ft, scale), right: mmToPx(fr, scale), bottom: mmToPx(fb, scale) }
+                                        : { zIndex: DOOR_CELL_Z.glass, top: 0, left: 0, right: 0, bottom: 0 }
+                                    }
+                                  >
+                                    <GlassPanel 
+                                      panelId={`partition-${i}`}
+                                      style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }}
+                                      glassWidthPx={innerGlassW}
+                                      glassHeightPx={innerGlassH}
+                                    >
+                                       {type === 'fold' && (
+                                         <FoldDoorOpeningGraphic leaves={foldLeaves ?? 2} variant="print" profileColor={profileColor} />
+                                       )}
+                                       <PrintShutterIndicator type={type} width={innerGlassW} height={innerGlassH} foldLeaves={foldLeaves} />
+                                    </GlassPanel>
+                                  </div>
                                   {isFramed && type === 'fold' && (
-                                    <div className="absolute" style={{ left: mmToPx(-bleedLeft, scale), top: mmToPx(-bleedTop, scale), width: mmToPx(frameW, scale), height: mmToPx(frameH, scale) }}>
+                                    <div className="absolute" style={{ zIndex: DOOR_CELL_Z.frameFill, left: mmToPx(-bleedLeft, scale), top: mmToPx(-bleedTop, scale), width: mmToPx(frameW, scale), height: mmToPx(frameH, scale) }}>
                                       <PrintableMiteredFrame
                                         width={frameW}
                                         height={frameH}
@@ -1609,30 +1863,10 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                                     </div>
                                   )}
                                   {isFramed && type !== 'fold' && (
-                                    <div className="absolute" style={{ left: mmToPx(-bleedLeft, scale), top: mmToPx(-bleedTop, scale), width: mmToPx(frameW, scale), height: mmToPx(frameH, scale) }}>
+                                    <div className="absolute" style={{ zIndex: DOOR_CELL_Z.frameFill, left: mmToPx(-bleedLeft, scale), top: mmToPx(-bleedTop, scale), width: mmToPx(frameW, scale), height: mmToPx(frameH, scale) }}>
                                       <PrintableMiteredFrame width={frameW} height={frameH} profileSize={frameSize} scale={scale} color={profileColor} texture={pt} hideInnerEdges={panelHideInner} />
                                     </div>
                                   )}
-                                  <div
-                                    className="absolute overflow-hidden"
-                                    style={
-                                      isFramed
-                                        ? { left: mmToPx(fl, scale), top: mmToPx(ft, scale), right: mmToPx(fr, scale), bottom: mmToPx(fb, scale) }
-                                        : { top: 0, left: 0, right: 0, bottom: 0 }
-                                    }
-                                  >
-                                    <GlassPanel 
-                                      panelId={`partition-${i}`}
-                                      style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' }}
-                                      glassWidthPx={innerGlassW}
-                                      glassHeightPx={innerGlassH}
-                                    >
-                                       {type === 'fold' && (
-                                         <FoldDoorOpeningGraphic leaves={foldLeaves ?? 2} variant="print" profileColor={profileColor} />
-                                       )}
-                                       <PrintShutterIndicator type={type} width={innerGlassW} height={innerGlassH} foldLeaves={foldLeaves} />
-                                    </GlassPanel>
-                                  </div>
                                 </div>
                             );
 
@@ -1653,17 +1887,17 @@ const PrintableWindow: React.FC<{ config: WindowConfig; externalScale?: number; 
                     {handleElements}
                 </div>
             )}
-            {config.windowType !== WindowType.CORNER && (
+            {!printCompact && config.windowType !== WindowType.CORNER && (
                 <>
                     <PrintDimensionLabel value={effectiveWidth} className="top-0 -translate-y-full left-1/2 -translate-x-1/2 -mt-1" />
                     <PrintDimensionLabel value={numHeight} className="top-1/2 -translate-y-1/2 left-0 -translate-x-full -ml-2 rotate-[-90deg]" />
                 </>
             )}
-            {labelElements}
-            {elevationDimsBeside}
+            {!printCompact ? labelElements : null}
+            {!printCompact ? elevationDimsBeside : null}
         </div>
-        {elevationDimsBelow}
-        {weightKg != null && weightKg > 0 && (
+        {!printCompact ? elevationDimsBelow : null}
+        {!printCompact && weightKg != null && weightKg > 0 && (
             <p
                 style={{
                     fontSize: '7pt',
@@ -1726,6 +1960,7 @@ const EditableSection: React.FC<{title: string, value: string, onChange: (value:
                     name={id}
                     value={value}
                     onChange={e => onChange(e.target.value)}
+                    onPaste={(e) => pastePlainTextIntoTextarea(e, onChange)}
                     onBlur={() => setIsEditing(false)}
                     className="w-full text-xs whitespace-pre-wrap bg-transparent border-gray-300 rounded-md p-1 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 print-editable"
                     style={{overflow: 'hidden'}}
@@ -1860,36 +2095,27 @@ const getItemDetails = (item: WindowQuotationItem) => {
     return { panelCounts, hardwareDetails, relevantHardware };
 }
 
-const getColorName = (item: QuotationItem) => {
-    if (item.kind === 'railing') return '—';
-    const quickColorNames: Record<string, string> = {
-        '#6b7280': 'Grey',
-        '#2f3238': 'Black',
-        '#5c4033': 'Brown',
-        '#d4a84b': 'Champion gold',
-        '#f5f5f0': 'Off white',
-    };
+export const PrintPreview: React.FC<PrintPreviewProps> = ({
+  isOpen,
+  onClose,
+  items,
+  settings,
+  setSettings,
+  savedColors,
+}) => {
+  const colorPresets = useMemo(
+    () => (savedColors?.length ? savedColors : loadSavedColorsFromStorage()),
+    [savedColors],
+  );
 
-    if (item.profileColorName) {
-        if (item.profileColorName.startsWith('#')) {
-            return quickColorNames[item.profileColorName.toLowerCase()] || 'Custom Color';
-        }
-        if (item.profileColorName.startsWith('data:image')) {
-            return 'Custom Texture';
-        }
-        return item.profileColorName;
-    }
-    if (item.config.profileColor && item.config.profileColor.startsWith('data:image')) {
-        return "Custom Texture";
-    }
-    if (item.config.profileColor && item.config.profileColor.startsWith('#')) {
-        return quickColorNames[item.config.profileColor.toLowerCase()] || 'Custom Color';
-    }
-    return item.config.profileColor || 'Custom Color';
-};
-
-
-export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, items, settings, setSettings }) => {
+  const getColorName = (item: QuotationItem) => {
+    if (item.kind === 'railing' || item.kind === 'window_package') return '—';
+    return resolveProfileColorLabel(
+      item.config.profileColor,
+      item.profileColorName,
+      colorPresets,
+    );
+  };
   const customer = settings.customer ?? {
     name: '',
     address: '',
@@ -1951,9 +2177,15 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
   );
   const hasOpenViewQuotationItems = useMemo(
     () =>
-      items.some(
-        (item) => item.kind !== 'railing' && getOpenViewPrintConfigs(item.config).length > 0,
-      ),
+      items.some((item) => {
+        if (isWindowQuotationItem(item)) {
+          return getOpenViewPrintConfigs(item.config).length > 0;
+        }
+        if (isWindowPackageQuotationItem(item)) {
+          return item.units.some((u) => getOpenViewPrintConfigs(u.config).length > 0);
+        }
+        return false;
+      }),
     [items],
   );
 
@@ -2250,10 +2482,12 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                         <table className="w-full" style={{borderCollapse: 'collapse'}}>
                             <thead className="bg-gray-200">
                                 <tr className="border-b-2 border-t-2 border-black">
-                                    <th className="p-1 text-center w-[5%]">#</th>
-                                    <th className="p-1 text-left w-[65%]" colSpan={2}>Item Description</th>
-                                    <th className="p-1 text-center w-[10%]">Qty</th>
-                                    <th className="p-1 text-right w-[20%] hide-for-arch" colSpan={2}>Total Amount</th>
+                                    <th className="p-1 text-center w-[4%]">#</th>
+                                    <th className="p-1 text-left" colSpan={2}>Item Description</th>
+                                    <th className="p-1 text-right print-qty-amount-col" colSpan={3}>
+                                      <span className="show-for-arch">Qty</span>
+                                      <span className="hide-for-arch">Qty · Amount</span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -2275,6 +2509,153 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                 listRowTitle={item.title}
                                                 hidePricesForArchitect={isArchitecturalMode}
                                               />
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      );
+                                    }
+
+                                    if (isWindowPackageQuotationItem(item)) {
+                                      const totalCost = quotationItemSubtotalContribution(item);
+                                      const combinedArea = packageCombinedArea(item);
+                                      const packageWeightKg = expandPackageToWindowItems(item).reduce(
+                                        (s, u) => s + (materialCostSummary.byItemId[u.id]?.totalWeightKg ?? 0),
+                                        0,
+                                      );
+
+                                      const openAmountFrac = openViewPrintAmount / 100;
+                                      const unitConfigs = item.units.map((u) => u.config);
+
+                                      return (
+                                        <tr
+                                          key={item.id}
+                                          className="border-b border-gray-300 print-item print-item-package"
+                                        >
+                                          <td className="p-2 align-top text-center">{index + 1}</td>
+                                          <td className="p-2 align-top" colSpan={2}>
+                                            <div className="print-item-layout">
+                                              <PrintVisualStack
+                                                elevation={
+                                                  <PrintElevationSlot
+                                                    widthMm={item.layoutWidthMm}
+                                                    heightMm={item.layoutHeightMm}
+                                                    photo={item.printElevationPhoto}
+                                                  >
+                                                    <PrintableLayoutPackage
+                                                      item={item}
+                                                      fitSlotMm={PRINT_ELEVATION_SLOT_MM}
+                                                    />
+                                                  </PrintElevationSlot>
+                                                }
+                                                sizeChart={<PrintPackageSizeChart item={item} />}
+                                                secondary={
+                                                  includeOpenViewDiagram ? (
+                                                    <PrintOpenViewsSecondary
+                                                      configs={unitConfigs}
+                                                      openAmount={openAmountFrac}
+                                                      swingSide={openViewPrintSwing}
+                                                    />
+                                                  ) : null
+                                                }
+                                                footer={
+                                                  packageWeightKg > 0 ? (
+                                                    <p className="print-visual-footer text-[6.5pt] text-gray-600">
+                                                      Est. weight: {formatItemWeightKg(packageWeightKg)}
+                                                    </p>
+                                                  ) : null
+                                                }
+                                              />
+                                              <div className="print-item-main min-w-0">
+                                                <p className="font-bold print-window-title">{item.title}</p>
+                                                <p className="text-[7pt] text-gray-600 mt-0.5">
+                                                  {packageCombinedSubtitle(item)}
+                                                </p>
+                                                <div className="print-package-units-grid">
+                                                  {item.units.map((unit) => {
+                                                    const fauxItem: WindowQuotationItem = {
+                                                      kind: 'window',
+                                                      id: unit.id,
+                                                      title: unit.title,
+                                                      config: unit.config,
+                                                      quantity: item.quantity,
+                                                      areaType: item.areaType,
+                                                      rate: unit.rate,
+                                                      hardwareCost: unit.hardwareCost,
+                                                      hardwareItems: unit.hardwareItems,
+                                                      profileColorName: unit.profileColorName,
+                                                    };
+                                                    const { panelCounts, relevantHardware } = getItemDetails(fauxItem);
+                                                    const glassDescription = getGlassDescription(unit.config);
+                                                    const area = unitArea(unit, item.areaType, item.quantity);
+                                                    const amount = unitLineAmount(unit, item.areaType, item.quantity);
+                                                    const colorLabel = resolveProfileColorLabel(
+                                                      unit.config.profileColor,
+                                                      unit.profileColorName,
+                                                      colorPresets,
+                                                    );
+
+                                                    return (
+                                                      <div key={unit.id} className="print-package-unit-card">
+                                                        <p className="font-bold text-[7pt] leading-tight">
+                                                          {unit.title} — {formatWindowTypeLabel(unit.config.windowType)}
+                                                        </p>
+                                                        <table className="print-package-unit-table">
+                                                          <tbody>
+                                                            <tr>
+                                                              <td>Area</td>
+                                                              <td>{area.toFixed(2)} {item.areaType}</td>
+                                                            </tr>
+                                                            <tr className="hide-for-arch">
+                                                              <td>Amount</td>
+                                                              <td className="font-semibold">₹{Math.round(amount).toLocaleString('en-IN')}</td>
+                                                            </tr>
+                                                            <tr>
+                                                              <td>Series</td>
+                                                              <td>{unit.config.series?.name ?? '—'}</td>
+                                                            </tr>
+                                                            <tr>
+                                                              <td>Color</td>
+                                                              <td>{colorLabel}</td>
+                                                            </tr>
+                                                            <tr>
+                                                              <td>Glass</td>
+                                                              <td>{glassDescription}</td>
+                                                            </tr>
+                                                            {Object.entries(panelCounts).map(
+                                                              ([name, count]) =>
+                                                                count > 0 ? (
+                                                                  <tr key={name}>
+                                                                    <td>{name}</td>
+                                                                    <td>{count} Nos.</td>
+                                                                  </tr>
+                                                                ) : null,
+                                                            )}
+                                                            {relevantHardware.length > 0 ? (
+                                                              <tr>
+                                                                <td>Lock</td>
+                                                                <td>{relevantHardware.map((hw) => hw.name).join(', ')}</td>
+                                                              </tr>
+                                                            ) : null}
+                                                          </tbody>
+                                                        </table>
+                                                      </div>
+                                                    );
+                                                  })}
+                                                  <div className="print-package-total hide-for-arch">
+                                                    <span>Package total</span>
+                                                    <span>{combinedArea.toFixed(2)} {item.areaType}</span>
+                                                    <span className="font-bold">₹{Math.round(totalCost).toLocaleString('en-IN')}</span>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </td>
+                                          <td className="p-1 align-top print-qty-amount-cell" colSpan={3}>
+                                            <div className="print-qty-amount">
+                                              <span className="print-qty">Qty: {item.quantity}</span>
+                                              <span className="print-line-total hide-for-arch">
+                                                ₹{Math.round(totalCost).toLocaleString('en-IN')}
+                                              </span>
                                             </div>
                                           </td>
                                         </tr>
@@ -2308,35 +2689,52 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                         }
                                     }
 
+                                    const winW = Number(item.config.width) || 1;
+                                    const winH = Number(item.config.height) || 1;
+                                    const compactScale = fitScalePxPerMm(winW, winH, PRINT_ELEVATION_SLOT_MM);
+
                                     return (
-                                        <tr key={item.id} className="border-b border-gray-300 print-item" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                                        <tr key={item.id} className="border-b border-gray-300 print-item print-item-window">
                                             <td className="p-2 align-top text-center">{index + 1}</td>
-                                            
-                                            <td className="p-2 align-top w-[25%]">
-                                                <div style={{ paddingRight: 24, paddingBottom: 8 }}>
-                                                    <PrintableWindow
-                                                      config={item.config}
-                                                      weightKg={itemWeight?.totalWeightKg}
-                                                    />
-                                                    {includeOpenViewDiagram
-                                                      ? getOpenViewPrintConfigs(item.config).map((openCfg, openIdx) => (
-                                                          <OpenViewPrintBlock
-                                                            key={`open-plan-${openIdx}`}
-                                                            config={openCfg}
-                                                            openAmount={openViewPrintAmount / 100}
-                                                            swingSide={openViewPrintSwing}
-                                                          />
-                                                        ))
-                                                      : null}
-                                                </div>
-                                            </td>
-                                            
-                                            <td className="p-2 align-top">
+                                            <td className="p-2 align-top" colSpan={2}>
+                                              <div className="print-item-layout">
+                                                <PrintVisualStack
+                                                  elevation={
+                                                    <PrintElevationSlot
+                                                      widthMm={winW}
+                                                      heightMm={winH}
+                                                      photo={item.printElevationPhoto}
+                                                    >
+                                                      <PrintableWindow
+                                                        config={item.config}
+                                                        externalScale={compactScale}
+                                                        printCompact
+                                                      />
+                                                    </PrintElevationSlot>
+                                                  }
+                                                  sizeChart={<PrintWindowSizeChart config={item.config} />}
+                                                  secondary={
+                                                    includeOpenViewDiagram ? (
+                                                      <PrintOpenViewsSecondary
+                                                        configs={[item.config]}
+                                                        openAmount={openViewPrintAmount / 100}
+                                                        swingSide={openViewPrintSwing}
+                                                      />
+                                                    ) : null
+                                                  }
+                                                  footer={
+                                                    itemWeight && itemWeight.totalWeightKg > 0 ? (
+                                                      <p className="print-visual-footer text-[6.5pt] text-gray-600">
+                                                        Est. weight: {formatItemWeightKg(itemWeight.totalWeightKg)}
+                                                      </p>
+                                                    ) : null
+                                                  }
+                                                />
+                                                <div className="print-item-main min-w-0">
                                                 <p className="font-bold print-window-title">{item.title}</p>
                                                 <table className="w-full text-[7pt] mt-1 details-table">
                                                     <tbody>
                                                         <tr><td className='pr-2 font-semibold'>Series:</td><td>{item.config.series.name}</td></tr>
-                                                        <tr><td className='pr-2 font-semibold'>Size:</td><td>{`${item.config.width} x ${item.config.height}`} mm</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
                                                         <tr className="hide-for-arch"><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
                                                         {!isFrameless && (
@@ -2356,9 +2754,17 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ isOpen, onClose, ite
                                                         )}
                                                     </tbody>
                                                 </table>
+                                                </div>
+                                              </div>
                                             </td>
-                                            <td className="p-2 align-top text-center">{item.quantity}</td>
-                                            <td className="p-2 align-top text-right font-bold hide-for-arch" colSpan={2}>₹{Math.round(totalCost).toLocaleString('en-IN')}</td>
+                                            <td className="p-1 align-top print-qty-amount-cell" colSpan={3}>
+                                              <div className="print-qty-amount">
+                                                <span className="print-qty">Qty: {item.quantity}</span>
+                                                <span className="print-line-total hide-for-arch">
+                                                  ₹{Math.round(totalCost).toLocaleString('en-IN')}
+                                                </span>
+                                              </div>
+                                            </td>
                                         </tr>
                                     );
                                 })}
