@@ -156,8 +156,8 @@ export function DesignForm({
       glassId: preset.glassId,
       customGlassComposition: preset.customGlassComposition,
       finish: { ...preset.finish },
-      packageRates: { ...preset.packageRates },
-      packageQuoteUnit: preset.packageQuoteUnit,
+      packageRates: draft.packageRates,
+      packageQuoteUnit: draft.packageQuoteUnit ?? preset.packageQuoteUnit,
       ...(designType === 'custom' ? { pathStartHeading: 'north' as const } : {}),
     })
   }

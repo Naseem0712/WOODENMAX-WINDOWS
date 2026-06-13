@@ -116,12 +116,16 @@ export function QuotationRatesPanel({
         mode={editMode}
         preset={presets[editMode]}
         onChange={(p) => patchPreset(editMode, p)}
+        glassPerSft={activeRates.glassPerSft}
+        onGlassPerSftChange={(n) => setRates({ glassPerSft: n })}
+        glassAreaHint={breakdown.glassAreaSft}
       />
 
       <hr className="drawer-divider" />
 
       <h3 className="setup-title">
-        Material rates — {editMode === 'staircase' ? 'Staircase' : 'Normal'} (internal costing)
+        Rail &amp; hardware rates — {editMode === 'staircase' ? 'Staircase' : 'Normal'} (internal
+        costing)
       </h3>
 
       <div className="toggle-row">

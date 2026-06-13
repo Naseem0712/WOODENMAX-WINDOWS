@@ -22,7 +22,7 @@ import { sanitizeFilenameSegment } from '../utils/pdfFilename';
 import { getRawDiscountAmount } from '../utils/pricingSafety';
 import { SpringScrollArea } from './ui/SpringScrollArea';
 import { quotationItemSubtotalContribution } from '../utils/quotationTotals';
-import { quoteBasisForLine, quoteRateForLine, recalculateQuoteLine as recalculateRailingQuoteLine } from '../railing/quotationFormat';
+import { quoteBasisForLine, quoteRateForLine, hydrateQuotationLine } from '../railing/quotationFormat';
 import { migrateBackup, parseBackupJson } from '../railing/backup';
 import { displayDesignTitle as railingDisplayTitle } from '../railing/utils';
 import { isWindowQuotationItem } from '../utils/quotationItemKinds';
@@ -465,7 +465,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                 try {
                     const migrated = migrateBackup(parseBackupJson(result));
                     const railingItemsFull = migrated.lines.map((line) => {
-                        const rec = recalculateRailingQuoteLine(structuredClone(line));
+                        const rec = hydrateQuotationLine(structuredClone(line));
                         const title =
                             rec.designName?.trim() ||
                             railingDisplayTitle(rec.draftSnapshot) ||

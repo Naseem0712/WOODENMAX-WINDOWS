@@ -95,8 +95,8 @@ export function PackageRatesEditor({ draft, breakdown, onChange }: Props) {
     <div className="package-rates-editor">
       <div className="package-rates-head">
         <p className="hint">
-          <strong>Package rate</strong> — material + installation below. Quotation and PDF use the
-          combined total for the selected unit.
+          <strong>Package rate</strong> — BOM material is for costing. Quotation and PDF use your
+          quote rate when entered (not added to material).
         </p>
         <button type="button" className="btn-ghost btn-sm" onClick={applySuggested}>
           Fill material from costing
@@ -175,15 +175,17 @@ export function PackageRatesEditor({ draft, breakdown, onChange }: Props) {
           Selected: <strong>{pq.basisQty}</strong> {unit.toUpperCase()} ({pq.basisLabel})
         </p>
         <p className="package-rate-breakdown">
-          Material {formatCurrency(pq.materialRate)}/{unit.toUpperCase()}
           {pq.installationRate > 0 ? (
             <>
-              {' '}
-              + Installation {formatCurrency(pq.installationRate)}/{unit.toUpperCase()}
+              Quote rate {formatCurrency(pq.rate)}/{unit.toUpperCase()} × {pq.basisQty} ={' '}
+              <strong>{formatCurrency(pq.amountPerSet)}</strong> / set
             </>
-          ) : null}{' '}
-          = <strong>{formatCurrency(pq.rate)}</strong>/{unit.toUpperCase()} × {pq.basisQty} ={' '}
-          <strong>{formatCurrency(pq.amountPerSet)}</strong> / set
+          ) : (
+            <>
+              Material {formatCurrency(pq.materialRate)}/{unit.toUpperCase()} × {pq.basisQty} ={' '}
+              <strong>{formatCurrency(pq.amountPerSet)}</strong> / set
+            </>
+          )}
         </p>
         <p className="package-quote-total">
           × {draft.quantity} set = <strong>{formatCurrency(total)}</strong>

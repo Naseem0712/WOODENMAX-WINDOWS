@@ -60,7 +60,7 @@ import { computeInnerHoleDims } from './utils/handleDefaults';
 import { calculateMaterialCostSummary } from './utils/materialCosting';
 import { applyHomeownerDefaultsToConfig, loadHomeownerDefaults } from './utils/homeownerDefaultsStorage';
 import { RailingDesignerApp } from './railing/App';
-import { recalculateQuoteLine as recalculateRailingQuoteLine } from './railing/quotationFormat';
+import { hydrateQuotationLine } from './railing/quotationFormat';
 import { displayDesignTitle as railingDisplayTitle } from './railing/utils';
 import type { QuotationLine } from './railing/types';
 import { isWindowQuotationItem } from './utils/quotationItemKinds';
@@ -94,7 +94,7 @@ function normalizeQuotationItemFromStorage(raw: unknown): QuotationItem | null {
       kind: 'railing',
       id: o.id,
       title: typeof o.title === 'string' ? o.title : 'Glass railing',
-      railingLine: recalculateRailingQuoteLine(structuredClone(o.railingLine as QuotationLine)),
+      railingLine: hydrateQuotationLine(structuredClone(o.railingLine as QuotationLine)),
     };
   }
   if (o.kind === 'window_package' && Array.isArray(o.units) && typeof o.id === 'string') {
@@ -2082,7 +2082,7 @@ const App: React.FC = () => {
 
   const handleUpsertUnifiedRailingLine = useCallback(
     (line: QuotationLine) => {
-      const rec = recalculateRailingQuoteLine(structuredClone(line));
+      const rec = hydrateQuotationLine(structuredClone(line));
       const title =
         rec.designName?.trim() ||
         railingDisplayTitle(rec.draftSnapshot) ||
@@ -2108,7 +2108,7 @@ const App: React.FC = () => {
       setQuotationItems((prev) => {
         const windows = prev.filter(isWindowQuotationItem);
         const railingItems: QuotationItem[] = lines.map((line) => {
-          const rec = recalculateRailingQuoteLine(structuredClone(line));
+          const rec = hydrateQuotationLine(structuredClone(line));
           const title =
             rec.designName?.trim() ||
             railingDisplayTitle(rec.draftSnapshot) ||

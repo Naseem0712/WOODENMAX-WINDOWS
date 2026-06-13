@@ -1,5 +1,11 @@
 import { hardwareProfilesSummary } from './railProfiles'
 import { quoteRailRft } from './railLength'
+import {
+  packageInstallationKey,
+  packageMaterialKey,
+  quotedPackageRate,
+  syncDraftPackageRatesFromQuote,
+} from './packagePricing'
 import { formatCurrency, glassDisplayForQuote } from './utils'
 import type { QuotationLine, RateDisplayUnit } from './types'
 
@@ -113,11 +119,46 @@ export function quoteLineAmount(line: QuotationLine): number {
   return Math.round(perSet * line.quantity * 100) / 100
 }
 
+/** Restore per-line quote rates on draft + recalculate amounts (backup / edit / session). */
+export function hydrateQuotationLine(line: QuotationLine): QuotationLine {
+  if (!line.draftSnapshot) return recalculateQuoteLine(line)
+  const snapshot = syncDraftPackageRatesFromQuote(line.draftSnapshot, line.packageQuote)
+  const pq = line.packageQuote
+  const syncedQuote = pq
+    ? {
+        ...pq,
+        unit: snapshot.packageQuoteUnit ?? pq.unit,
+        materialRate:
+          snapshot.packageRates[packageMaterialKey(snapshot.packageQuoteUnit ?? pq.unit)] ||
+          pq.materialRate,
+        installationRate:
+          snapshot.packageRates[
+            packageInstallationKey(snapshot.packageQuoteUnit ?? pq.unit)
+          ] || pq.installationRate,
+      }
+    : pq
+  const rate = syncedQuote
+    ? quotedPackageRate(syncedQuote.materialRate, syncedQuote.installationRate)
+    : 0
+  return recalculateQuoteLine({
+    ...line,
+    draftSnapshot: snapshot,
+    packageQuote: syncedQuote
+      ? { ...syncedQuote, rate: rate > 0 ? rate : syncedQuote.rate }
+      : syncedQuote,
+  })
+}
+
 /** Fix stored packageQuote.basisQty & amount (e.g. old double RFT). */
 export function recalculateQuoteLine(line: QuotationLine): QuotationLine {
   const basis = quoteBasisForLine(line)
   const unit = quoteUnitForLine(line)
-  const rate = quoteRateForLine(line)
+  const pq = line.packageQuote
+  const materialRate = pq?.materialRate ?? 0
+  const installationRate = pq?.installationRate ?? 0
+  const rate = pq
+    ? quotedPackageRate(materialRate, installationRate)
+    : quoteRateForLine(line)
   const extras = customChargesPerSet(line)
   const amountPerSet = Math.round(basis.qty * rate * 100) / 100 + extras
   const amount = Math.round(amountPerSet * line.quantity * 100) / 100
@@ -125,18 +166,18 @@ export function recalculateQuoteLine(line: QuotationLine): QuotationLine {
   return {
     ...line,
     amount,
-    packageQuote: line.packageQuote
+    packageQuote: pq
       ? {
-          ...line.packageQuote,
+          ...pq,
           unit,
           rate,
-          materialRate: line.packageQuote.materialRate ?? rate,
-          installationRate: line.packageQuote.installationRate ?? 0,
+          materialRate,
+          installationRate,
           basisQty: basis.qty,
           basisLabel: basis.label,
           amountPerSet,
         }
-      : line.packageQuote,
+      : pq,
     costing: line.costing
       ? {
           ...line.costing,

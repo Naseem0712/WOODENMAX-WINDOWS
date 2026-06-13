@@ -113,8 +113,8 @@ export function DesignQuoteRatePanel({ draft, breakdown, onChange }: Props) {
 
         <label className="field package-rate-install package-rate-active">
           <span>
-            Installation ₹ / {unit.toUpperCase()}{' '}
-            <span className="field-basis">(labour on quote basis)</span>
+            Quote rate ₹ / {unit.toUpperCase()}{' '}
+            <span className="field-basis">(final rate for customer — all-in)</span>
           </span>
           <div className="input-row">
             <span className="input-prefix">₹</span>
@@ -135,17 +135,24 @@ export function DesignQuoteRatePanel({ draft, breakdown, onChange }: Props) {
 
       <div className="package-quote-preview">
         <p className="package-rate-breakdown">
-          {formatCurrency(pq.materialRate)}/{unit.toUpperCase()} material
           {pq.installationRate > 0 ? (
             <>
-              {' '}
-              + {formatCurrency(pq.installationRate)}/{unit.toUpperCase()} installation
+              Quote: <strong>{formatCurrency(pq.rate)}</strong>/{unit.toUpperCase()} × {pq.basisQty}{' '}
+              {unit.toUpperCase()} = <strong>{formatCurrency(pq.amountPerSet)}</strong> / set
+              {pq.materialRate > 0 ? (
+                <span className="ref">
+                  {' '}
+                  · BOM material {formatCurrency(pq.materialRate)}/{unit.toUpperCase()} (costing only)
+                </span>
+              ) : null}
             </>
           ) : (
-            ' + installation (enter above)'
-          )}{' '}
-          = <strong>{formatCurrency(pq.rate)}</strong>/{unit.toUpperCase()} × {pq.basisQty}{' '}
-          {unit.toUpperCase()} = <strong>{formatCurrency(pq.amountPerSet)}</strong> / set
+            <>
+              {formatCurrency(pq.materialRate)}/{unit.toUpperCase()} material + quote rate (enter above) ={' '}
+              <strong>{formatCurrency(pq.rate)}</strong>/{unit.toUpperCase()} × {pq.basisQty}{' '}
+              {unit.toUpperCase()} = <strong>{formatCurrency(pq.amountPerSet)}</strong> / set
+            </>
+          )}
         </p>
         <p className="package-quote-total">
           × {draft.quantity} set(s) = <strong>{formatCurrency(total)}</strong>

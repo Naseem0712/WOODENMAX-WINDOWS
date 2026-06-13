@@ -110,9 +110,17 @@ export function CostingSummaryStrip({ draft, breakdown }: Props) {
       <div className="costing-summary-row costing-quote-row">
         <span className="costing-summary-label">Quotation ({unit.toUpperCase()})</span>
         <strong>
-          {formatCurrency(pq.materialRate)} + {formatCurrency(pq.installationRate)} install ={' '}
-          {formatCurrency(pq.rate)}/{unit.toUpperCase()} →{' '}
-          <span className="costing-total-amount">{formatCurrency(quoteTotal)}</span>
+          {pq.installationRate > 0 ? (
+            <>
+              {formatCurrency(pq.rate)}/{unit.toUpperCase()} quote rate × {pq.basisQty} ={' '}
+              <span className="costing-total-amount">{formatCurrency(quoteTotal)}</span>
+            </>
+          ) : (
+            <>
+              {formatCurrency(pq.materialRate)}/{unit.toUpperCase()} material →{' '}
+              <span className="costing-total-amount">{formatCurrency(quoteTotal)}</span>
+            </>
+          )}
         </strong>
       </div>
     </div>

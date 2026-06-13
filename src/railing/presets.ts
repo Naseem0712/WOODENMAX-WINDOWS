@@ -1,4 +1,4 @@
-import { DEFAULT_PACKAGE_RATES } from './packagePricing'
+import { DEFAULT_PACKAGE_RATES, normalizePackageRates } from './packagePricing'
 import {
   defaultBottomRailSpec,
   defaultHandrailSpec,
@@ -94,8 +94,11 @@ export function applyPresetToDraft(
     finish,
     uniformHeight: preset.uniformHeight,
     heightMode: preset.heightMode,
-    packageRates: { ...preset.packageRates },
-    packageQuoteUnit: preset.packageQuoteUnit,
+    packageRates: normalizePackageRates({
+      ...preset.packageRates,
+      ...draft.packageRates,
+    }),
+    packageQuoteUnit: draft.packageQuoteUnit ?? preset.packageQuoteUnit,
     customCharges: applyExtras
       ? [...(preset.customCharges ?? [])]
       : [...(draft.customCharges ?? [])],

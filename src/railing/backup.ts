@@ -1,3 +1,4 @@
+import { syncDraftPackageRatesFromQuote } from './packagePricing'
 import { normalizeDraft } from './draftMigrate'
 import { DEFAULT_RATES } from './rateStorage'
 import type { CostingRates, DesignDraft, QuotationLine, QuotationMeta } from './types'
@@ -6,7 +7,7 @@ import { ratesForMode, resolveDraftMode } from './presets'
 import { DEFAULT_DESIGN, type DesignDefaults } from './projectStorage'
 import { DEFAULT_FINISH } from './constants'
 import { normalizeQuotationMeta } from './metaDefaults'
-import { recalculateQuoteLine } from './quotationFormat'
+import { recalculateQuoteLine, hydrateQuotationLine } from './quotationFormat'
 import { draftToLine } from './utils'
 import type { QuotationItem, QuotationSettings } from '../types'
 
@@ -206,7 +207,10 @@ export function migrateQuotationLine(
     }
   }
 
-  const snapshot = migrateDraft(line.draftSnapshot)
+  const snapshot = syncDraftPackageRatesFromQuote(
+    migrateDraft(line.draftSnapshot),
+    line.packageQuote,
+  )
   const fresh = draftToLine(snapshot, rates, {
     id: line.id,
     createdAt: line.createdAt,
@@ -219,26 +223,23 @@ export function migrateQuotationLine(
     quantity: line.quantity > 0 ? line.quantity : fresh.quantity,
     notes: line.notes ?? fresh.notes,
     customCharges: line.customCharges?.length ? line.customCharges : fresh.customCharges,
-    packageQuote: line.packageQuote ?? fresh.packageQuote,
+    packageQuote: fresh.packageQuote ?? line.packageQuote,
     internalCosting: line.internalCosting ?? fresh.internalCosting,
     calculation: line.calculation ?? fresh.calculation,
-    draftSnapshot: {
-      ...fresh.draftSnapshot,
-      printImageUrl: snapshot.printImageUrl ?? fresh.draftSnapshot.printImageUrl,
-    },
-    costing: line.packageQuote
+    draftSnapshot: snapshot,
+    costing: fresh.packageQuote
       ? {
           ...fresh.costing,
-          subtotal: line.packageQuote.amountPerSet,
+          subtotal: fresh.packageQuote.amountPerSet,
           items: fresh.costing.items,
-          displayUnit: line.packageQuote.unit,
+          displayUnit: fresh.packageQuote.unit,
         }
       : line.costing?.items
         ? { ...line.costing, design: line.costing.design ?? fresh.calculation }
         : fresh.costing,
   }
 
-  return recalculateQuoteLine(merged)
+  return hydrateQuotationLine(merged)
 }
 
 /** Migrate old c-type to o-type; full quotation line repair on import */

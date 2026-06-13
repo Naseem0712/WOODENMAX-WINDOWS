@@ -1,4 +1,4 @@
-import { DEFAULT_PACKAGE_RATES, packageMaterialKey } from '../packagePricing'
+import { DEFAULT_PACKAGE_RATES, packageInstallationKey, packageMaterialKey } from '../packagePricing'
 import type { ModePreset } from '../modePreset'
 import type { HardwareMode, RateDisplayUnit } from '../types'
 import { CustomChargesEditor } from './CustomChargesEditor'
@@ -8,16 +8,27 @@ interface Props {
   mode: HardwareMode
   preset: ModePreset
   onChange: (preset: ModePreset) => void
+  glassPerSft: number
+  onGlassPerSftChange: (value: number) => void
+  glassAreaHint?: number
 }
 
 const QUOTE_UNITS: RateDisplayUnit[] = ['rft', 'sft', 'rmt']
 
-export function QuotationSetupSection({ mode, preset, onChange }: Props) {
+export function QuotationSetupSection({
+  mode,
+  preset,
+  onChange,
+  glassPerSft,
+  onGlassPerSftChange,
+  glassAreaHint,
+}: Props) {
   const pkg = preset.packageRates ?? DEFAULT_PACKAGE_RATES
   const patch = (p: Partial<ModePreset>) => onChange({ ...preset, ...p })
   const patchPkg = (p: Partial<typeof pkg>) => patch({ packageRates: { ...pkg, ...p } })
   const unit = preset.packageQuoteUnit ?? 'rft'
   const matKey = packageMaterialKey(unit)
+  const instKey = packageInstallationKey(unit)
 
   const modeLabel = mode === 'staircase' ? 'Staircase' : 'Normal'
 
@@ -29,15 +40,22 @@ export function QuotationSetupSection({ mode, preset, onChange }: Props) {
         quotation unit is RFT — change per design on the home screen.
       </p>
 
-      <HardwareConfigFields mode={mode} preset={preset} onChange={onChange} />
+      <HardwareConfigFields
+        mode={mode}
+        preset={preset}
+        onChange={onChange}
+        glassPerSft={glassPerSft}
+        onGlassPerSftChange={onGlassPerSftChange}
+        glassAreaHint={glassAreaHint}
+      />
 
-      <h4 className="setup-subtitle">Default quote material ({modeLabel})</h4>
+      <h4 className="setup-subtitle">Default quote rates ({modeLabel})</h4>
       <p className="hint">
-        Default material rate for new designs (installation is entered per design in Quotation
-        rates panel).
+        Per-design defaults when you apply this preset. Material = internal costing reference only.
+        Quote rate = final customer rate (not added to material).
       </p>
       <div className="toggle-row">
-        <span className="toggle-label">Default quote unit:</span>
+        <span className="toggle-label">Quote unit:</span>
         {QUOTE_UNITS.map((u) => (
           <button
             key={u}
@@ -49,15 +67,38 @@ export function QuotationSetupSection({ mode, preset, onChange }: Props) {
           </button>
         ))}
       </div>
-      <label className="field">
-        <span>Default material ₹ / {unit.toUpperCase()}</span>
-        <input
-          type="number"
-          min={0}
-          value={pkg[matKey] || ''}
-          onChange={(e) => patchPkg({ [matKey]: Number(e.target.value) })}
-        />
-      </label>
+      <div className="field-grid quote-rate-inputs">
+        <label className="field">
+          <span>
+            Default material ₹ / {unit.toUpperCase()}{' '}
+            <span className="field-basis">(BOM / costing reference)</span>
+          </span>
+          <div className="input-row">
+            <span className="input-prefix">₹</span>
+            <input
+              type="number"
+              min={0}
+              value={pkg[matKey] || ''}
+              onChange={(e) => patchPkg({ [matKey]: Number(e.target.value) })}
+            />
+          </div>
+        </label>
+        <label className="field package-rate-install">
+          <span>
+            Default quote rate ₹ / {unit.toUpperCase()}{' '}
+            <span className="field-basis">(final rate — all-in for customer)</span>
+          </span>
+          <div className="input-row">
+            <span className="input-prefix">₹</span>
+            <input
+              type="number"
+              min={0}
+              value={pkg[instKey] || ''}
+              onChange={(e) => patchPkg({ [instKey]: Number(e.target.value) })}
+            />
+          </div>
+        </label>
+      </div>
 
       <h4 className="setup-subtitle">Default extras ({modeLabel}) — optional</h4>
       <p className="hint">

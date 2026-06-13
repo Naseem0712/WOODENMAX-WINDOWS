@@ -35,7 +35,8 @@ import type { CostingRates, DesignDraft, HardwareMode, QuotationLine, QuotationM
 import { useUserMode } from '../components/UserModeProvider'
 import { DEFAULT_RATES } from './rateStorage'
 import { packageLineTotal, resolvePackageQuote } from './packagePricing'
-import { quoteLineAmount, quoteTotals, recalculateQuoteLine } from './quotationFormat'
+import { quoteLineAmount, quoteTotals, recalculateQuoteLine, hydrateQuotationLine } from './quotationFormat'
+import { syncDraftPackageRatesFromQuote } from './packagePricing'
 import { defaultMetaFields, normalizeQuotationMeta } from './metaDefaults'
 import {
   applyDefaultsToDraft,
@@ -171,9 +172,9 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
   } = useDraftHistory(initialDraft)
   const [lines, setLines] = useState<QuotationLine[]>(() => {
     if (embedUnified?.unifiedLines?.length) {
-      return embedUnified.unifiedLines.map(recalculateQuoteLine)
+      return embedUnified.unifiedLines.map(hydrateQuotationLine)
     }
-    return (initialSession?.lines ?? []).map(recalculateQuoteLine)
+    return (initialSession?.lines ?? []).map(hydrateQuotationLine)
   })
   const [meta, setMeta] = useState<QuotationMeta>(() =>
     normalizeQuotationMeta(initialSession?.meta ?? defaultMeta()),
@@ -210,7 +211,14 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
       if (!parsed?.line?.draftSnapshot || !parsed.line.id) return
       restoredUnifiedDraftRef.current = true
       sessionStorage.removeItem('wm-railing-unified-restore-v1')
-      replaceDraft(normalizeDraft(structuredClone(parsed.line.draftSnapshot)))
+      replaceDraft(
+        normalizeDraft(
+          syncDraftPackageRatesFromQuote(
+            structuredClone(parsed.line.draftSnapshot),
+            parsed.line.packageQuote,
+          ),
+        ),
+      )
       setEditingLineId(parsed.line.id)
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch {
@@ -224,7 +232,7 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
       setUnifiedBootstrapDone(true)
       return
     }
-    const sessionLines = (initialSession?.lines ?? []).map(recalculateQuoteLine)
+    const sessionLines = (initialSession?.lines ?? []).map(hydrateQuotationLine)
     if (sessionLines.length === 0) {
       setUnifiedBootstrapDone(true)
       return
@@ -244,7 +252,7 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
 
   useEffect(() => {
     if (!unifiedBootstrapDone || embedUnified?.unifiedLines === undefined) return
-    setLines(embedUnified.unifiedLines.map(recalculateQuoteLine))
+    setLines(embedUnified.unifiedLines.map(hydrateQuotationLine))
   }, [unifiedBootstrapDone, unifiedLinesSig, embedUnified?.unifiedLines])
 
   const draftMode = resolveDraftMode(draft)
@@ -387,7 +395,7 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
       ? normalizeDraft(migrated.draft)
       : createInitialDraft(nextPresets, 'normal')
 
-    const restoredLines = migrated.lines.map(recalculateQuoteLine)
+    const restoredLines = migrated.lines.map(hydrateQuotationLine)
     embedUnified?.onReplaceUnifiedRailingLines?.(restoredLines)
 
     setMeta(migrated.meta)
@@ -439,7 +447,14 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
     const line = lines.find((l) => l.id === id)
     if (!line) return
     const idx = lines.findIndex((l) => l.id === id)
-    replaceDraft(structuredClone(line.draftSnapshot))
+    replaceDraft(
+      normalizeDraft(
+        syncDraftPackageRatesFromQuote(
+          structuredClone(line.draftSnapshot),
+          line.packageQuote,
+        ),
+      ),
+    )
     setEditingLineId(id)
     setActiveDrawer(null)
     showToast(`Editing quotation #${idx + 1} — position will stay same`)

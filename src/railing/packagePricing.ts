@@ -51,6 +51,12 @@ export function installationRateForUnit(rates: PackageRates, unit: RateDisplayUn
   }
 }
 
+/** Customer quote rate: installation field is all-in when set; else material only. */
+export function quotedPackageRate(materialRate: number, installationRate: number): number {
+  if (installationRate > 0) return installationRate
+  return materialRate
+}
+
 export function packageMaterialKey(
   unit: RateDisplayUnit,
 ): keyof Pick<PackageRates, 'perSft' | 'perRft' | 'perRmt'> {
@@ -143,6 +149,30 @@ export function packageRatesWithBomMaterial(
   return { ...rates, [matKey]: bomMat }
 }
 
+/** Keep per-design quote rates on draft when restoring backup or opening edit. */
+export function syncDraftPackageRatesFromQuote(
+  draft: DesignDraft,
+  pq?: PackageQuote | null,
+): DesignDraft {
+  if (!pq) return draft
+  const unit = pq.unit ?? draft.packageQuoteUnit ?? 'rft'
+  const rates = normalizePackageRates(draft.packageRates)
+  const matKey = packageMaterialKey(unit)
+  const instKey = packageInstallationKey(unit)
+  const next: PackageRates = { ...rates }
+  if (pq.materialRate > 0) next[matKey] = pq.materialRate
+  if (pq.installationRate > 0) {
+    next[instKey] = pq.installationRate
+  } else if (pq.rate > 0 && pq.installationRate <= 0 && pq.materialRate <= 0) {
+    next[instKey] = pq.rate
+  }
+  return {
+    ...draft,
+    packageQuoteUnit: unit,
+    packageRates: next,
+  }
+}
+
 export function resolvePackageQuote(
   draft: DesignDraft,
   breakdown: CostBreakdown,
@@ -152,7 +182,7 @@ export function resolvePackageQuote(
   const rates = packageRatesWithBomMaterial(draft, breakdown)
   const materialRate = effectiveMaterialRate(draft, breakdown, unit)
   const installationRate = installationRateForUnit(rates, unit)
-  const rate = materialRate + installationRate
+  const rate = quotedPackageRate(materialRate, installationRate)
   const amountPerSet = Math.round(basis.qty * rate * 100) / 100
   return {
     unit,

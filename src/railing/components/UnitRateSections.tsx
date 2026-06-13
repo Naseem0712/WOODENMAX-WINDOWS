@@ -82,41 +82,17 @@ export function UnitRateSections({
   return (
     <div className="unit-rate-sections">
       <p className="section-desc unit-rate-intro">
-        Rates in separate units — enter any column (SFT / RFT / RMT / pcs); amount stays in sync. This design:{' '}
-        <strong>{glassAreaSft} SFT</strong> glass · <strong>{runRft} RFT</strong> perimeter run
-        ({runRmt} RMT)
+        Rail &amp; hardware supply rates (internal BOM only). Glass type &amp; ₹/SFT — preset section
+        above. Customer quote rate — preset or per-design <strong>Quotation rates</strong>.
+        {' '}
+        This sample: <strong>{runRft} RFT</strong> perimeter run ({runRmt} RMT)
         {materialRailRft > runRft && (
           <>
             {' '}
-            · <strong>{materialRailRft} RFT</strong> rail material (bottom + handrail)
+            · <strong>{materialRailRft} RFT</strong> rail stock (bottom + handrail)
           </>
         )}{' '}
         · <strong>{perimeterRmt} RMT</strong> path
-      </p>
-
-      <div className="unit-rate-block unit-sft">
-        <h4>Per SFT (square feet)</h4>
-        <RateInput
-          label="Glass"
-          unit="SFT"
-          value={rates.glassPerSft}
-          onChange={(n) => set({ glassPerSft: n })}
-          hint={
-            hardwareMode === 'staircase'
-              ? `Staircase billed: ${glassAreaSft} SFT — (panel W + H) × H per piece`
-              : `This design: ${glassAreaSft} SFT`
-          }
-        />
-        {hardwareMode === 'staircase' && (
-          <p className="ref">
-            Each glass: (run width ÷ panels + height) × height. Glass ₹/RFT = glass cost ÷
-            actual run length (mm→RFT).
-          </p>
-        )}
-      </div>
-      <p className="ref install-note">
-        Material rates here are supply-only. Add <strong>installation / labour</strong> in the
-        package rate section (Add to quote) or under Rates → Package defaults.
       </p>
 
       <div className="unit-rate-block unit-rft">

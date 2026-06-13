@@ -202,13 +202,6 @@ export function QuotationPanel({
                   Package: {formatCurrency(line.packageQuote.rate)}/
                   {line.packageQuote.unit.toUpperCase()} × {line.packageQuote.basisQty}{' '}
                   {line.packageQuote.unit.toUpperCase()}
-                  {line.packageQuote.installationRate > 0 ? (
-                    <>
-                      {' '}
-                      (material {formatCurrency(line.packageQuote.materialRate)} + installation{' '}
-                      {formatCurrency(line.packageQuote.installationRate)})
-                    </>
-                  ) : null}
                 </p>
               ) : (
                 <div className="line-set-rates">

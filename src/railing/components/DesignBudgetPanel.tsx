@@ -22,7 +22,7 @@ export function DesignBudgetPanel({ draft, breakdown }: Props) {
   const materialQuoteRate = effectiveMaterialRate(draft, breakdown, unit)
   const installAmount = Math.round(basis.qty * installRate * 100) / 100
   const materialQuoteAmount = Math.round(basis.qty * materialQuoteRate * 100) / 100
-  const combinedPerSet = materialQuoteAmount + installAmount
+  const quotePerSet = installRate > 0 ? installAmount : materialQuoteAmount
 
   const setRates =
     breakdown.setRates ??
@@ -36,16 +36,17 @@ export function DesignBudgetPanel({ draft, breakdown }: Props) {
   const bomMatPerUnit = setRateForQuoteUnit(setRates, unit)
   const glassRateEntered = glassEnteredRatePerSft(breakdown)
   const combinedRatePerUnit =
-    materialQuoteRate + installRate > 0
-      ? materialQuoteRate + installRate
-      : (bomMatPerUnit ?? 0) + installRate
+    installRate > 0
+      ? installRate
+      : materialQuoteRate > 0
+        ? materialQuoteRate
+        : (bomMatPerUnit ?? 0)
 
   return (
     <div className="budget-breakdown-panel">
       <p className="hint">
-        Item rates from <strong>Rates</strong> drawer (BOM). Glass always in SFT. Installation is
-        added below from the <strong>Quotation rates</strong> panel for an accurate{' '}
-        {unit.toUpperCase()} quote.
+        Item rates from <strong>Rates</strong> drawer (BOM). Glass always in SFT. Enter your final{' '}
+        {unit.toUpperCase()} quote rate in <strong>Quotation rates</strong> (not added to BOM).
       </p>
 
       <div className="table-scroll budget-table-wrap">
@@ -81,7 +82,8 @@ export function DesignBudgetPanel({ draft, breakdown }: Props) {
             </tr>
             <tr className="budget-install-row">
               <td colSpan={3}>
-                Installation ({basis.qty} {unit.toUpperCase()} × {formatCurrency(installRate)})
+                {installRate > 0 ? 'Quote rate' : 'Installation'} ({basis.qty} {unit.toUpperCase()} ×{' '}
+                {formatCurrency(installRate)})
               </td>
               <td>
                 <strong>{installAmount > 0 ? formatCurrency(installAmount) : '—'}</strong>
@@ -89,10 +91,13 @@ export function DesignBudgetPanel({ draft, breakdown }: Props) {
             </tr>
             <tr className="budget-combined-row">
               <td colSpan={3}>
-                <strong>Quote total per set (material + installation)</strong>
+                <strong>
+                  Quote total per set
+                  {installRate > 0 ? ' (your rate)' : ' (material)'}
+                </strong>
               </td>
               <td>
-                <strong>{formatCurrency(combinedPerSet)}</strong>
+                <strong>{formatCurrency(quotePerSet)}</strong>
               </td>
             </tr>
           </tfoot>
@@ -110,12 +115,26 @@ export function DesignBudgetPanel({ draft, breakdown }: Props) {
           )}
         </p>
         <p>
-          Quote basis <strong>{unit.toUpperCase()}</strong>: material{' '}
-          <strong>{formatCurrency(materialQuoteRate || bomMatPerUnit || 0)}</strong>
-          {' + '}
-          installation <strong>{formatCurrency(installRate)}</strong>
+          Quote basis <strong>{unit.toUpperCase()}</strong>:{' '}
+          {installRate > 0 ? (
+            <>
+              customer rate <strong>{formatCurrency(installRate)}</strong>
+              {materialQuoteRate > 0 ? (
+                <span className="costing-summary-sub">
+                  {' '}
+                  · BOM material {formatCurrency(materialQuoteRate || bomMatPerUnit || 0)} (internal)
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <>
+              material <strong>{formatCurrency(materialQuoteRate || bomMatPerUnit || 0)}</strong>
+            </>
+          )}
           {' = '}
-          <strong>{formatCurrency(combinedRatePerUnit)}/{unit.toUpperCase()}</strong>
+          <strong>
+            {formatCurrency(combinedRatePerUnit)}/{unit.toUpperCase()}
+          </strong>
         </p>
       </div>
 

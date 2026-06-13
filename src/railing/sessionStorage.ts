@@ -1,6 +1,6 @@
 import { migrateQuotationLine } from './backup'
 import { normalizeQuotationMeta } from './metaDefaults'
-import { recalculateQuoteLine } from './quotationFormat'
+import { recalculateQuoteLine, hydrateQuotationLine } from './quotationFormat'
 import { normalizeDraft } from './draftMigrate'
 import { DEFAULT_RATES } from './rateStorage'
 import { loadProjectSettings } from './projectStorage'
@@ -25,7 +25,7 @@ export function loadSession(): SessionState | null {
     return {
       version: 1,
       meta: normalizeQuotationMeta(data.meta),
-      lines: data.lines.map((l) => recalculateQuoteLine(migrateQuotationLine(l, rates))),
+      lines: data.lines.map((l) => hydrateQuotationLine(migrateQuotationLine(l, rates))),
       draft: normalizeDraft(data.draft),
     }
   } catch {

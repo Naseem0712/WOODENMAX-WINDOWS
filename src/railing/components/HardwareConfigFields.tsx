@@ -58,6 +58,10 @@ export interface HardwareConfigFieldsProps {
   preset: ModePreset
   onChange: (preset: ModePreset) => void
   compact?: boolean
+  /** When set, show glass ₹/SFT next to glass type (Rates preset panel). */
+  glassPerSft?: number
+  onGlassPerSftChange?: (value: number) => void
+  glassAreaHint?: number
 }
 
 export function HardwareConfigFields({
@@ -65,6 +69,9 @@ export function HardwareConfigFields({
   preset,
   onChange,
   compact = false,
+  glassPerSft,
+  onGlassPerSftChange,
+  glassAreaHint,
 }: HardwareConfigFieldsProps) {
   const patch = (p: Partial<ModePreset>) => onChange({ ...preset, ...p })
   const patchFinish = (p: Partial<FinishSpecs>) => {
@@ -223,6 +230,9 @@ export function HardwareConfigFields({
       )}
 
       <h4 className="setup-subtitle">Glass ({modeLabel})</h4>
+      <p className="hint glass-panel-hint">
+        Glass type and costing rate together — quotation glass is always priced in SFT.
+      </p>
       <label className="field">
         <span>Glass type</span>
         <select value={preset.glassId} onChange={(e) => patch({ glassId: e.target.value })}>
@@ -242,12 +252,38 @@ export function HardwareConfigFields({
           />
         </label>
       )}
-
+      {onGlassPerSftChange != null && (
+        <label className="field">
+          <span>
+            Glass rate ₹ / SFT{' '}
+            {glassAreaHint != null && glassAreaHint > 0 ? (
+              <span className="field-basis">(sample design: {glassAreaHint} SFT)</span>
+            ) : null}
+          </span>
+          <div className="input-row">
+            <span className="input-prefix">₹</span>
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={glassPerSft || ''}
+              onChange={(e) => onGlassPerSftChange(Number(e.target.value))}
+            />
+            <span className="unit">/SFT</span>
+          </div>
+        </label>
+      )}
       {mode === 'staircase' && (
-        <p className="hint staircase-hw-hint">
-          Staircase: 180° connectors are not used — 90° connectors, wall connectors &amp; end caps
-          apply from size.
-        </p>
+        <>
+          <p className="ref">
+            Staircase billed area: (panel width + height) × height per piece. Glass ₹/RFT in costing
+            uses glass cost ÷ actual run length.
+          </p>
+          <p className="hint staircase-hw-hint">
+            Staircase: 180° connectors are not used — 90° connectors, wall connectors &amp; end caps
+            apply from size.
+          </p>
+        </>
       )}
     </div>
   )

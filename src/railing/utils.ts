@@ -137,35 +137,37 @@ export function buildSummary(draft: DesignDraft): string {
 
 function packageCostingItems(pq: PackageQuote): CostLineItem[] {
   const u = pq.unit.toUpperCase()
-  const items: CostLineItem[] = []
-  if (pq.materialRate > 0) {
-    items.push({
-      label: `Material (per ${u})`,
-      qty: pq.basisQty,
-      unit: u,
-      rate: pq.materialRate,
-      amount: Math.round(pq.basisQty * pq.materialRate * 100) / 100,
-    })
-  }
   if (pq.installationRate > 0) {
-    items.push({
-      label: `Installation (per ${u})`,
-      qty: pq.basisQty,
-      unit: u,
-      rate: pq.installationRate,
-      amount: Math.round(pq.basisQty * pq.installationRate * 100) / 100,
-    })
+    return [
+      {
+        label: `Quote rate (per ${u})`,
+        qty: pq.basisQty,
+        unit: u,
+        rate: pq.rate,
+        amount: pq.amountPerSet,
+      },
+    ]
   }
-  if (items.length === 0) {
-    items.push({
+  if (pq.materialRate > 0) {
+    return [
+      {
+        label: `Material (per ${u})`,
+        qty: pq.basisQty,
+        unit: u,
+        rate: pq.materialRate,
+        amount: Math.round(pq.basisQty * pq.materialRate * 100) / 100,
+      },
+    ]
+  }
+  return [
+    {
       label: `Railing package (per ${u})`,
       qty: pq.basisQty,
       unit: u,
       rate: pq.rate,
       amount: pq.amountPerSet,
-    })
-  }
-  return items
+    },
+  ]
 }
 
 export function draftToLine(
