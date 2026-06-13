@@ -84,7 +84,7 @@ export function packageQuotationSubtotal(
   let total = 0;
   for (const u of item.units) {
     const area = (getWindowQuotationAreaMm2(u.config) / div) * qty;
-    total += area * u.rate + u.hardwareCost * qty;
+    total += area * (Number(u.rate) || 0) + (Number(u.hardwareCost) || 0) * qty;
   }
   return total;
 }

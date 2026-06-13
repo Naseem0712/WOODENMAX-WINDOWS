@@ -5,6 +5,7 @@ import {
   QDOC_PDF_MARGINS_MM,
 } from './quotationPrintSheet';
 import { stampSearchableTextLayer } from './pdfSearchableTextLayer';
+import { openPdfBlobPrintDialog, preloadHtml2Pdf } from '../utils/quotationPdfCapture';
 
 type JsPdfDoc = {
   internal: {
@@ -120,10 +121,15 @@ export function prepareQuotationElementForPdf(element: HTMLElement): () => void 
   };
 }
 
-async function buildRailingQuotationPdf(element: HTMLElement, filename: string): Promise<JsPdfDoc> {
+async function buildRailingQuotationPdf(
+  element: HTMLElement,
+  filename: string,
+  options?: { skipSearchableLayer?: boolean },
+): Promise<JsPdfDoc> {
+  preloadHtml2Pdf();
   const html2pdf = await loadHtml2Pdf();
   await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    requestAnimationFrame(() => resolve());
   });
 
   let pdfDoc: JsPdfDoc | null = null;
@@ -134,7 +140,9 @@ async function buildRailingQuotationPdf(element: HTMLElement, filename: string):
     .get('pdf')
     .then((pdf) => {
       pdfDoc = pdf;
-      stampSearchableTextLayer(pdf, element);
+      if (!options?.skipSearchableLayer) {
+        stampSearchableTextLayer(pdf, element);
+      }
       stampPdfPageNumbers(pdf);
     });
 
@@ -149,9 +157,10 @@ export async function exportRailingQuotationPdf(
 ): Promise<void> {
   const cleanup = prepareQuotationElementForPdf(element);
   try {
+    preloadHtml2Pdf();
     const html2pdf = await loadHtml2Pdf();
     await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      requestAnimationFrame(() => resolve());
     });
     await html2pdf()
       .set(pdfCaptureOptions(element, filename))
@@ -168,41 +177,15 @@ export async function exportRailingQuotationPdf(
   }
 }
 
-/** Open system print dialog on PDF (correct Page 1 of N — browsers show Page 0 for CSS counters). */
+/** Open system print dialog on PDF (same speed as export — skip searchable layer for print). */
 export async function printRailingQuotationPdf(element: HTMLElement): Promise<void> {
   const cleanup = prepareQuotationElementForPdf(element);
-  let objectUrl: string | null = null;
-  let iframe: HTMLIFrameElement | null = null;
-
   try {
-    const pdf = await buildRailingQuotationPdf(element, 'quotation-print.pdf');
-    const blob = pdf.output('blob');
-    objectUrl = URL.createObjectURL(blob);
-    iframe = document.createElement('iframe');
-    iframe.setAttribute('title', 'Quotation print');
-    iframe.style.cssText =
-      'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
-    iframe.src = objectUrl;
-    document.body.appendChild(iframe);
-
-    await new Promise<void>((resolve, reject) => {
-      const timer = window.setTimeout(() => reject(new Error('PDF print load timeout')), 30000);
-      iframe!.onload = () => {
-        window.clearTimeout(timer);
-        try {
-          iframe!.contentWindow?.focus();
-          iframe!.contentWindow?.print();
-          resolve();
-        } catch (err) {
-          reject(err);
-        }
-      };
+    const pdf = await buildRailingQuotationPdf(element, 'quotation-print.pdf', {
+      skipSearchableLayer: true,
     });
+    await openPdfBlobPrintDialog(pdf.output('blob'));
   } finally {
     cleanup();
-    window.setTimeout(() => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-      iframe?.remove();
-    }, 120000);
   }
 }

@@ -1,10 +1,12 @@
 import { formatQuoteMoney } from '../utils'
+import { isStaircaseDraft } from '../presets'
 import {
   buildItemSpecRows,
-  quoteBasisForLine,
+  quoteDisplayBasisForLine,
   quoteLineAmount,
   quoteRateForLine,
   quoteUnitForLine,
+  resolveQuotationLine,
 } from '../quotationFormat'
 import type { QuotationLine } from '../types'
 import { QuoteMiniDiagram } from './QuoteMiniDiagram'
@@ -32,15 +34,17 @@ export interface RailingQuotationLinePrintBlockProps {
  * Single railing line — same layout as standalone RailingQ quotation print (QuotationDocument).
  */
 export function RailingQuotationLinePrintBlock({
-  line,
+  line: rawLine,
   index,
   listRowTitle,
   hidePricesForArchitect,
 }: RailingQuotationLinePrintBlockProps) {
+  const line = resolveQuotationLine(rawLine)
   const specRows = buildItemSpecRows(line)
   const draft = line.draftSnapshot
-  const basis = quoteBasisForLine(line)
+  const basis = quoteDisplayBasisForLine(line)
   const rate = quoteRateForLine(line)
+  const modeLabel = isStaircaseDraft(draft) ? 'Staircase' : 'Normal'
   const amount = quoteLineAmount(line)
   const unit = quoteUnitForLine(line)
   const heading = (listRowTitle?.trim() || line.designName || line.designLabel).trim()
@@ -74,7 +78,7 @@ export function RailingQuotationLinePrintBlock({
               {basis.qty} {basis.unit}
               <br />
               <small className="qdoc-line-type">
-                {line.designType.replace('-', ' ')} · per {unit.toUpperCase()}
+                {modeLabel} railing · rate per {unit.toUpperCase()}
               </small>
             </div>
             <div className="qdoc-col-rate qdoc-price-v" role="cell">

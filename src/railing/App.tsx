@@ -50,6 +50,7 @@ import {
 } from './presets'
 import { displayDesignTitle, draftToLine, formatCurrency } from './utils'
 import { exportRailingQuotationPdf, printRailingQuotationPdf } from './exportQuotationPdf'
+import { preloadHtml2Pdf } from '../utils/quotationPdfCapture'
 import { isMobileOrPrintUnavailable, waitForQuotationPrintRoot } from './railingPrint'
 import './index.css'
 
@@ -188,6 +189,7 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
   useEffect(() => {
     if (showQuotePreview) {
       document.body.classList.add('quotation-preview-open')
+      preloadHtml2Pdf()
     } else {
       document.body.classList.remove('quotation-preview-open')
     }
@@ -538,6 +540,7 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
       showToast('Add at least one item to the quotation first.')
       return
     }
+    preloadHtml2Pdf()
     setActiveDrawer(null)
     let root: HTMLElement
     try {
@@ -555,7 +558,7 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
     document.body.classList.add('quotation-capture-active', 'pdf-export-active')
     try {
       await new Promise<void>((r) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => r()))
+        requestAnimationFrame(() => r())
       })
       await job(docEl)
       showToast(successToast)

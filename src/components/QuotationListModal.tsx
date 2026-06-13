@@ -21,7 +21,7 @@ import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { sanitizeFilenameSegment } from '../utils/pdfFilename';
 import { getRawDiscountAmount } from '../utils/pricingSafety';
 import { SpringScrollArea } from './ui/SpringScrollArea';
-import { quotationItemSubtotalContribution } from '../utils/quotationTotals';
+import { computeQuotationFinancials, quotationItemLineTotal } from '../utils/quotationTotals';
 import { quoteBasisForLine, quoteRateForLine, hydrateQuotationLine } from '../railing/quotationFormat';
 import { migrateBackup, parseBackupJson } from '../railing/backup';
 import { displayDesignTitle as railingDisplayTitle } from '../railing/utils';
@@ -203,7 +203,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
   }, [isPreviewOpen]);
 
   useEffect(() => {
-    const computedSubTotal = items.reduce((total, item) => total + quotationItemSubtotalContribution(item), 0);
+    const computedSubTotal = items.reduce((total, item) => total + quotationItemLineTotal(item), 0);
     const rawDiscount = getRawDiscountAmount(computedSubTotal, settings);
     const profitBefore = materialCostSummary.totals.profitCost;
     const maxDiscount = Math.max(0, profitBefore * 0.5);
@@ -225,21 +225,16 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
     }
   }, [items, settings, setSettings, materialCostSummary]);
 
-  const subTotal = items.reduce((total, item) => total + quotationItemSubtotalContribution(item), 0);
-
-  const fin = settings.financials;
-  const discountAmount = fin?.discountType === 'percentage'
-    ? subTotal * (Number(fin?.discount ?? 0) / 100)
-    : Number(fin?.discount ?? 0);
+  const { subTotal, discountAmount: safeDiscountAmount, totalAfterDiscount, gstAmount, grandTotal } =
+    computeQuotationFinancials(items, settings, materialCostSummary.totals.profitCost);
   const profitBeforeDiscount = materialCostSummary.totals.profitCost;
   const maxDiscountAmount = Math.max(0, profitBeforeDiscount * 0.5);
-  const safeDiscountAmount = Math.min(Math.max(discountAmount, 0), maxDiscountAmount);
   const profitAfterDiscount = profitBeforeDiscount - safeDiscountAmount;
-  const discountWasCapped = Math.abs((discountAmount || 0) - safeDiscountAmount) > 0.01;
-
-  const totalAfterDiscount = subTotal - safeDiscountAmount;
-  const gstAmount = totalAfterDiscount * (Number(fin?.gstPercentage ?? 0) / 100);
-  const grandTotal = totalAfterDiscount + gstAmount;
+  const fin = settings.financials;
+  const rawDiscountAmount = fin?.discountType === 'percentage'
+    ? subTotal * (Number(fin?.discount ?? 0) / 100)
+    : Number(fin?.discount ?? 0);
+  const discountWasCapped = Math.abs((rawDiscountAmount || 0) - safeDiscountAmount) > 0.01;
 
   const clampDiscountForType = useCallback(
     (rawDiscount: number | '', discountType: 'percentage' | 'fixed'): number | '' => {
@@ -799,7 +794,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                               const globalIndex = items.findIndex((i) => i.id === item.id) + 1;
 
                               if (isWindowPackageQuotationItem(item)) {
-                                const totalCost = quotationItemSubtotalContribution(item);
+                                const totalCost = quotationItemLineTotal(item);
                                 const combinedArea = packageCombinedArea(item);
                                 return (
                                   <div key={item.id} className="bg-slate-900/50 p-3 rounded-lg flex flex-col md:flex-row md:items-center gap-4">
@@ -851,7 +846,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                               if (item.kind === 'railing') {
                                 const rl = item.railingLine;
                                 const basis = quoteBasisForLine(rl);
-                                const totalCost = quotationItemSubtotalContribution(item);
+                                const totalCost = quotationItemLineTotal(item);
                                 const rate = quoteRateForLine(rl);
 
                                 return (

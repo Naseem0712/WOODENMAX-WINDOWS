@@ -1,5 +1,5 @@
 
-import React, { useMemo, useRef, useState, useEffect, useId } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useId, useCallback } from 'react';
 import type { QuotationItem, QuotationSettings, SavedColor, WindowConfig, HandleConfig, MaterialRateSettings, PartitionPanelConfig, WindowQuotationItem, WindowPackageQuotationItem, WindowPackageUnitLine } from '../types';
 import { resolveProfileColorLabel } from '../utils/profileColorLabel';
 import { Button } from './ui/Button';
@@ -32,9 +32,15 @@ import { resolveFoldFrameEdges } from '../utils/foldDoorFrame';
 import { FoldDoorOpeningGraphic } from './FoldDoorOpeningVisual';
 import { normalizeWebsiteUrl, parseInlineBoldSegments, boldSegmentInner, isDoubleBoldSegment, isSingleBoldSegment, splitQuotationLines, pastePlainTextIntoTextarea } from '../utils/quotationText';
 import { calculateMaterialCostSummary, formatItemWeightKg } from '../utils/materialCosting';
-import { getRawDiscountAmount } from '../utils/pricingSafety';
 import { DEFAULT_MATERIAL_RATES } from '../constants/materialRates';
-import { quotationItemSubtotalContribution } from '../utils/quotationTotals';
+import { computeQuotationFinancials, quotationItemLineTotal } from '../utils/quotationTotals';
+import {
+  captureQuotationPdf,
+  openPdfBlobPrintDialog,
+  preloadHtml2Pdf,
+  saveQuotationPdf,
+  stampWoodenMaxPageNumbers,
+} from '../utils/quotationPdfCapture';
 import { getWindowQuotationAreaMm2 } from '../utils/louverBays';
 import { isWindowQuotationItem } from '../utils/quotationItemKinds';
 import {
@@ -2189,132 +2195,81 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
     [items],
   );
 
-  const subTotal = items.reduce((total, item) => total + quotationItemSubtotalContribution(item), 0);
+  const { subTotal, discountAmount, totalAfterDiscount, gstAmount, grandTotal } = useMemo(
+    () => computeQuotationFinancials(items, settings, materialCostSummary.totals.profitCost),
+    [items, settings, materialCostSummary.totals.profitCost],
+  );
 
-  const rawDiscountAmount = getRawDiscountAmount(subTotal, settings);
-  const profitBeforeDiscount = materialCostSummary.totals.profitCost;
-  const maxDiscountAllowed = Math.max(0, profitBeforeDiscount * 0.5);
-  const discountAmount = Math.min(rawDiscountAmount, maxDiscountAllowed);
+  const formatLineMoney = (n: number) =>
+    n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const totalAfterDiscount = subTotal - discountAmount;
-  const gstAmount = totalAfterDiscount * (Number(settings.financials?.gstPercentage ?? 0) / 100);
-  const grandTotal = totalAfterDiscount + gstAmount;
+  useEffect(() => {
+    if (isOpen) preloadHtml2Pdf();
+  }, [isOpen]);
+
+  const pdfCaptureOpts = useCallback(
+    (element: HTMLElement) => {
+      const captureW = element.scrollWidth || element.offsetWidth || 800;
+      const captureH = element.scrollHeight || element.offsetHeight || 1100;
+      return {
+        filename: quotationPdfFilename(customer.name, pdfDateStamp),
+        captureW,
+        captureH,
+        canvasScale: isLikelyMobile ? 1.5 : 2,
+        stampPageNumbers: stampWoodenMaxPageNumbers,
+      };
+    },
+    [customer.name, pdfDateStamp, isLikelyMobile],
+  );
 
   const handleExportPdf = async () => {
     const element = printContainerRef.current?.querySelector<HTMLElement>('.a4-page');
     if (!element || isExporting || isPrinting) return;
 
-    const captureW = element.scrollWidth || element.offsetWidth || 800;
-    const captureH = element.scrollHeight || element.offsetHeight || 1100;
-    const canvasScale = isLikelyMobile ? 1.5 : 2;
-
     setIsExporting(true);
     element.classList.add('pdf-export-mode');
-
-    const opt = {
-      margin: [8, 8, 8, 8] as [number, number, number, number],
-      filename: quotationPdfFilename(customer.name, pdfDateStamp),
-      image: { type: 'jpeg' as const, quality: 0.95 },
-      html2canvas: {
-        scale: canvasScale,
-        logging: false,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: captureW,
-        windowHeight: captureH,
-      },
-      jsPDF: {
-        unit: 'mm',
-        format: 'a4',
-        orientation: 'portrait' as const,
-        compress: true,
-      },
-      pagebreak: { mode: ['css', 'legacy'] as ('css' | 'legacy')[] },
-    };
-
-    import('html2pdf.js')
-      .then((mod: { default?: unknown }) => {
-        const html2pdf = (typeof mod.default === 'function' ? mod.default : mod) as (...args: unknown[]) => any;
-        if (typeof html2pdf !== 'function') throw new Error('html2pdf module did not load correctly');
-
-        return html2pdf()
-          .from(element)
-          .set(opt)
-          .toPdf()
-          .get('pdf')
-          .then((pdf: any) => {
-            try {
-              const totalPages = pdf.internal.getNumberOfPages();
-              const pageW = pdf.internal.pageSize.getWidth();
-              const pageH = pdf.internal.pageSize.getHeight();
-              pdf.setFont('helvetica', 'normal');
-              pdf.setFontSize(8);
-              pdf.setTextColor(110);
-              for (let i = 1; i <= totalPages; i++) {
-                pdf.setPage(i);
-                pdf.setFillColor(255, 255, 255);
-                pdf.rect(pageW - 42, pageH - 12, 38, 8, 'F');
-                pdf.setTextColor(110);
-                pdf.text(`Page ${i} of ${totalPages}`, pageW - 8, pageH - 6, { align: 'right' });
-              }
-            } catch (stampErr) {
-              console.warn('Page-number stamp skipped:', stampErr);
-            }
-          })
-          .save()
-          .then(() => {
-            setIsExporting(false);
-            element.classList.remove('pdf-export-mode');
-          })
-          .catch((err: unknown) => {
-            console.error('PDF export failed', err);
-            setIsExporting(false);
-            element.classList.remove('pdf-export-mode');
-            alert('Sorry, there was an error exporting the PDF.');
-          });
-      })
-      .catch((err: unknown) => {
-        console.error('Failed to load PDF exporter', err);
-        setIsExporting(false);
-        element.classList.remove('pdf-export-mode');
-        alert('Sorry, PDF tool could not be loaded. Please try again.');
-      });
+    try {
+      await saveQuotationPdf(element, pdfCaptureOpts(element));
+    } catch (err) {
+      console.error('PDF export failed', err);
+      alert('Sorry, there was an error exporting the PDF.');
+    } finally {
+      setIsExporting(false);
+      element.classList.remove('pdf-export-mode');
+    }
   };
 
   const handlePrint = async () => {
     if (isExporting || isPrinting) return;
+    const element = printContainerRef.current?.querySelector<HTMLElement>('.a4-page');
+    if (!element) return;
+
     if (typeof window.print !== 'function') {
       await handleExportPdf();
       return;
     }
-    const prevTitle = document.title;
-    document.title = printDocumentTitleForQuotation(customer.name);
+
     setIsPrinting(true);
-    printContainerRef.current?.scrollTo(0, 0);
-    window.scrollTo(0, 0);
-    let finished = false;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      setIsPrinting(false);
-      document.title = prevTitle;
-      window.removeEventListener('afterprint', finish);
-      window.clearTimeout(fallbackTimer);
-    };
-    const fallbackTimer = window.setTimeout(finish, 12000);
-    window.addEventListener('afterprint', finish);
-    window.requestAnimationFrame(() => {
+    element.classList.add('pdf-export-mode');
+    try {
+      const pdf = await captureQuotationPdf(element, pdfCaptureOpts(element));
+      await openPdfBlobPrintDialog(pdf.output('blob'));
+    } catch (err) {
+      console.error('Print via PDF failed', err);
       try {
+        const prevTitle = document.title;
+        document.title = printDocumentTitleForQuotation(customer.name);
+        printContainerRef.current?.scrollTo(0, 0);
+        window.scrollTo(0, 0);
         window.print();
-      } catch (err) {
-        console.error('Print dialog failed', err);
-        finish();
-        void handleExportPdf();
+        document.title = prevTitle;
+      } catch {
+        await handleExportPdf();
       }
-    });
+    } finally {
+      setIsPrinting(false);
+      element.classList.remove('pdf-export-mode');
+    }
   };
 
   if (!isOpen) return null;
@@ -2516,7 +2471,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
                                     }
 
                                     if (isWindowPackageQuotationItem(item)) {
-                                      const totalCost = quotationItemSubtotalContribution(item);
+                                      const totalCost = quotationItemLineTotal(item);
                                       const combinedArea = packageCombinedArea(item);
                                       const packageWeightKg = expandPackageToWindowItems(item).reduce(
                                         (s, u) => s + (materialCostSummary.byItemId[u.id]?.totalWeightKg ?? 0),
@@ -2644,7 +2599,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
                                                   <div className="print-package-total hide-for-arch">
                                                     <span>Package total</span>
                                                     <span>{combinedArea.toFixed(2)} {item.areaType}</span>
-                                                    <span className="font-bold">₹{Math.round(totalCost).toLocaleString('en-IN')}</span>
+                                                    <span className="font-bold">₹{formatLineMoney(totalCost)}</span>
                                                   </div>
                                                 </div>
                                               </div>
@@ -2654,7 +2609,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
                                             <div className="print-qty-amount">
                                               <span className="print-qty">Qty: {item.quantity}</span>
                                               <span className="print-line-total hide-for-arch">
-                                                ₹{Math.round(totalCost).toLocaleString('en-IN')}
+                                                ₹{formatLineMoney(totalCost)}
                                               </span>
                                             </div>
                                           </td>
@@ -2667,11 +2622,8 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
                                       getWindowQuotationAreaMm2(item.config) /
                                       (conversionFactor * conversionFactor);
                                     const totalArea = singleArea * item.quantity;
-                                    const baseCost = totalArea * item.rate;
-                                    const totalHardwareCost = item.hardwareCost * item.quantity;
-                                    const totalCost = baseCost + totalHardwareCost;
-                                    
-                                    const unitAmount = (singleArea * item.rate) + item.hardwareCost;
+                                    const totalCost = quotationItemLineTotal(item);
+                                    const unitAmount = (singleArea * (Number(item.rate) || 0)) + (Number(item.hardwareCost) || 0);
 
                                     const { panelCounts, relevantHardware } = getItemDetails(item);
                                     const glassDescription = getGlassDescription(item.config);
@@ -2761,7 +2713,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
                                               <div className="print-qty-amount">
                                                 <span className="print-qty">Qty: {item.quantity}</span>
                                                 <span className="print-line-total hide-for-arch">
-                                                  ₹{Math.round(totalCost).toLocaleString('en-IN')}
+                                                  ₹{formatLineMoney(totalCost)}
                                                 </span>
                                               </div>
                                             </td>

@@ -6,8 +6,9 @@ import {
   quotedPackageRate,
   syncDraftPackageRatesFromQuote,
 } from './packagePricing'
+import { isStaircaseDraft } from './presets'
 import { formatCurrency, glassDisplayForQuote } from './utils'
-import type { QuotationLine, RateDisplayUnit } from './types'
+import type { ProductSpec, QuotationLine, RateDisplayUnit } from './types'
 
 export function quoteUnitForLine(line: QuotationLine): RateDisplayUnit {
   return line.packageQuote?.unit ?? 'rft'
@@ -106,46 +107,48 @@ function customChargesPerSet(line: QuotationLine): number {
 
 /** Amount = basis qty × rate × sets + custom charges (always matches summary columns). */
 export function quoteLineAmount(line: QuotationLine): number {
-  const basis = quoteBasisForLine(line)
-  const rate = quoteRateForLine(line)
-  const extras = customChargesPerSet(line)
-  if (basis.qty <= 0 || rate <= 0) {
-    const base = line.amount
-    return extras > 0
-      ? Math.round((base + extras * line.quantity) * 100) / 100
-      : base
-  }
-  const perSet = Math.round(basis.qty * rate * 100) / 100 + extras
-  return Math.round(perSet * line.quantity * 100) / 100
+  return Math.round(resolveQuotationLine(line).amount * 100) / 100
+}
+
+/** Normalize stored line (sync quote rates from draft snapshot) before display or totals. */
+export function resolveQuotationLine(line: QuotationLine): QuotationLine {
+  if (!line.draftSnapshot) return recalculateQuoteLine(line)
+  return hydrateQuotationLine(line)
 }
 
 /** Restore per-line quote rates on draft + recalculate amounts (backup / edit / session). */
 export function hydrateQuotationLine(line: QuotationLine): QuotationLine {
   if (!line.draftSnapshot) return recalculateQuoteLine(line)
   const snapshot = syncDraftPackageRatesFromQuote(line.draftSnapshot, line.packageQuote)
-  const pq = line.packageQuote
-  const syncedQuote = pq
-    ? {
-        ...pq,
-        unit: snapshot.packageQuoteUnit ?? pq.unit,
-        materialRate:
-          snapshot.packageRates[packageMaterialKey(snapshot.packageQuoteUnit ?? pq.unit)] ||
-          pq.materialRate,
-        installationRate:
-          snapshot.packageRates[
-            packageInstallationKey(snapshot.packageQuoteUnit ?? pq.unit)
-          ] || pq.installationRate,
-      }
-    : pq
-  const rate = syncedQuote
-    ? quotedPackageRate(syncedQuote.materialRate, syncedQuote.installationRate)
-    : 0
+  const unit = snapshot.packageQuoteUnit ?? line.packageQuote?.unit ?? 'rft'
+  const matKey = packageMaterialKey(unit)
+  const instKey = packageInstallationKey(unit)
+  const materialRate =
+    snapshot.packageRates[matKey] || line.packageQuote?.materialRate || 0
+  const installationRate =
+    snapshot.packageRates[instKey] || line.packageQuote?.installationRate || 0
+  const rate = quotedPackageRate(materialRate, installationRate)
+  const basis = quoteBasisForLine({
+    ...line,
+    draftSnapshot: snapshot,
+    packageQuote: line.packageQuote,
+  })
+  const syncedQuote =
+    rate > 0 || materialRate > 0 || installationRate > 0 || line.packageQuote
+      ? {
+          unit,
+          rate: rate > 0 ? rate : line.packageQuote?.rate ?? 0,
+          materialRate,
+          installationRate,
+          basisQty: line.packageQuote?.basisQty ?? basis.qty,
+          basisLabel: line.packageQuote?.basisLabel ?? basis.label,
+          amountPerSet: line.packageQuote?.amountPerSet ?? 0,
+        }
+      : line.packageQuote
   return recalculateQuoteLine({
     ...line,
     draftSnapshot: snapshot,
-    packageQuote: syncedQuote
-      ? { ...syncedQuote, rate: rate > 0 ? rate : syncedQuote.rate }
-      : syncedQuote,
+    packageQuote: syncedQuote,
   })
 }
 
@@ -188,10 +191,33 @@ export function recalculateQuoteLine(line: QuotationLine): QuotationLine {
 }
 
 export function quoteTotals(lines: QuotationLine[]) {
-  const subtotal = lines.reduce((s, l) => s + quoteLineAmount(l), 0)
+  const subtotal = Math.round(lines.reduce((s, l) => s + quoteLineAmount(l), 0) * 100) / 100
   const gst = Math.round(subtotal * 0.18 * 100) / 100
   const grand = Math.round((subtotal + gst) * 100) / 100
   return { subtotal, gst, grand }
+}
+
+function formatProductSpec(spec?: ProductSpec | null): string | null {
+  if (!spec?.name?.trim()) return null
+  const parts = [spec.name.trim()]
+  if (spec.size?.trim()) parts.push(spec.size.trim())
+  if (spec.color?.trim()) parts.push(spec.color.trim())
+  return parts.join(' · ')
+}
+
+/** Print/PDF quantity row — pillars or studs in pcs when used as bottom fixing. */
+export function quoteDisplayBasisForLine(
+  line: QuotationLine,
+): { label: string; qty: number; unit: string } {
+  const draft = line.draftSnapshot
+  const hw = line.calculation.hardware
+  if (draft.bottomFixing === 'pillars' && hw.totalPillars > 0) {
+    return { label: 'Floor pillars', qty: hw.totalPillars, unit: 'PCS' }
+  }
+  if (draft.bottomFixing === 'studs' && hw.totalStuds > 0) {
+    return { label: 'Glass studs', qty: hw.totalStuds, unit: 'PCS' }
+  }
+  return quoteBasisForLine(line)
 }
 
 /** Consolidated item spec — no duplicate hardware / profile lines. */
@@ -199,11 +225,31 @@ export function buildItemSpecRows(line: QuotationLine): { label: string; value: 
   const hw = line.calculation.hardware
   const f = line.finish
   const draft = line.draftSnapshot
+  const staircase = isStaircaseDraft(draft)
   const profiles = hardwareProfilesSummary(draft)
   const rows: { label: string; value: string }[] = []
 
+  rows.push({
+    label: 'Railing type',
+    value: staircase ? 'Staircase railing' : 'Normal railing',
+  })
+
   if (draft.bottomFixing === 'pillars') {
-    rows.push({ label: 'Bottom fixing', value: `Pillars — ${hw.totalPillars} pcs` })
+    const pillarSpec = formatProductSpec(f.pillarSpec)
+    rows.push({
+      label: 'Bottom fixing',
+      value: pillarSpec
+        ? `Pillars — ${hw.totalPillars} pcs · ${pillarSpec}`
+        : `Pillars — ${hw.totalPillars} pcs`,
+    })
+  } else if (draft.bottomFixing === 'studs') {
+    const studSpec = formatProductSpec(f.studSpec)
+    rows.push({
+      label: 'Bottom fixing',
+      value: studSpec
+        ? `Studs — ${hw.totalStuds} pcs · ${studSpec}`
+        : `Studs — ${hw.totalStuds} pcs`,
+    })
   } else {
     rows.push({ label: 'Bottom fixing', value: 'Continuous bottom profile' })
     if (hw.bottomRailRft > 0 && profiles.bottomRail) {
@@ -223,11 +269,17 @@ export function buildItemSpecRows(line: QuotationLine): { label: string; value: 
   }
 
   rows.push({ label: 'Glass', value: glassDisplayForQuote(line) })
+  if (staircase && line.calculation.totalGlassAreaSftActual != null) {
+    rows.push({
+      label: 'Glass area (actual W×H)',
+      value: `${line.calculation.totalGlassAreaSftActual} SFT`,
+    })
+  }
 
   rows.push(...hardwareSpecRows(line))
 
-  const basis = quoteBasisForLine(line)
-  rows.push({ label: basis.label, value: `${basis.qty} ${basis.unit}` })
+  const displayBasis = quoteDisplayBasisForLine(line)
+  rows.push({ label: displayBasis.label, value: `${displayBasis.qty} ${displayBasis.unit}` })
 
   for (const c of line.customCharges ?? []) {
     if (c.label?.trim() && c.amount > 0) {
@@ -241,7 +293,28 @@ export function buildItemSpecRows(line: QuotationLine): { label: string; value: 
 export function hardwareSpecRows(line: QuotationLine): { label: string; value: string }[] {
   const hw = line.calculation.hardware
   const f = line.finish
+  const draft = line.draftSnapshot
+  const staircase = isStaircaseDraft(draft)
   const rows: { label: string; value: string }[] = []
+
+  if (staircase) {
+    if (hw.wallConnectors > 0) {
+      rows.push({ label: 'Wall connector', value: `${hw.wallConnectors} pcs` })
+    }
+    if (hw.endCaps > 0) {
+      rows.push({ label: 'Handrail end cap', value: `${hw.endCaps} pcs` })
+    }
+    if (hw.connector90 > 0) {
+      rows.push({ label: '90° corner connector', value: `${hw.connector90} pcs` })
+    }
+    if (hw.totalAnchors > 0) {
+      rows.push({
+        label: 'Anchors',
+        value: `${hw.totalAnchors} pcs · ${f.anchorSize || '12×100 mm'}`,
+      })
+    }
+    return rows
+  }
 
   if (hw.connector90 > 0) {
     rows.push({ label: '90° L-corner connector', value: `${hw.connector90} pcs` })
@@ -252,7 +325,10 @@ export function hardwareSpecRows(line: QuotationLine): { label: string; value: s
   if (hw.wallConnectors > 0) {
     rows.push({ label: 'Wall connector', value: `${hw.wallConnectors} pcs` })
   }
-  if (hw.totalPillars > 0) {
+  if (hw.endCaps > 0) {
+    rows.push({ label: 'Handrail end cap', value: `${hw.endCaps} pcs` })
+  }
+  if (hw.totalPillars > 0 && draft.bottomFixing !== 'pillars') {
     rows.push({ label: 'Floor pillars', value: `${hw.totalPillars} pcs` })
   }
   if (hw.totalAnchors > 0) {

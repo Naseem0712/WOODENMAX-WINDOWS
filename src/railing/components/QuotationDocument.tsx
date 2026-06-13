@@ -1,7 +1,7 @@
 import { COMPANY } from '../constants'
 import { bankDetailsForQuote, parseTermsLines } from '../metaDefaults'
 import { formatQuoteMoney } from '../utils'
-import { formatQuoteDate, quoteTotals, recalculateQuoteLine } from '../quotationFormat'
+import { formatQuoteDate, quoteTotals, resolveQuotationLine } from '../quotationFormat'
 import type { QuotationLine, QuotationMeta } from '../types'
 import { CompanyLogo } from './CompanyLogo'
 import { RailingQuotationLinePrintBlock } from './RailingQuotationLinePrintBlock'
@@ -36,7 +36,7 @@ function InfoRow({
 }
 
 export function QuotationDocument({ meta, lines }: Props) {
-  const displayLines = lines.map(recalculateQuoteLine)
+  const displayLines = lines.map(resolveQuotationLine)
   const { subtotal, gst, grand } = quoteTotals(displayLines)
   const terms = parseTermsLines(meta.termsText ?? '')
   const bank = bankDetailsForQuote(meta)
