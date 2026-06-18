@@ -1,10 +1,12 @@
-import type { WindowConfig, QuotationItem, ProfileDimensions, BOM, BOMSeries, BOMProfile, GlassType, BOMGlassCutRow, BOMMeshCutRow, HardwareItem } from '../types';
+import type { WindowConfig, QuotationItem, ProfileDimensions, BOM, BOMSeries, BOMProfile, GlassType, BOMGlassCutRow, BOMMeshCutRow, HardwareItem, ProfileSeries, WindowQuotationItem } from '../types';
 import { WindowType, FixedPanelPosition } from '../types';
 import { computeSlidingCutLayout, isSlidingSeriesUnifiedOuter } from './slidingCutFormula';
 import { hasResolvedSeriesValue, resolveSeriesNumeric } from './profileDimensionKeys';
 import { getQuotationHardwareUnitMultiplier } from './quotationHardwareCost';
 import { getFixedPanelVerticalDivisionsMm } from './fixedPanelDivisions';
 import { getEffectiveLouverBays, getLouverBaySeparatorMm } from './louverBays';
+import { isWindowQuotationItem } from './quotationItemKinds';
+import { expandPackageToWindowItems, isWindowPackageQuotationItem } from './windowPackageQuotation';
 import {
   archHeadGlassAreaMm2,
   archInnerRingArcLengthMm,
@@ -633,6 +635,18 @@ export function calculateUsageForConfig(
 }
 
 
+function expandItemsForBom(items: QuotationItem[]): WindowQuotationItem[] {
+    const flat: WindowQuotationItem[] = [];
+    for (const item of items) {
+        if (isWindowPackageQuotationItem(item)) {
+            flat.push(...expandPackageToWindowItems(item));
+        } else if (isWindowQuotationItem(item)) {
+            flat.push(item);
+        }
+    }
+    return flat;
+}
+
 /**
  * Generates a complete Bill of Materials from a list of quotation items.
  */
@@ -641,14 +655,14 @@ export function generateBillOfMaterials(items: QuotationItem[], options?: Calcul
         name: string; 
         profiles: Map<keyof ProfileDimensions, number[]>; 
         hardware: Map<string, number>; 
-        series: QuotationItem['config']['series'];
+        series: ProfileSeries;
         glass: Map<string, number>; // area in mm^2
         meshArea: number; // area in mm^2
         glassCutTotals: Map<string, GlassCutAcc>;
         meshCutTotals: Map<string, MeshCutAcc>;
     }>();
 
-    for (const item of items) {
+    for (const item of expandItemsForBom(items)) {
         try {
             const { config, quantity } = item;
             const qty = Math.max(0, Number(quantity) || 0);
