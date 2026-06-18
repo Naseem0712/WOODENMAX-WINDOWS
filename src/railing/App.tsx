@@ -126,6 +126,7 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
   const { state: userModeState, getFlag, setFlag } = useUserMode()
   const initialSettings = useMemo(() => loadProjectSettings(), [])
   const initialSession = useMemo(() => loadSession(), [])
+  const hasUnifiedLineSource = embedUnified?.unifiedLines !== undefined
 
   const [presets, setPresets] = useState<QuotationPresets>(initialSettings.presets)
   const [ratesNormal, setRatesNormal] = useState<CostingRates>(initialSettings.ratesNormal)
@@ -172,8 +173,8 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
     canRedo,
   } = useDraftHistory(initialDraft)
   const [lines, setLines] = useState<QuotationLine[]>(() => {
-    if (embedUnified?.unifiedLines?.length) {
-      return embedUnified.unifiedLines.map(hydrateQuotationLine)
+    if (hasUnifiedLineSource) {
+      return (embedUnified?.unifiedLines ?? []).map(hydrateQuotationLine)
     }
     return (initialSession?.lines ?? []).map(hydrateQuotationLine)
   })
@@ -200,7 +201,7 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
   const [unifiedBootstrapDone, setUnifiedBootstrapDone] = useState(
     () =>
       !embedUnified?.onReplaceUnifiedRailingLines ||
-      (embedUnified?.unifiedLines?.length ?? 0) > 0 ||
+      hasUnifiedLineSource ||
       (initialSession?.lines?.length ?? 0) === 0,
   )
 
@@ -230,7 +231,7 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
 
   useEffect(() => {
     if (unifiedBootstrapDone || !embedUnified?.onReplaceUnifiedRailingLines) return
-    if ((embedUnified.unifiedLines?.length ?? 0) > 0) {
+    if (hasUnifiedLineSource) {
       setUnifiedBootstrapDone(true)
       return
     }
@@ -245,6 +246,7 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
     unifiedBootstrapDone,
     embedUnified?.onReplaceUnifiedRailingLines,
     embedUnified?.unifiedLines,
+    hasUnifiedLineSource,
     initialSession,
   ])
 
@@ -253,9 +255,9 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
     .join('|')
 
   useEffect(() => {
-    if (!unifiedBootstrapDone || embedUnified?.unifiedLines === undefined) return
-    setLines(embedUnified.unifiedLines.map(hydrateQuotationLine))
-  }, [unifiedBootstrapDone, unifiedLinesSig, embedUnified?.unifiedLines])
+    if (!unifiedBootstrapDone || !hasUnifiedLineSource) return
+    setLines((embedUnified?.unifiedLines ?? []).map(hydrateQuotationLine))
+  }, [unifiedBootstrapDone, unifiedLinesSig, embedUnified?.unifiedLines, hasUnifiedLineSource])
 
   const draftMode = resolveDraftMode(draft)
   const activeRates = useMemo(
@@ -490,19 +492,24 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
       ),
     )
 
+    const nextLines = editingLineId
+      ? lines.map((l) => (l.id === editingLineId ? line : l))
+      : [...lines, line]
+
     if (editingLineId) {
-      setLines((prev) => prev.map((l) => (l.id === editingLineId ? line : l)))
+      setLines(nextLines)
       setEditingLineId(null)
       showToast(`Updated #${editingIndex + 1} — ${formatCurrency(quoteLineAmount(line))}`)
     } else {
-      setLines((prev) => [...prev, line])
+      setLines(nextLines)
       showToast(`Added — ${formatCurrency(quoteLineAmount(line))}`)
     }
+    saveSessionNow(meta, nextLines, draft)
 
     embedUnified?.onPushLine?.(structuredClone(line))
 
     resetDraft()
-  }, [draft, activeRates, liveCost, editingLineId, editingIndex, lines, resetDraft, embedUnified])
+  }, [draft, activeRates, liveCost, editingLineId, editingIndex, lines, meta, resetDraft, embedUnified])
 
   const handleDownloadBom = () => {
     downloadOrderBom(meta, lines, draft)
@@ -708,12 +715,16 @@ export function RailingDesignerApp({ embedUnified }: RailingDesignerAppProps = {
           editingLineId={editingLineId}
           onEdit={handleEditLine}
           onRemove={(id) => {
-            setLines((p) => p.filter((l) => l.id !== id))
+            const nextLines = lines.filter((l) => l.id !== id)
+            setLines(nextLines)
+            saveSessionNow(meta, nextLines, draft)
             if (editingLineId === id) setEditingLineId(null)
             embedUnified?.onRemoveLine?.(id)
           }}
           onClear={() => {
-            setLines([])
+            const nextLines: QuotationLine[] = []
+            setLines(nextLines)
+            saveSessionNow(meta, nextLines, draft)
             setEditingLineId(null)
             embedUnified?.onClearLines?.()
           }}

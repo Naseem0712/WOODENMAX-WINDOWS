@@ -10,7 +10,7 @@ import { Select } from './ui/Select';
 import { PrintPreview } from './PrintPreview';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { generateBillOfMaterials } from '../utils/materialCalculator';
-import { loadProjectSettings } from '../railing/projectStorage';
+import { loadProjectSettings, saveProjectSettings } from '../railing/projectStorage';
 import { MaterialSummaryModal } from './MaterialSummaryModal';
 import { ErrorBoundary } from './ErrorBoundary';
 import { calculateMaterialCostSummary, formatItemWeightKg } from '../utils/materialCosting';
@@ -25,7 +25,7 @@ import { computeQuotationFinancials, quotationItemLineTotal } from '../utils/quo
 import { quoteBasisForLine, quoteRateForLine, hydrateQuotationLine } from '../railing/quotationFormat';
 import { migrateBackup, parseBackupJson } from '../railing/backup';
 import { displayDesignTitle as railingDisplayTitle } from '../railing/utils';
-import { isWindowQuotationItem } from '../utils/quotationItemKinds';
+import { isWindowQuotationItem, normalizeQuotationItemFromStorage } from '../utils/quotationItemKinds';
 import { isWindowPackageQuotationItem, packageCombinedArea } from '../utils/windowPackageQuotation';
 import { getWindowQuotationAreaMm2 } from '../utils/louverBays';
 import { pastePlainTextIntoTextarea } from '../utils/quotationText';
@@ -56,6 +56,23 @@ function windowConfigsFromQuotationItem(item: QuotationItem): WindowConfig[] {
 
 function quotationItemMatchesWindowType(item: QuotationItem, windowType: WindowType): boolean {
   return windowConfigsFromQuotationItem(item).some((c) => c.windowType === windowType);
+}
+
+function restoreEmbeddedRailingProjectFromExport(jsonText: string): void {
+  try {
+    const migrated = migrateBackup(parseBackupJson(jsonText));
+    if (!migrated.presets || !migrated.ratesNormal || !migrated.ratesStaircase) return;
+    saveProjectSettings({
+      ...loadProjectSettings(),
+      presets: migrated.presets,
+      ratesNormal: migrated.ratesNormal,
+      ratesStaircase: migrated.ratesStaircase,
+      costingCollapsed: false,
+      savedOnce: true,
+    });
+  } catch {
+    // The quotation import can still succeed without embedded railing project settings.
+  }
 }
 
 const Section: React.FC<{title: string, children: React.ReactNode, className?: string}> = ({title, children, className}) => (
@@ -453,8 +470,14 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                     },
                   },
                 };
+                const importedItems = data.items
+                  .map((row: unknown) => normalizeQuotationItemFromStorage(row))
+                  .filter((item: QuotationItem | null): item is QuotationItem => item !== null);
                 setSettings(importedSettings);
-                setItems(data.items);
+                if (data.railingEmbeddedProject) {
+                  restoreEmbeddedRailingProjectFromExport(result);
+                }
+                setItems(importedItems);
                 alert('Quotation imported successfully!');
             } else {
                 try {

@@ -63,7 +63,7 @@ import { RailingDesignerApp } from './railing/App';
 import { hydrateQuotationLine } from './railing/quotationFormat';
 import { displayDesignTitle as railingDisplayTitle } from './railing/utils';
 import type { QuotationLine } from './railing/types';
-import { isWindowQuotationItem } from './utils/quotationItemKinds';
+import { isWindowQuotationItem, normalizeQuotationItemFromStorage } from './utils/quotationItemKinds';
 import { resolveProfileColorLabel } from './utils/profileColorLabel';
 import {
   buildWindowPackageQuotationItem,
@@ -85,29 +85,6 @@ import {
 } from './utils/louverBays';
 import { useUserMode } from './components/UserModeProvider';
 import type { UserMode } from './types';
-
-function normalizeQuotationItemFromStorage(raw: unknown): QuotationItem | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const o = raw as Record<string, unknown>;
-  if (o.kind === 'railing' && o.railingLine && typeof o.id === 'string') {
-    return {
-      kind: 'railing',
-      id: o.id,
-      title: typeof o.title === 'string' ? o.title : 'Glass railing',
-      railingLine: hydrateQuotationLine(structuredClone(o.railingLine as QuotationLine)),
-    };
-  }
-  if (o.kind === 'window_package' && Array.isArray(o.units) && typeof o.id === 'string') {
-    return normalizeWindowPackageItem(structuredClone(o) as unknown as import('./types').WindowPackageQuotationItem);
-  }
-  if (o.config && typeof o.id === 'string') {
-    return {
-      ...(o as unknown as WindowQuotationItem),
-      kind: 'window',
-    };
-  }
-  return null;
-}
 
 function labelForMode(mode: UserMode): string {
   if (mode === 'manufacturer') return 'Manufacturer'
