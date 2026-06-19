@@ -25,7 +25,7 @@ import { computeQuotationFinancials, quotationItemLineTotal } from '../utils/quo
 import { quoteBasisForLine, quoteRateForLine, hydrateQuotationLine } from '../railing/quotationFormat';
 import { migrateBackup, parseBackupJson } from '../railing/backup';
 import { displayDesignTitle as railingDisplayTitle } from '../railing/utils';
-import { isWindowQuotationItem } from '../utils/quotationItemKinds';
+import { isNonRailingQuotationItem, isWindowQuotationItem } from '../utils/quotationItemKinds';
 import { isWindowPackageQuotationItem, packageCombinedArea } from '../utils/windowPackageQuotation';
 import { getWindowQuotationAreaMm2 } from '../utils/louverBays';
 import { pastePlainTextIntoTextarea } from '../utils/quotationText';
@@ -485,11 +485,11 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                         description: migrated.meta.introText ?? settings.description,
                         terms: migrated.meta.termsText ?? settings.terms,
                     });
-                    const windowsOnly = items.filter(isWindowQuotationItem);
-                    setItems([...windowsOnly, ...railingItemsFull]);
+                    const nonRailingItems = items.filter(isNonRailingQuotationItem);
+                    setItems([...nonRailingItems, ...railingItemsFull]);
                     alert(
                         railingItemsFull.length > 0
-                            ? `Imported ${railingItemsFull.length} glass railing line(s). Window lines kept; client details updated from backup where present.`
+                            ? `Imported ${railingItemsFull.length} glass railing line(s). Window/package lines kept; client details updated from backup where present.`
                             : 'Imported backup — no railing lines in file (railing quotation list cleared).',
                     );
                 } catch {

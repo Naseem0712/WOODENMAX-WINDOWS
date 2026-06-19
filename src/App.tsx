@@ -63,7 +63,7 @@ import { RailingDesignerApp } from './railing/App';
 import { hydrateQuotationLine } from './railing/quotationFormat';
 import { displayDesignTitle as railingDisplayTitle } from './railing/utils';
 import type { QuotationLine } from './railing/types';
-import { isWindowQuotationItem } from './utils/quotationItemKinds';
+import { isNonRailingQuotationItem, isWindowQuotationItem } from './utils/quotationItemKinds';
 import { resolveProfileColorLabel } from './utils/profileColorLabel';
 import {
   buildWindowPackageQuotationItem,
@@ -2106,7 +2106,7 @@ const App: React.FC = () => {
   const handleReplaceUnifiedRailingLines = useCallback(
     (lines: QuotationLine[]) => {
       setQuotationItems((prev) => {
-        const windows = prev.filter(isWindowQuotationItem);
+        const nonRailingItems = prev.filter(isNonRailingQuotationItem);
         const railingItems: QuotationItem[] = lines.map((line) => {
           const rec = hydrateQuotationLine(structuredClone(line));
           const title =
@@ -2121,7 +2121,7 @@ const App: React.FC = () => {
             railingLine: rec,
           };
         });
-        return applySlidingBasicRateProtection([...windows, ...railingItems]);
+        return applySlidingBasicRateProtection([...nonRailingItems, ...railingItems]);
       });
     },
     [applySlidingBasicRateProtection],
@@ -2146,7 +2146,7 @@ const App: React.FC = () => {
 
   const handleClearUnifiedRailingLines = useCallback(() => {
     setQuotationItems((prev) =>
-      applySlidingBasicRateProtection(prev.filter(isWindowQuotationItem)),
+      applySlidingBasicRateProtection(prev.filter(isNonRailingQuotationItem)),
     );
   }, [applySlidingBasicRateProtection]);
 
