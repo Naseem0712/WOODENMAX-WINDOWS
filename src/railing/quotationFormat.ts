@@ -8,7 +8,11 @@ import {
 } from './packagePricing'
 import { isStaircaseDraft } from './presets'
 import { formatCurrency, glassDisplayForQuote } from './utils'
-import type { ProductSpec, QuotationLine, RateDisplayUnit } from './types'
+import type { DesignDraft, ProductSpec, QuotationLine, RateDisplayUnit } from './types'
+
+function draftSnapshotForLine(line: QuotationLine): DesignDraft | null {
+  return (line as { draftSnapshot?: DesignDraft | null }).draftSnapshot ?? null
+}
 
 export function quoteUnitForLine(line: QuotationLine): RateDisplayUnit {
   return line.packageQuote?.unit ?? 'rft'
@@ -209,24 +213,37 @@ function formatProductSpec(spec?: ProductSpec | null): string | null {
 export function quoteDisplayBasisForLine(
   line: QuotationLine,
 ): { label: string; qty: number; unit: string } {
-  const draft = line.draftSnapshot
+  const draft = draftSnapshotForLine(line)
   const hw = line.calculation.hardware
-  if (draft.bottomFixing === 'pillars' && hw.totalPillars > 0) {
+  if (draft?.bottomFixing === 'pillars' && hw.totalPillars > 0) {
     return { label: 'Floor pillars', qty: hw.totalPillars, unit: 'PCS' }
   }
-  if (draft.bottomFixing === 'studs' && hw.totalStuds > 0) {
+  if (draft?.bottomFixing === 'studs' && hw.totalStuds > 0) {
     return { label: 'Glass studs', qty: hw.totalStuds, unit: 'PCS' }
   }
   return quoteBasisForLine(line)
+}
+
+function fallbackProfiles(line: QuotationLine): { bottomRail: string; handrail: string } {
+  return {
+    bottomRail:
+      formatProductSpec(line.finish.bottomRailSpec) ??
+      line.finish.bottomRailProfile?.trim() ??
+      '',
+    handrail:
+      formatProductSpec(line.finish.handrailSpec) ??
+      line.finish.handrailProfile?.trim() ??
+      '',
+  }
 }
 
 /** Consolidated item spec — no duplicate hardware / profile lines. */
 export function buildItemSpecRows(line: QuotationLine): { label: string; value: string }[] {
   const hw = line.calculation.hardware
   const f = line.finish
-  const draft = line.draftSnapshot
-  const staircase = isStaircaseDraft(draft)
-  const profiles = hardwareProfilesSummary(draft)
+  const draft = draftSnapshotForLine(line)
+  const staircase = draft ? isStaircaseDraft(draft) : line.designType === 'staircase'
+  const profiles = draft ? hardwareProfilesSummary(draft) : fallbackProfiles(line)
   const rows: { label: string; value: string }[] = []
 
   rows.push({
@@ -234,7 +251,7 @@ export function buildItemSpecRows(line: QuotationLine): { label: string; value: 
     value: staircase ? 'Staircase railing' : 'Normal railing',
   })
 
-  if (draft.bottomFixing === 'pillars') {
+  if (draft?.bottomFixing === 'pillars' || (!draft && hw.totalPillars > 0)) {
     const pillarSpec = formatProductSpec(f.pillarSpec)
     rows.push({
       label: 'Bottom fixing',
@@ -242,7 +259,7 @@ export function buildItemSpecRows(line: QuotationLine): { label: string; value: 
         ? `Pillars — ${hw.totalPillars} pcs · ${pillarSpec}`
         : `Pillars — ${hw.totalPillars} pcs`,
     })
-  } else if (draft.bottomFixing === 'studs') {
+  } else if (draft?.bottomFixing === 'studs' || (!draft && hw.totalStuds > 0)) {
     const studSpec = formatProductSpec(f.studSpec)
     rows.push({
       label: 'Bottom fixing',
@@ -260,7 +277,7 @@ export function buildItemSpecRows(line: QuotationLine): { label: string; value: 
     }
   }
 
-  if (draft.includeHandrail && hw.handrailRft > 0 && profiles.handrail) {
+  if ((draft?.includeHandrail ?? hw.handrailRft > 0) && hw.handrailRft > 0 && profiles.handrail) {
     const color = f.hardwareColor?.trim()
     rows.push({
       label: 'Handrail',
@@ -293,8 +310,8 @@ export function buildItemSpecRows(line: QuotationLine): { label: string; value: 
 export function hardwareSpecRows(line: QuotationLine): { label: string; value: string }[] {
   const hw = line.calculation.hardware
   const f = line.finish
-  const draft = line.draftSnapshot
-  const staircase = isStaircaseDraft(draft)
+  const draft = draftSnapshotForLine(line)
+  const staircase = draft ? isStaircaseDraft(draft) : line.designType === 'staircase'
   const rows: { label: string; value: string }[] = []
 
   if (staircase) {
@@ -328,7 +345,7 @@ export function hardwareSpecRows(line: QuotationLine): { label: string; value: s
   if (hw.endCaps > 0) {
     rows.push({ label: 'Handrail end cap', value: `${hw.endCaps} pcs` })
   }
-  if (hw.totalPillars > 0 && draft.bottomFixing !== 'pillars') {
+  if (draft && hw.totalPillars > 0 && draft.bottomFixing !== 'pillars') {
     rows.push({ label: 'Floor pillars', value: `${hw.totalPillars} pcs` })
   }
   if (hw.totalAnchors > 0) {

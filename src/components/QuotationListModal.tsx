@@ -25,6 +25,7 @@ import { computeQuotationFinancials, quotationItemLineTotal } from '../utils/quo
 import { quoteBasisForLine, quoteRateForLine, hydrateQuotationLine } from '../railing/quotationFormat';
 import { migrateBackup, parseBackupJson } from '../railing/backup';
 import { displayDesignTitle as railingDisplayTitle } from '../railing/utils';
+import type { QuotationLine } from '../railing/types';
 import { isWindowQuotationItem } from '../utils/quotationItemKinds';
 import { isWindowPackageQuotationItem, packageCombinedArea } from '../utils/windowPackageQuotation';
 import { getWindowQuotationAreaMm2 } from '../utils/louverBays';
@@ -461,9 +462,10 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                     const migrated = migrateBackup(parseBackupJson(result));
                     const railingItemsFull = migrated.lines.map((line) => {
                         const rec = hydrateQuotationLine(structuredClone(line));
+                        const draft = (rec as { draftSnapshot?: QuotationLine['draftSnapshot'] | null }).draftSnapshot;
                         const title =
                             rec.designName?.trim() ||
-                            railingDisplayTitle(rec.draftSnapshot) ||
+                            (draft ? railingDisplayTitle(draft) : '') ||
                             rec.designLabel ||
                             'Glass railing';
                         return {

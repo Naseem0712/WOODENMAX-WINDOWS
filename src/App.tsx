@@ -2083,9 +2083,10 @@ const App: React.FC = () => {
   const handleUpsertUnifiedRailingLine = useCallback(
     (line: QuotationLine) => {
       const rec = hydrateQuotationLine(structuredClone(line));
+      const draft = (rec as { draftSnapshot?: QuotationLine['draftSnapshot'] | null }).draftSnapshot;
       const title =
         rec.designName?.trim() ||
-        railingDisplayTitle(rec.draftSnapshot) ||
+        (draft ? railingDisplayTitle(draft) : '') ||
         rec.designLabel ||
         'Glass railing';
       const uni: QuotationItem = {
@@ -2109,9 +2110,10 @@ const App: React.FC = () => {
         const windows = prev.filter(isWindowQuotationItem);
         const railingItems: QuotationItem[] = lines.map((line) => {
           const rec = hydrateQuotationLine(structuredClone(line));
+          const draft = (rec as { draftSnapshot?: QuotationLine['draftSnapshot'] | null }).draftSnapshot;
           const title =
             rec.designName?.trim() ||
-            railingDisplayTitle(rec.draftSnapshot) ||
+            (draft ? railingDisplayTitle(draft) : '') ||
             rec.designLabel ||
             'Glass railing';
           return {

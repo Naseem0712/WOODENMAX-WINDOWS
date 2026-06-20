@@ -41,10 +41,16 @@ export function RailingQuotationLinePrintBlock({
 }: RailingQuotationLinePrintBlockProps) {
   const line = resolveQuotationLine(rawLine)
   const specRows = buildItemSpecRows(line)
-  const draft = line.draftSnapshot
+  const draft = (line as { draftSnapshot?: QuotationLine['draftSnapshot'] | null }).draftSnapshot
   const basis = quoteDisplayBasisForLine(line)
   const rate = quoteRateForLine(line)
-  const modeLabel = isStaircaseDraft(draft) ? 'Staircase' : 'Normal'
+  const modeLabel = draft
+    ? isStaircaseDraft(draft)
+      ? 'Staircase'
+      : 'Normal'
+    : line.designType === 'staircase'
+      ? 'Staircase'
+      : 'Normal'
   const amount = quoteLineAmount(line)
   const unit = quoteUnitForLine(line)
   const heading = (listRowTitle?.trim() || line.designName || line.designLabel).trim()
@@ -108,11 +114,15 @@ export function RailingQuotationLinePrintBlock({
 
         <div className="quote-item-body">
           <div className="quote-item-left">
-            <QuoteMiniDiagram
-              draft={draft}
-              calc={line.calculation}
-              printImageUrl={draft.printImageUrl}
-            />
+            {draft ? (
+              <QuoteMiniDiagram
+                draft={draft}
+                calc={line.calculation}
+                printImageUrl={draft.printImageUrl}
+              />
+            ) : (
+              <div className="quote-mini-svg quote-mini-empty">Diagram unavailable</div>
+            )}
             <div className="dim-box dim-box-compact">
               <p className="dim-title">Measurements</p>
               <p className="dim-lines">{line.dimensionsText}</p>
