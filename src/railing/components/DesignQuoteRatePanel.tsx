@@ -38,6 +38,7 @@ export function DesignQuoteRatePanel({ draft, breakdown, onChange }: Props) {
     if (userEditedMaterial.current) return
     const nextMat = setRateForQuoteUnit(bomSetRates, unit) ?? 0
     if (nextMat <= 0) return
+    if (rates[matKey] > 0) return
     if (rates[matKey] === nextMat) return
     onChange({ packageRates: { ...rates, [matKey]: nextMat } })
   }, [

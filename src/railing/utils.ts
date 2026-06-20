@@ -77,7 +77,8 @@ export function glassLabel(draft: DesignDraft): string {
 
 /** Glass line on quotation print/PDF — fresh label + colour, no duplicate text. */
 export function glassDisplayForQuote(line: QuotationLine): string {
-  const label = glassLabel(line.draftSnapshot)
+  const draft = (line as { draftSnapshot?: DesignDraft | null }).draftSnapshot
+  const label = draft ? glassLabel(draft) : line.glassLabel || 'Glass'
   const color = line.finish.glassColor?.trim()
   if (!color) return label
   if (label.toLowerCase().includes(color.toLowerCase())) return label
