@@ -391,7 +391,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
 
   const getVentilatorCellLabel = (type: VentilatorCellType) => {
     switch(type) {
-        case 'glass': return 'Glass'; case 'louvers': return 'Louvers'; case 'door': return 'Door'; case 'exhaust_fan': return 'Ex-Fan';
+        case 'glass': return 'Glass'; case 'louvers': return 'Louvers'; case 'door': return 'Door'; case 'exhaust_fan': return 'Ex-Fan slot';
         default: return 'Fixed';
     }
   };

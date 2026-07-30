@@ -46,39 +46,27 @@ export function getElevationDimensionsMm(config: WindowConfig | undefined): Elev
 
   switch (config.windowType) {
     case WindowType.SLIDING: {
+      // Quote dims divide by glass shutter count only — mesh does not add a width column
+      // (2G1M → 2, 4G2M → 4). Matches EvA-style quotation drawings.
       let numCols = 0;
-      let meshFlags: boolean[] = [];
       switch (config.shutterConfig) {
         case ShutterConfigType.TWO_GLASS:
+        case ShutterConfigType.TWO_GLASS_ONE_MESH:
           numCols = 2;
-          meshFlags = [false, false];
           break;
         case ShutterConfigType.THREE_GLASS:
           numCols = 3;
-          meshFlags = [false, false, false];
-          break;
-        case ShutterConfigType.TWO_GLASS_ONE_MESH:
-          numCols = 3;
-          meshFlags = [false, false, true];
           break;
         case ShutterConfigType.FOUR_GLASS:
-          numCols = 4;
-          meshFlags = [false, false, false, false];
-          break;
         case ShutterConfigType.FOUR_GLASS_TWO_MESH:
-          numCols = 6;
-          // 4G2M layout: G G G G M M (first 4 glass, then 2 mesh on back track behind ends)
-          // Visually 4 glass columns with mesh covering ends. For labeling
-          // purposes we report 4 visible columns.
           numCols = 4;
-          meshFlags = [false, false, false, false];
           break;
       }
       if (leftFixSize > 0) columns.push({ sizeMm: leftFixSize, label: 'F' });
       if (numCols > 0 && innerWidth > 0) {
         const w = innerWidth / numCols;
         for (let i = 0; i < numCols; i++) {
-          columns.push({ sizeMm: w, label: meshFlags[i] ? 'M' : 'S' });
+          columns.push({ sizeMm: w, label: 'S' });
         }
       }
       if (rightFixSize > 0) columns.push({ sizeMm: rightFixSize, label: 'F' });

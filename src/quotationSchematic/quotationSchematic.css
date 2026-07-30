@@ -1,0 +1,40 @@
+.qs-elevation,
+.qs-track-section {
+  display: block;
+  margin: 0 auto;
+  background: #fff;
+  max-width: 100%;
+  height: auto;
+}
+
+.print-slot-schematic {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
+.print-slot-schematic .qs-elevation {
+  width: 100%;
+  max-width: 240px;
+}
+
+.print-slot-schematic .qs-track-section {
+  width: 100%;
+  max-width: 240px;
+}
+
+@media print {
+  .qs-elevation,
+  .qs-track-section {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+.pdf-export-mode .qs-elevation,
+.pdf-export-mode .qs-track-section {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}

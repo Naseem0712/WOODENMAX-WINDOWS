@@ -197,6 +197,37 @@ const PrintShutterIndicator: React.FC<{
 
     const baseStyle = "absolute inset-0 z-[12] flex items-center justify-center text-black font-bold tracking-wide pointer-events-none opacity-90 p-1 text-center";
 
+    if (type === 'exhaust_fan') {
+      const r = Math.max(10, containerSize * 0.28);
+      return (
+        <div className={baseStyle} style={style}>
+          <svg viewBox="0 0 100 120" width={r * 2.2} height={r * 2.6} aria-label="Exhaust fan">
+            <circle cx="50" cy="42" r="38" fill="none" stroke="#111" strokeWidth="3.5" />
+            <circle cx="50" cy="42" r="28" fill="none" stroke="#111" strokeWidth="1.8" />
+            {[0, 72, 144, 216, 288].map((deg) => {
+              const rad = (deg * Math.PI) / 180;
+              return (
+                <line
+                  key={deg}
+                  x1="50"
+                  y1="42"
+                  x2={50 + Math.sin(rad) * 30}
+                  y2={42 - Math.cos(rad) * 30}
+                  stroke="#111"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                />
+              );
+            })}
+            <circle cx="50" cy="42" r="5" fill="#111" />
+            <text x="50" y="108" textAnchor="middle" fontSize="18" fontWeight="700" fill="#111">
+              FAN
+            </text>
+          </svg>
+        </div>
+      );
+    }
+
     return <div className={baseStyle} style={style}>{text}</div>;
 };
 
@@ -484,7 +515,7 @@ const PrintElevationSlot: React.FC<{
   widthMm: number;
   heightMm: number;
   photo?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }> = ({ widthMm, heightMm, photo, children }) => {
   const w = Math.max(widthMm, 1);
   const h = Math.max(heightMm, 1);

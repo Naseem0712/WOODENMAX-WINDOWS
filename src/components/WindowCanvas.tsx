@@ -2060,14 +2060,16 @@ const createWindowElements = (
                                 doorLayer.push(<div key={`cell-${r}-${c}`} className="absolute z-[6]" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>{louvers}</div>);
                             } else if (cellType === 'exhaust_fan') {
                                 doorLayer.push(
-                                  <div key={`cell-${r}-${c}`} className="absolute z-[6] flex items-center justify-center" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>
-                                     <svg viewBox="0 0 100 100" className="w-full h-full text-slate-500 opacity-50">
-                                          <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="2"/>
-                                          <circle cx="50" cy="50" r="10" fill="currentColor" />
+                                  <div key={`cell-${r}-${c}`} className="absolute z-[6] flex flex-col items-center justify-center" style={{left: cellX*scale, top: cellY*scale, width: cellW*scale, height: cellH*scale}}>
+                                     <svg viewBox="0 0 100 100" className="w-[55%] h-[55%] text-slate-700" style={{ maxWidth: 120, maxHeight: 120 }}>
+                                          <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="2.5"/>
+                                          <circle cx="50" cy="50" r="32" fill="none" stroke="currentColor" strokeWidth="1.2"/>
+                                          <circle cx="50" cy="50" r="8" fill="currentColor" />
                                           {[0, 72, 144, 216, 288].map(angle => (
-                                            <path key={angle} d="M50 50 L 50 10 A 40 40 0 0 1 84 36 L 50 50 Z" fill="currentColor" transform={`rotate(${angle} 50 50)`}/>
+                                            <line key={angle} x1="50" y1="50" x2={50 + Math.sin(angle * Math.PI / 180) * 34} y2={50 - Math.cos(angle * Math.PI / 180) * 34} stroke="currentColor" strokeWidth="5" strokeLinecap="round"/>
                                           ))}
                                      </svg>
+                                     <span className="text-[9px] font-bold tracking-wide text-slate-700 mt-0.5 pointer-events-none">FAN</span>
                                   </div>
                                 )
                             }
