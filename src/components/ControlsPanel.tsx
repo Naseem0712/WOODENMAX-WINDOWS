@@ -29,6 +29,7 @@ import {
   applyRoundedBandLayout,
   defaultArchStraightBottomMm,
   DEFAULT_CASEMENT_OUTLINE,
+  isArchTopOutline,
   isOutlineBandCell,
   isRoundedOutline,
   maxArchStraightBottomMm,
@@ -36,6 +37,12 @@ import {
   resolveArchStraightBottomMm,
   resolveCasementOutline,
 } from '../utils/casementOutlineGeometry';
+import {
+  dividersFromPanelSizes,
+  formatPanelSizeMm,
+  panelSizesFromDividers,
+  resolvePanelSizesMm,
+} from '../utils/casementPanelSizes';
 import { SLIDING_LAYOUT_PRESETS, type SlidingLayoutPreset } from '../utils/slidingLayoutPresets';
 import { isCompoundLouverConfig, LOUVER_BAY_MAX } from '../utils/louverBays';
 import { scrollNearestVerticalOverflowAncestor } from '../utils/scrollParentWheel';
@@ -276,6 +283,185 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
   const gridRows = displayConfig.horizontalDividers.length + 1;
   const gridCols = displayConfig.verticalDividers.length + 1;
   const activeWindowType = displayConfig.windowType;
+
+  const gridInnerDims = useMemo(() => {
+    if (
+      activeWindowType !== WindowType.CASEMENT &&
+      activeWindowType !== WindowType.VENTILATOR
+    ) {
+      return { innerW: 0, innerH: 0 };
+    }
+    return computeInnerHoleDims({
+      ...displayConfig,
+      series: config.series,
+    });
+  }, [activeWindowType, displayConfig, config.series]);
+
+  const columnSizesMm = useMemo(
+    () => panelSizesFromDividers(displayConfig.verticalDividers, gridInnerDims.innerW),
+    [displayConfig.verticalDividers, gridInnerDims.innerW],
+  );
+  const rowSizesMm = useMemo(
+    () => panelSizesFromDividers(displayConfig.horizontalDividers, gridInnerDims.innerH),
+    [displayConfig.horizontalDividers, gridInnerDims.innerH],
+  );
+
+  const [colWidthDrafts, setColWidthDrafts] = useState<(number | '')[]>([]);
+  const [rowHeightDrafts, setRowHeightDrafts] = useState<(number | '')[]>([]);
+  const [editingColIdx, setEditingColIdx] = useState<number | null>(null);
+  const [editingRowIdx, setEditingRowIdx] = useState<number | null>(null);
+  const colWidthDraftsRef = useRef<(number | '')[]>([]);
+  const rowHeightDraftsRef = useRef<(number | '')[]>([]);
+  /** Panels the user explicitly sized; others share leftover equally. */
+  const lockedColWidthsRef = useRef<Map<number, number>>(new Map());
+  const lockedRowHeightsRef = useRef<Map<number, number>>(new Map());
+  const skipColSyncOnceRef = useRef(false);
+  const skipRowSyncOnceRef = useRef(false);
+
+  useEffect(() => {
+    colWidthDraftsRef.current = colWidthDrafts;
+  }, [colWidthDrafts]);
+  useEffect(() => {
+    rowHeightDraftsRef.current = rowHeightDrafts;
+  }, [rowHeightDrafts]);
+
+  useEffect(() => {
+    lockedColWidthsRef.current = new Map();
+  }, [gridCols]);
+  useEffect(() => {
+    lockedRowHeightsRef.current = new Map();
+  }, [gridRows]);
+
+  useEffect(() => {
+    if (editingColIdx !== null) return;
+    if (skipColSyncOnceRef.current) {
+      skipColSyncOnceRef.current = false;
+      return;
+    }
+    // Canvas drag (or other external change): drop locks and show live sizes.
+    lockedColWidthsRef.current = new Map();
+    const next = columnSizesMm.map((mm) => Math.round(mm * 10) / 10);
+    setColWidthDrafts(next);
+    colWidthDraftsRef.current = next;
+  }, [columnSizesMm, editingColIdx, gridCols]);
+
+  useEffect(() => {
+    if (editingRowIdx !== null) return;
+    if (skipRowSyncOnceRef.current) {
+      skipRowSyncOnceRef.current = false;
+      return;
+    }
+    lockedRowHeightsRef.current = new Map();
+    const next = rowSizesMm.map((mm) => Math.round(mm * 10) / 10);
+    setRowHeightDrafts(next);
+    rowHeightDraftsRef.current = next;
+  }, [rowSizesMm, editingRowIdx, gridRows]);
+
+  const draftsFromColLocks = (overrideIndex?: number, overrideValue?: number | '') => {
+    return Array.from({ length: gridCols }, (_, j) => {
+      if (overrideIndex !== undefined && j === overrideIndex) {
+        return overrideValue === '' || overrideValue == null ? '' : overrideValue;
+      }
+      const locked = lockedColWidthsRef.current.get(j);
+      return locked != null ? locked : '';
+    });
+  };
+
+  const draftsFromRowLocks = (overrideIndex?: number, overrideValue?: number | '') => {
+    return Array.from({ length: gridRows }, (_, j) => {
+      if (overrideIndex !== undefined && j === overrideIndex) {
+        return overrideValue === '' || overrideValue == null ? '' : overrideValue;
+      }
+      const locked = lockedRowHeightsRef.current.get(j);
+      return locked != null ? locked : '';
+    });
+  };
+
+  const applyColumnWidths = (drafts: (number | '')[]) => {
+    if (gridCols <= 1 || gridInnerDims.innerW <= 0) return;
+    const sizes = resolvePanelSizesMm(drafts, gridInnerDims.innerW);
+    const dividers = dividersFromPanelSizes(sizes, gridInnerDims.innerW);
+    const nextLocks = new Map<number, number>();
+    drafts.forEach((d, i) => {
+      if (d !== '' && d != null && Number(d) > 0) nextLocks.set(i, Number(d));
+    });
+    lockedColWidthsRef.current = nextLocks;
+    skipColSyncOnceRef.current = true;
+    if (isCorner) setSideConfig({ verticalDividers: dividers });
+    else setConfig('verticalDividers', dividers);
+    const rounded = sizes.map((mm) => Math.round(mm * 10) / 10);
+    setColWidthDrafts(rounded);
+    colWidthDraftsRef.current = rounded;
+  };
+
+  const applyRowHeights = (drafts: (number | '')[]) => {
+    if (gridRows <= 1 || gridInnerDims.innerH <= 0) return;
+    const sizes = resolvePanelSizesMm(drafts, gridInnerDims.innerH);
+    const dividers = dividersFromPanelSizes(sizes, gridInnerDims.innerH);
+    const nextLocks = new Map<number, number>();
+    drafts.forEach((d, i) => {
+      if (d !== '' && d != null && Number(d) > 0) nextLocks.set(i, Number(d));
+    });
+    lockedRowHeightsRef.current = nextLocks;
+    skipRowSyncOnceRef.current = true;
+    if (isCorner) {
+      setSideConfig({ horizontalDividers: dividers });
+    } else if (isArchTopOutline(displayConfig) && dividers.length > 0) {
+      const straightBottom = Math.max(0, gridInnerDims.innerH * (1 - dividers[0]));
+      const patch = applyArchStraightBottomLayout(
+        { ...displayConfig, horizontalDividers: dividers },
+        gridInnerDims.innerW,
+        gridInnerDims.innerH,
+        Math.round(straightBottom),
+      );
+      setConfig('horizontalDividers', patch.horizontalDividers);
+      setConfig('casementOutline', patch.casementOutline);
+    } else {
+      setConfig('horizontalDividers', dividers);
+    }
+    const rounded = sizes.map((mm) => Math.round(mm * 10) / 10);
+    setRowHeightDrafts(rounded);
+    rowHeightDraftsRef.current = rounded;
+  };
+
+  const onColWidthChange = (index: number, raw: string) => {
+    const parsed: number | '' = raw === '' ? '' : (Number.isFinite(parseFloat(raw)) ? parseFloat(raw) : '');
+    const next = draftsFromColLocks(index, parsed);
+    // While typing, show Auto on unlocked panels so intent is clear.
+    setColWidthDrafts(next);
+    colWidthDraftsRef.current = next;
+  };
+
+  const onRowHeightChange = (index: number, raw: string) => {
+    const parsed: number | '' = raw === '' ? '' : (Number.isFinite(parseFloat(raw)) ? parseFloat(raw) : '');
+    const next = draftsFromRowLocks(index, parsed);
+    setRowHeightDrafts(next);
+    rowHeightDraftsRef.current = next;
+  };
+
+  const onColWidthFocus = (index: number) => {
+    setEditingColIdx(index);
+    const locked = lockedColWidthsRef.current;
+    let start: number | '';
+    if (locked.has(index)) start = locked.get(index)!;
+    else if (locked.size === 0) start = Math.round((columnSizesMm[index] ?? 0) * 10) / 10;
+    else start = '';
+    const next = draftsFromColLocks(index, start);
+    setColWidthDrafts(next);
+    colWidthDraftsRef.current = next;
+  };
+
+  const onRowHeightFocus = (index: number) => {
+    setEditingRowIdx(index);
+    const locked = lockedRowHeightsRef.current;
+    let start: number | '';
+    if (locked.has(index)) start = locked.get(index)!;
+    else if (locked.size === 0) start = Math.round((rowSizesMm[index] ?? 0) * 10) / 10;
+    else start = '';
+    const next = draftsFromRowLocks(index, start);
+    setRowHeightDrafts(next);
+    rowHeightDraftsRef.current = next;
+  };
 
   const operablePanels = useMemo(() => {
     const panels: { id: string; label: string }[] = [];
@@ -1094,6 +1280,119 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
                   <Input id={`${idPrefix}grid-rows`} name="grid-rows" label="Rows" type="number" inputMode="numeric" value={gridRows} min={1} onChange={e => setGridSize(Math.max(1, parseInt(e.target.value) || 1), gridCols)} />
                   <Input id={`${idPrefix}grid-cols`} name="grid-cols" label="Columns" type="number" inputMode="numeric" value={gridCols} min={1} onChange={e => setGridSize(gridRows, Math.max(1, parseInt(e.target.value) || 1))} />
               </div>
+
+              {(gridCols > 1 || gridRows > 1) && (
+                <div className="mt-4 space-y-4">
+                  <p className="text-[11px] text-slate-400 leading-snug">
+                    Panel sizes (mm). Type one size (e.g. middle fix) — other panels share leftover equally. Or set both side doors separately and leave the middle blank. Same for row heights.
+                  </p>
+                  {gridCols > 1 && (
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <label className="block text-sm font-medium text-slate-300">Column widths</label>
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold text-indigo-300 hover:text-indigo-200"
+                          onClick={() => {
+                            lockedColWidthsRef.current = new Map();
+                            applyColumnWidths(Array.from({ length: gridCols }, () => '' as number | ''));
+                          }}
+                        >
+                          Equal widths
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mb-1.5">
+                        Inner width {formatPanelSizeMm(gridInnerDims.innerW)} mm
+                      </p>
+                      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(gridCols, 3)}, minmax(0, 1fr))` }}>
+                        {Array.from({ length: gridCols }).map((_, i) => (
+                          <Input
+                            key={`col-w-${gridCols}-${i}`}
+                            id={`${idPrefix}grid-col-w-${i}`}
+                            name={`grid-col-w-${i}`}
+                            label={`Col ${i + 1}`}
+                            type="number"
+                            inputMode="decimal"
+                            min={1}
+                            placeholder="Auto"
+                            value={colWidthDrafts[i] === '' || colWidthDrafts[i] == null ? '' : colWidthDrafts[i]}
+                            onFocus={() => onColWidthFocus(i)}
+                            onChange={(e) => onColWidthChange(i, e.target.value.trim())}
+                            onBlur={() => {
+                              const v = colWidthDraftsRef.current[i];
+                              if (lockedColWidthsRef.current.size === 0) {
+                                const current = Math.round((columnSizesMm[i] ?? 0) * 10) / 10;
+                                if (v !== '' && v != null && Math.abs(Number(v) - current) < 0.15) {
+                                  const next = columnSizesMm.map((mm) => Math.round(mm * 10) / 10);
+                                  setColWidthDrafts(next);
+                                  colWidthDraftsRef.current = next;
+                                  setEditingColIdx(null);
+                                  return;
+                                }
+                              }
+                              applyColumnWidths(draftsFromColLocks(i, v === '' || v == null ? '' : v));
+                              setEditingColIdx(null);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {gridRows > 1 && (
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <label className="block text-sm font-medium text-slate-300">Row heights</label>
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold text-indigo-300 hover:text-indigo-200"
+                          onClick={() => {
+                            lockedRowHeightsRef.current = new Map();
+                            applyRowHeights(Array.from({ length: gridRows }, () => '' as number | ''));
+                          }}
+                        >
+                          Equal heights
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mb-1.5">
+                        Inner height {formatPanelSizeMm(gridInnerDims.innerH)} mm
+                      </p>
+                      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(gridRows, 3)}, minmax(0, 1fr))` }}>
+                        {Array.from({ length: gridRows }).map((_, i) => (
+                          <Input
+                            key={`row-h-${gridRows}-${i}`}
+                            id={`${idPrefix}grid-row-h-${i}`}
+                            name={`grid-row-h-${i}`}
+                            label={`Row ${i + 1}`}
+                            type="number"
+                            inputMode="decimal"
+                            min={1}
+                            placeholder="Auto"
+                            value={rowHeightDrafts[i] === '' || rowHeightDrafts[i] == null ? '' : rowHeightDrafts[i]}
+                            onFocus={() => onRowHeightFocus(i)}
+                            onChange={(e) => onRowHeightChange(i, e.target.value.trim())}
+                            onBlur={() => {
+                              const v = rowHeightDraftsRef.current[i];
+                              if (lockedRowHeightsRef.current.size === 0) {
+                                const current = Math.round((rowSizesMm[i] ?? 0) * 10) / 10;
+                                if (v !== '' && v != null && Math.abs(Number(v) - current) < 0.15) {
+                                  const next = rowSizesMm.map((mm) => Math.round(mm * 10) / 10);
+                                  setRowHeightDrafts(next);
+                                  rowHeightDraftsRef.current = next;
+                                  setEditingRowIdx(null);
+                                  return;
+                                }
+                              }
+                              applyRowHeights(draftsFromRowLocks(i, v === '' || v == null ? '' : v));
+                              setEditingRowIdx(null);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="mt-4">
                   <label className="block text-sm font-medium text-slate-300 mb-2">Panel Configuration (Click to toggle)</label>
                   <p className="text-xs text-slate-400 mb-2">You can also click grid lines on the canvas to merge panels.</p>

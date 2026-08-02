@@ -92,7 +92,7 @@ export const guides: Record<string, GuideContent> = {
             <p>This module is for creating versatile designs with fixed glass panels and openable doors (casements). You can design single windows, large multi-panel doors, and simulate more complex systems like bi-fold doors.</p>
 
             <h4>1. Grid Layout & Doors</h4>
-            <p>Use the "Grid Layout" section to define rows and columns. Click on any panel in the grid preview to toggle it between a <strong>Fixed Panel</strong> and an <strong>Openable Door</strong>.</p>
+            <p>Use the "Grid Layout" section to define rows and columns. Set <strong>column widths</strong> and <strong>row heights</strong> in mm (leave blank for Auto so remaining panels share space equally — e.g. a larger middle fix with equal side doors). You can also drag mullions on the canvas. Click any panel in the grid preview to toggle it between a <strong>Fixed Panel</strong> and an <strong>Openable Door</strong>.</p>
             
             <h4>2. Simulating Advanced Designs</h4>
             <p>While direct "bi-fold" or "slide-and-fold" types are not single-click options, you can easily simulate these designs for visualization and quotation:</p>
