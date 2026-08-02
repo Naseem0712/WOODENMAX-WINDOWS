@@ -16,6 +16,8 @@ import {
 } from '../utils/designLayout';
 
 type Props = {
+  /** Prefix so desktop + mobile ControlsPanel instances do not share form field ids. */
+  idPrefix?: string;
   primaryTitle: string;
   activeUnitId: DesignLayoutActiveUnit;
   companions: DesignLayoutUnit[];
@@ -35,6 +37,7 @@ const SIDE_OPTIONS: { value: DesignLayoutSide; label: string; short: string }[] 
 ];
 
 export const DesignLayoutPanel: React.FC<Props> = ({
+  idPrefix = '',
   primaryTitle,
   activeUnitId,
   companions,
@@ -153,7 +156,8 @@ export const DesignLayoutPanel: React.FC<Props> = ({
 
         <div className="mb-2 grid grid-cols-2 gap-2">
           <Input
-            id="layout-copy-count"
+            id={`${idPrefix}layout-copy-count`}
+            name="layout-copy-count"
             label="Kitni copies"
             type="number"
             min={1}
@@ -163,7 +167,8 @@ export const DesignLayoutPanel: React.FC<Props> = ({
             className="!py-1 text-xs"
           />
           <Select
-            id="layout-attach-to"
+            id={`${idPrefix}layout-attach-to`}
+            name="layout-attach-to"
             label="Chipkayein kis se"
             value={attachToId}
             onChange={(e) => setAttachToId(e.target.value as DesignLayoutActiveUnit)}
@@ -195,7 +200,8 @@ export const DesignLayoutPanel: React.FC<Props> = ({
         </div>
 
         <Select
-          id="layout-new-cross-align"
+          id={`${idPrefix}layout-new-cross-align`}
+          name="layout-new-cross-align"
           label="Vertical align (nayi copies)"
           value={newUnitCrossAlign}
           onChange={(e) => setNewUnitCrossAlign(e.target.value as DesignLayoutCrossAlign)}
@@ -232,7 +238,8 @@ export const DesignLayoutPanel: React.FC<Props> = ({
             </div>
 
             <Input
-              id={`layout-title-${c.id}`}
+              id={`${idPrefix}layout-title-${c.id}`}
+              name={`layout-title-${c.id}`}
               label="Label"
               value={c.title}
               onChange={(e) => onUpdateUnit(c.id, { title: e.target.value })}
@@ -244,7 +251,8 @@ export const DesignLayoutPanel: React.FC<Props> = ({
             </p>
 
             <Input
-              id={`layout-rate-${c.id}`}
+              id={`${idPrefix}layout-rate-${c.id}`}
+              name={`layout-rate-${c.id}`}
               label="Rate (₹/unit area — khali = global rate)"
               type="number"
               inputMode="decimal"
@@ -279,7 +287,8 @@ export const DesignLayoutPanel: React.FC<Props> = ({
 
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <Select
-                  id={`layout-anchor-${c.id}`}
+                  id={`${idPrefix}layout-anchor-${c.id}`}
+                  name={`layout-anchor-${c.id}`}
                   label="Anchor"
                   value={c.anchorUnitId ?? 'primary'}
                   onChange={(e) => onUpdateUnit(c.id, { anchorUnitId: e.target.value as DesignLayoutActiveUnit })}
@@ -291,7 +300,8 @@ export const DesignLayoutPanel: React.FC<Props> = ({
                   ))}
                 </Select>
                 <DimensionInput
-                  id={`layout-gap-${c.id}`}
+                  id={`${idPrefix}layout-gap-${c.id}`}
+                  name={`layout-gap-${c.id}`}
                   label="Gap mm (0=chipka)"
                   value_mm={c.gapMm ?? 0}
                   onChange_mm={(v) => onUpdateUnit(c.id, { gapMm: Number(v) || 0 })}
@@ -299,7 +309,8 @@ export const DesignLayoutPanel: React.FC<Props> = ({
               </div>
 
               <Select
-                id={`layout-align-${c.id}`}
+                id={`${idPrefix}layout-align-${c.id}`}
+                name={`layout-align-${c.id}`}
                 label={alignLabels.axis}
                 value={hasCustomOffset ? 'custom' : (c.crossAlign ?? 'top')}
                 onChange={(e) => {
@@ -323,7 +334,8 @@ export const DesignLayoutPanel: React.FC<Props> = ({
 
               {hasCustomOffset ? (
                 <DimensionInput
-                  id={`layout-offset-${c.id}`}
+                  id={`${idPrefix}layout-offset-${c.id}`}
+                  name={`layout-offset-${c.id}`}
                   label="Offset mm"
                   value_mm={c.crossOffsetMm ?? 0}
                   onChange_mm={(v) => onUpdateUnit(c.id, { crossOffsetMm: v })}

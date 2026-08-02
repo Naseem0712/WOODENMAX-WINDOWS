@@ -6,7 +6,8 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   unit?: string;
 }
 
-export const Input: React.FC<InputProps> = ({ label, id, unit, className, value, onChange, onFocus, onBlur, type = 'text', onWheel, ...props }) => {
+export const Input: React.FC<InputProps> = ({ label, id, name, unit, className, value, onChange, onFocus, onBlur, type = 'text', onWheel, ...props }) => {
+  const fieldName = name ?? (typeof id === 'string' ? id : undefined);
   const [internalValue, setInternalValue] = useState(String(value ?? ''));
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -86,6 +87,7 @@ export const Input: React.FC<InputProps> = ({ label, id, unit, className, value,
         <input
           ref={inputRef}
           id={id}
+          name={fieldName}
           type={type}
           className={`${baseClasses} ${className || ''}`}
           value={internalValue} // The input is always controlled by its internal state.

@@ -6,6 +6,10 @@ export type ProfileJointVariant = 'canvas' | 'print';
 export const jointStroke = (variant: ProfileJointVariant) =>
   variant === 'print' ? 'rgba(15,23,42,0.62)' : 'rgba(15,23,42,0.58)';
 
+/** Outer unit perimeter — stronger than inner joints so light frames read on white canvas. */
+export const jointOuterStroke = (variant: ProfileJointVariant) =>
+  variant === 'print' ? 'rgba(15,23,42,0.78)' : 'rgba(15,23,42,0.72)';
+
 /** Screen / print stroke width for profile CAD outlines (px, non-scaling). */
 export const jointWidth = (variant: ProfileJointVariant) => (variant === 'print' ? 1.15 : 1.65);
 
@@ -72,9 +76,14 @@ export const MiteredProfileOutlines: React.FC<OutlineProps> = ({
   if (w <= 0 || h <= 0) return null;
 
   const stroke = jointStroke(variant);
+  const outerStroke = jointOuterStroke(variant);
   const sw = jointWidth(variant);
   const innerSw = jointInnerWidth(variant);
-  const outerD = `M 0 0 L ${w} 0 L ${w} ${h} L 0 ${h} Z`;
+  // Inset by half stroke so the dark rim sits on the true exterior without
+  // relying on overflow outside the frame (padded viewBox used to shrink the
+  // whole outline inward and left a bare light band that blended into white).
+  const half = sw / 2;
+  const outerD = `M ${half} ${half} L ${w - half} ${half} L ${w - half} ${h - half} L ${half} ${h - half} Z`;
   const hide = hideInnerEdges ?? {};
   const butt = buttEdges ?? {};
 
@@ -83,13 +92,13 @@ export const MiteredProfileOutlines: React.FC<OutlineProps> = ({
       className="pointer-events-none absolute left-0 top-0"
       width={w}
       height={h}
-      viewBox={`${-sw} ${-sw} ${w + sw * 2} ${h + sw * 2}`}
+      viewBox={`0 0 ${w} ${h}`}
       aria-hidden
       style={{ zIndex: outlineZIndex, overflow: 'visible' }}
       {...outlineSvgProps}
     >
       {showOuter ? (
-        <path d={outerD} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap="butt" strokeLinejoin="miter" vectorEffect="non-scaling-stroke" />
+        <path d={outerD} fill="none" stroke={outerStroke} strokeWidth={sw} strokeLinecap="butt" strokeLinejoin="miter" vectorEffect="non-scaling-stroke" />
       ) : null}
       {showInner && !hide.top && t > 0 ? (
         <line x1={l} y1={t} x2={w - r} y2={t} stroke={stroke} strokeWidth={innerSw} strokeLinecap="butt" vectorEffect="non-scaling-stroke" />
@@ -233,7 +242,7 @@ export const SlidingTrackOuterOutline: React.FC<{
   const w = Math.max(0, widthPx);
   const h = Math.max(0, heightPx);
   if (w <= 0 || h <= 0) return null;
-  const stroke = jointStroke(variant);
+  const stroke = jointOuterStroke(variant);
   const sw = jointWidth(variant);
 
   return (

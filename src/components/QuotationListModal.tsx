@@ -693,7 +693,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
               <Button onClick={() => importQuotationInputRef.current?.click()} variant="secondary" className="!h-8 !min-h-0 !px-2 !py-1 !text-[11px] !shadow-none sm:!text-xs">
                 <UploadIcon className="mr-1 h-3.5 w-3.5 shrink-0"/> Import
               </Button>
-              <input type="file" ref={importQuotationInputRef} onChange={handleImport} className="hidden" accept="application/json" />
+              <input type="file" id="modal-import-quotation" name="modal-import-quotation" ref={importQuotationInputRef} onChange={handleImport} className="hidden" accept="application/json" />
               <Button onClick={openPrintPreview} className="!h-8 !min-h-0 !px-2 !py-1 !text-[11px] !shadow-none sm:!text-xs">
                 <PrinterIcon className="mr-1 h-3.5 w-3.5 shrink-0"/> Print
               </Button>
@@ -715,7 +715,7 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                           <div className="flex-grow">
                               <Input id="modal-company-name" name="modal-company-name" label="Company Name" value={settings.company.name} onChange={e => handleSettingsChange('company', 'name', e.target.value)} />
                               <Button variant="secondary" className="w-full mt-2" onClick={() => companyLogoInputRef.current?.click()}><UploadIcon className="w-4 h-4 mr-2"/> Upload Logo</Button>
-                              <input type="file" ref={companyLogoInputRef} onChange={handleLogoUpload} className="hidden" accept="image/*" />
+                              <input type="file" id="modal-company-logo" name="modal-company-logo" ref={companyLogoInputRef} onChange={handleLogoUpload} className="hidden" accept="image/*" />
                           </div>
                       </div>
                       <Input id="modal-company-address" name="modal-company-address" label="Address" value={settings.company.address} onChange={e => handleSettingsChange('company', 'address', e.target.value)} />
@@ -757,9 +757,11 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                       <div className="space-y-3">
                           <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 justify-between">
                             <div className="flex flex-wrap items-center gap-2">
-                              <label className="text-sm text-slate-300 flex items-center gap-2">
+                              <label className="text-sm text-slate-300 flex items-center gap-2" htmlFor="modal-show-type-filter">
                                 <span>Show type</span>
                                 <select
+                                  id="modal-show-type-filter"
+                                  name="modal-show-type-filter"
                                   value={typeFilter}
                                   onChange={(e) => setTypeFilter(e.target.value as WindowType | 'all' | 'railing')}
                                   className="bg-slate-800 border border-slate-600 rounded-md px-2 py-1 text-white text-sm"
@@ -800,6 +802,8 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                                   <div key={item.id} className="bg-slate-900/50 p-3 rounded-lg flex flex-col md:flex-row md:items-center gap-4">
                                     <label className="flex items-center gap-2 cursor-pointer shrink-0 no-print">
                                       <input
+                                        id={`modal-select-package-${item.id}`}
+                                        name={`modal-select-line-${item.id}`}
                                         type="checkbox"
                                         checked={selectedLineIds.includes(item.id)}
                                         onChange={() => toggleSelect(item.id)}
@@ -853,6 +857,8 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                                   <div key={item.id} className="bg-slate-900/50 p-3 rounded-lg flex flex-col md:flex-row md:items-center gap-4">
                                     <label className="flex items-center gap-2 cursor-pointer shrink-0 no-print">
                                       <input
+                                        id={`modal-select-railing-${item.id}`}
+                                        name={`modal-select-line-${item.id}`}
                                         type="checkbox"
                                         checked={selectedLineIds.includes(item.id)}
                                         onChange={() => toggleSelect(item.id)}
@@ -920,6 +926,8 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                                   <div key={item.id} className="bg-slate-900/50 p-3 rounded-lg flex flex-col md:flex-row md:items-center gap-4">
                                       <label className="flex items-center gap-2 cursor-pointer shrink-0 no-print">
                                         <input
+                                          id={`modal-select-window-${item.id}`}
+                                          name={`modal-select-line-${item.id}`}
                                           type="checkbox"
                                           checked={selectedLineIds.includes(item.id)}
                                           onChange={() => toggleSelect(item.id)}
@@ -1187,6 +1195,8 @@ export const QuotationListModal: React.FC<QuotationListModalProps> = ({
                     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3 pt-3">
                       <label className="flex items-center space-x-2 cursor-pointer pt-2">
                         <input
+                          id="modal-rate-mesh-separate-sections"
+                          name="modal-rate-mesh-separate-sections"
                           type="checkbox"
                           checked={settings.materialRates.meshShutterOptions.separateSections}
                           onChange={(e) =>

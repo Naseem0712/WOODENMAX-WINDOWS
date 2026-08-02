@@ -212,6 +212,8 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
                         <>
                             <input
                                 ref={photoInputRef}
+                                id={`${idPrefix}print-elevation-photo`}
+                                name="print-elevation-photo"
                                 type="file"
                                 accept="image/*"
                                 className="sr-only"
@@ -411,6 +413,8 @@ export const QuotationPanel: React.FC<QuotationPanelProps> = React.memo(({
                               </td>
                               <td className="px-1.5 py-1 text-right">
                                 <input
+                                  id={`${idPrefix}layout-unit-rate-${row.id}`}
+                                  name={`layout-unit-rate-${row.id}`}
                                   type="number"
                                   inputMode="decimal"
                                   className="w-16 rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-right text-slate-200 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"

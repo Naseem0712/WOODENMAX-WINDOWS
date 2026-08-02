@@ -14,7 +14,7 @@ import {
 } from '../../utils/casementOutlineGeometry';
 import type { OpeningInnerLineHideRanges } from '../../utils/casementGridMullions';
 import { subtractMmRanges } from '../../utils/casementGridMullions';
-import { jointStroke, jointWidth, jointInnerWidth, mmOutlineInnerStrokeWidth, mmOutlineStrokeWidth, outlineSvgProps, type ProfileJointVariant } from '../profile/ProfileJointLines';
+import { jointStroke, jointOuterStroke, jointWidth, jointInnerWidth, mmOutlineInnerStrokeWidth, mmOutlineStrokeWidth, outlineSvgProps, type ProfileJointVariant } from '../profile/ProfileJointLines';
 
 type FrameGeom = {
   ringD: string;
@@ -198,6 +198,7 @@ export const OpeningShapedFrame: React.FC<Props> = ({
   const wPx = mmToPx(windowW, scale);
   const hPx = mmToPx(windowH, scale);
   const stroke = jointStroke(variant);
+  const outerStroke = jointOuterStroke(variant);
   const outerSw = jointWidth(variant);
   const innerSw = jointInnerWidth(variant);
 
@@ -225,7 +226,7 @@ export const OpeningShapedFrame: React.FC<Props> = ({
         </>
       ) : null}
       {!fillOnly && outerBoundary ? (
-        <path d={outerBoundary} fill="none" stroke={stroke} strokeWidth={outerSw} strokeLinecap="butt" strokeLinejoin="miter" vectorEffect="non-scaling-stroke" />
+        <path d={outerBoundary} fill="none" stroke={outerStroke} strokeWidth={outerSw} strokeLinecap="butt" strokeLinejoin="miter" vectorEffect="non-scaling-stroke" />
       ) : null}
       {!fillOnly && innerBoundary ? (
         <path d={innerBoundary} fill="none" stroke={stroke} strokeWidth={innerSw} strokeLinecap="butt" strokeLinejoin="miter" vectorEffect="non-scaling-stroke" />
@@ -262,10 +263,10 @@ export const OpeningShapedFrameOutlines: React.FC<Omit<Props, 'fillOnly' | 'colo
   );
   if (!outerBoundary && !innerBoundary && !useArchSegments) return null;
 
-  const pad = mmOutlineStrokeWidth(variant, scale);
   const wPx = mmToPx(windowW, scale);
   const hPx = mmToPx(windowH, scale);
   const stroke = jointStroke(variant);
+  const outerStroke = jointOuterStroke(variant);
   const outerSw = mmOutlineStrokeWidth(variant, scale);
   const innerSw = mmOutlineInnerStrokeWidth(variant, scale);
   const springY = useArchSegments ? archSpringYMmForOpening(config, innerW, innerH) : 0;
@@ -285,7 +286,7 @@ export const OpeningShapedFrameOutlines: React.FC<Omit<Props, 'fillOnly' | 'colo
       style={{ zIndex: 1, overflow: 'visible' }}
       width={wPx}
       height={hPx}
-      viewBox={`${-pad} ${-pad} ${windowW + pad * 2} ${windowH + pad * 2}`}
+      viewBox={`0 0 ${windowW} ${windowH}`}
       preserveAspectRatio="none"
       aria-hidden
       {...outlineSvgProps}
@@ -294,7 +295,7 @@ export const OpeningShapedFrameOutlines: React.FC<Omit<Props, 'fillOnly' | 'colo
         <path
           d={outerBoundary}
           fill="none"
-          stroke={stroke}
+          stroke={outerStroke}
           strokeWidth={outerSw}
           strokeLinecap="butt"
           strokeLinejoin="miter"

@@ -318,6 +318,7 @@ export function HomeownerConfigSections(props: {
             <input
               type="checkbox"
               id={`${idPrefix}homeowner-frosted-extra`}
+              name="homeowner-frosted-extra"
               checked={frostedExtra}
               onChange={(e) => {
                 setFrostedExtra(e.target.checked);

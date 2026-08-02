@@ -742,6 +742,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
 
       {!isCorner && props.onAddLayoutUnits && props.onActiveLayoutUnitChange ? (
         <DesignLayoutPanel
+          idPrefix={idPrefix}
           primaryTitle={props.windowTitle ?? 'Window 1'}
           activeUnitId={props.activeLayoutUnitId ?? 'primary'}
           companions={props.layoutCompanions ?? []}
@@ -1914,7 +1915,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
             <div className='mt-4 pt-4 border-t border-slate-700'>
                 <h4 className="text-base font-semibold text-slate-200 mb-2">Glass Texture</h4>
                 <Button variant="secondary" className="w-full" onClick={() => glassTextureUploadRef.current?.click()}> <UploadIcon className="w-4 h-4 mr-2" /> Upload Texture </Button>
-                <input type="file" ref={glassTextureUploadRef} onChange={handleGlassTextureUpload} className="hidden" accept="image/*" />
+                <input type="file" id={`${idPrefix}glass-texture-upload`} name="glass-texture-upload" ref={glassTextureUploadRef} onChange={handleGlassTextureUpload} className="hidden" accept="image/*" />
                 {config.glassTexture && <Button variant="danger" className="w-full mt-2" onClick={() => setConfig('glassTexture', '')}> Remove Texture </Button>}
             </div>
         )}
@@ -1944,7 +1945,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
                 <Button variant="secondary" className="flex-1 min-w-[140px]" onClick={() => profileOverlayUploadRef.current?.click()}>
                     <UploadIcon className="w-4 h-4 mr-2" /> Upload texture overlay
                 </Button>
-                <input type="file" ref={profileOverlayUploadRef} onChange={handleProfileOverlayUpload} className="hidden" accept="image/*" />
+                <input type="file" id={`${idPrefix}profile-overlay-upload`} name="profile-overlay-upload" ref={profileOverlayUploadRef} onChange={handleProfileOverlayUpload} className="hidden" accept="image/*" />
                 {config.profileTexture ? (
                     <Button variant="danger" onClick={() => setConfig('profileTexture', '')}>Remove overlay</Button>
                 ) : null}
@@ -1964,7 +1965,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
                   <div className='flex gap-2 items-end'>
                     <Input id={`${idPrefix}new-preset-value`} name="new-preset-value" label="Color Value" type="color" value={newPreset.value} onChange={e => setNewPreset({...newPreset, value: e.target.value, type: 'color'})} className='p-1 h-10'/>
                     <Button variant="secondary" className="h-10" onClick={() => profileTextureUploadRef.current?.click()}><UploadIcon className='w-4 h-4'/></Button>
-                    <input type="file" ref={profileTextureUploadRef} onChange={e => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setNewPreset({...newPreset, value: reader.result as string, type: 'texture'}); reader.readAsDataURL(file); } }} className="hidden" accept="image/*" />
+                    <input type="file" id={`${idPrefix}profile-texture-upload`} name="profile-texture-upload" ref={profileTextureUploadRef} onChange={e => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setNewPreset({...newPreset, value: reader.result as string, type: 'texture'}); reader.readAsDataURL(file); } }} className="hidden" accept="image/*" />
                   </div>
                   <div className="flex gap-2"> <Button onClick={handleAddPreset} className="flex-grow">Save</Button> <Button variant="secondary" onClick={() => setIsAddingPreset(false)} className="flex-grow">Cancel</Button> </div>
               </div>
@@ -1977,7 +1978,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
           <CollapsibleCard title="Georgian Bars" isOpen={openCard === 'Georgian Bars'} onToggle={() => handleToggleCard('Georgian Bars')}>
             <div className="grid grid-cols-2 gap-4">
                 <DimensionInput id={`${idPrefix}georgian-bar-thickness`} name="georgian-bar-thickness" label="Bar Thickness" value_mm={glassGrid.barThickness} onChange_mm={v => setConfig('glassGrid', {...glassGrid, barThickness: v === '' ? 0 : v})} controlledUnit={georgianUnit} />
-                <Select id={`${idPrefix}georgian-unit-select`} label="Unit" value={georgianUnit} onChange={e => setGeorgianUnit(e.target.value as Unit)}>
+                <Select id={`${idPrefix}georgian-unit-select`} name="georgian-unit-select" label="Unit" value={georgianUnit} onChange={e => setGeorgianUnit(e.target.value as Unit)}>
                     <option value="mm">mm</option>
                     <option value="cm">cm</option>
                     <option value="in">in</option>

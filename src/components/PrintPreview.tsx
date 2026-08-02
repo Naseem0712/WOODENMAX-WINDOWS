@@ -2045,7 +2045,7 @@ const EditableSection: React.FC<{title: string, value: string, onChange: (value:
 
     return (
         <div className="print-final-details mt-4" style={{breakInside: 'avoid'}}>
-            <h3 id={id} className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">{title}</h3>
+            <h3 id={`${id}-heading`} className="font-bold text-sm mb-1 border-b border-gray-300 pb-1">{title}</h3>
             {isEditing ? (
                 <textarea
                     ref={textareaRef}
@@ -2057,7 +2057,7 @@ const EditableSection: React.FC<{title: string, value: string, onChange: (value:
                     onBlur={() => setIsEditing(false)}
                     className="w-full text-xs whitespace-pre-wrap bg-transparent border-gray-300 rounded-md p-1 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 print-editable"
                     style={{overflow: 'hidden'}}
-                    aria-labelledby={id}
+                    aria-labelledby={`${id}-heading`}
                     autoFocus
                 />
             ) : (
@@ -2391,6 +2391,8 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
         <div className="flex-shrink-0 bg-slate-800 p-3 flex-wrap flex justify-start items-center gap-4 no-print border-t border-slate-700">
              <label className="flex items-center space-x-2 cursor-pointer text-white">
                 <input
+                    id="print-architectural-mode"
+                    name="print-architectural-mode"
                     type="checkbox"
                     checked={isArchitecturalMode}
                     onChange={e => setIsArchitecturalMode(e.target.checked)}
@@ -2407,6 +2409,8 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
               }
             >
                 <input
+                    id="print-include-open-view"
+                    name="print-include-open-view"
                     type="checkbox"
                     checked={includeOpenViewDiagram && hasOpenViewQuotationItems}
                     disabled={!hasOpenViewQuotationItems}
@@ -2417,9 +2421,11 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
             </label>
             {includeOpenViewDiagram && hasOpenViewQuotationItems ? (
               <div className="flex flex-wrap items-end gap-3 text-white text-xs">
-                <label className="flex min-w-[140px] flex-col gap-1">
+                <label className="flex min-w-[140px] flex-col gap-1" htmlFor="print-open-view-amount">
                   <span>Open amount ({openViewPrintAmount}%)</span>
                   <input
+                    id="print-open-view-amount"
+                    name="print-open-view-amount"
                     type="range"
                     min={0}
                     max={100}
@@ -2428,9 +2434,11 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
                     className="w-full accent-indigo-500"
                   />
                 </label>
-                <label className="flex flex-col gap-1">
+                <label className="flex flex-col gap-1" htmlFor="print-open-view-swing">
                   <span>Swing</span>
                   <select
+                    id="print-open-view-swing"
+                    name="print-open-view-swing"
                     value={openViewPrintSwing}
                     onChange={(e) => setOpenViewPrintSwing(e.target.value as 'inside' | 'outside')}
                     className="rounded bg-slate-700 px-2 py-1 text-xs"
