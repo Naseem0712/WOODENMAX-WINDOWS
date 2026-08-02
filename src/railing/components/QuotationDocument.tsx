@@ -1,4 +1,5 @@
 import { COMPANY } from '../constants'
+import { PrintWeosCredit } from '../../components/PrintWeosCredit'
 import { bankDetailsForQuote, parseTermsLines } from '../metaDefaults'
 import { formatQuoteMoney } from '../utils'
 import { formatQuoteDate, quoteTotals, resolveQuotationLine } from '../quotationFormat'
@@ -44,12 +45,15 @@ export function QuotationDocument({ meta, lines }: Props) {
   return (
     <div className="quotation-doc">
       <div className="qdoc-print-footer" aria-hidden="true">
+        <span className="qdoc-print-watermark">
+          <PrintWeosCredit />
+        </span>
         <span className="qdoc-page-num" />
       </div>
       <header className="qdoc-header-panels">
         <section className="qdoc-panel qdoc-panel-company" aria-label="Company details">
           <div className="qdoc-company-logo-bar">
-            <CompanyLogo size={88} className="qdoc-logo-head" />
+            <CompanyLogo size={120} className="qdoc-logo-head" />
           </div>
           <div className="qdoc-company-intro">
             <p className="qdoc-brand-name">{COMPANY.name}</p>

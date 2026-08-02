@@ -2,8 +2,10 @@
 
 Free **online & offline** (PWA) app to design aluminium windows, doors, partitions, louvers, ventilators, and more — with quotations and material-style summaries.
 
-**Live app:** [window.woodenmax.in](https://window.woodenmax.in)  
-**Company:** [woodenmax.in](https://www.woodenmax.in) · **Email:** info@woodenmax.com
+**Live app:** [window.woodenmax.in](https://window.woodenmax.in) (WEOS by WoodenMax)  
+**Company:** [woodenmax.in](https://www.woodenmax.in) · [allukraft.com](https://www.allukraft.com) · **Email:** info@woodenmax.com
+
+Installed PWA clients auto-update when you open the app after a new deploy (`registerType: 'autoUpdate'` + periodic update checks).
 
 ## Prerequisites
 

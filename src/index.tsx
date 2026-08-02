@@ -7,8 +7,10 @@ import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { UserModeProvider } from './components/UserModeProvider';
 import { HomeownerHandlePlacementProvider } from './components/homeowner/HomeownerHandlePlacementContext';
+import { registerPwaAutoUpdate } from './pwaRegister';
 
 initAnalytics();
+registerPwaAutoUpdate();
 
 // Production SW on localhost breaks dev (wrong cached responses → no CSS, manifest HTML).
 if (import.meta.env.DEV && 'serviceWorker' in navigator) {

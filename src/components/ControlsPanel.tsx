@@ -674,6 +674,72 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = React.memo(({ idPrefi
         )}
       </CollapsibleCard>
 
+      <CollapsibleCard title="Print Specifications" isOpen={openCard === 'Print Specifications'} onToggle={() => handleToggleCard('Print Specifications')}>
+        <p className="text-[11px] text-slate-400 leading-snug mb-3">
+          These fields always appear on the quotation PDF with each window (blank shows as —).
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <DimensionInput
+            id={`${idPrefix}wall-thickness`}
+            name="wall-thickness"
+            label="Wall thickness"
+            value_mm={config.wallThicknessMm ?? ''}
+            onChange_mm={(v) => setConfig('wallThicknessMm', v)}
+            placeholder="e.g., 150"
+          />
+          <Input
+            id={`${idPrefix}aluminium-alloy`}
+            name="aluminium-alloy"
+            label="Aluminium alloy"
+            type="text"
+            placeholder="e.g., 6063-T5"
+            value={config.aluminiumAlloy ?? ''}
+            onChange={(e) => setConfig('aluminiumAlloy', e.target.value)}
+          />
+          <Input
+            id={`${idPrefix}hardware-brand`}
+            name="hardware-brand"
+            label="Hardware brand"
+            type="text"
+            placeholder="e.g., Godrej"
+            value={config.hardwareBrand ?? ''}
+            onChange={(e) => setConfig('hardwareBrand', e.target.value)}
+          />
+          <Input
+            id={`${idPrefix}hardware-type`}
+            name="hardware-type"
+            label="Hardware type"
+            type="text"
+            placeholder="e.g., Multi Point Lock"
+            value={config.hardwareType ?? ''}
+            onChange={(e) => setConfig('hardwareType', e.target.value)}
+          />
+          <Input
+            id={`${idPrefix}hardware-color`}
+            name="hardware-color"
+            label="Hardware color"
+            type="text"
+            placeholder="e.g., SS / Black"
+            value={config.hardwareColor ?? ''}
+            onChange={(e) => setConfig('hardwareColor', e.target.value)}
+          />
+        </div>
+        <div className="mt-3">
+          <label htmlFor={`${idPrefix}window-notes`} className="block text-xs font-medium text-slate-300 mb-1">
+            Special note (this window)
+          </label>
+          <textarea
+            id={`${idPrefix}window-notes`}
+            name="window-notes"
+            rows={3}
+            placeholder="Any special instruction for this window…"
+            value={config.notes ?? ''}
+            onChange={(e) => setConfig('notes', e.target.value)}
+            className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </div>
+      </CollapsibleCard>
+
       {!isCorner && props.onAddLayoutUnits && props.onActiveLayoutUnitChange ? (
         <DesignLayoutPanel
           primaryTitle={props.windowTitle ?? 'Window 1'}

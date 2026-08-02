@@ -7,7 +7,7 @@ interface Props {
   className?: string
 }
 
-export function CompanyLogo({ size = 72, className = '' }: Props) {
+export function CompanyLogo({ size = 96, className = '' }: Props) {
   const [srcIdx, setSrcIdx] = useState(0)
   const src = LOGO_CANDIDATES[srcIdx] ?? LOGO_CANDIDATES[0]
 
@@ -18,7 +18,7 @@ export function CompanyLogo({ size = 72, className = '' }: Props) {
       width={size}
       height={size}
       className={`company-logo-img ${className}`.trim()}
-      style={{ width: size, height: 'auto', maxHeight: size }}
+      style={{ width: 'auto', height: size, maxHeight: size, maxWidth: Math.round(size * 2.4), objectFit: 'contain', objectPosition: 'left center' }}
       onError={() => {
         setSrcIdx((i) => (i < LOGO_CANDIDATES.length - 1 ? i + 1 : i))
       }}

@@ -364,6 +364,19 @@ export interface WindowConfig {
   leftConfig?: CornerSideConfig;
   rightConfig?: CornerSideConfig;
   cornerPostWidth: number | '';
+
+  /** Wall / opening thickness (mm) — always shown on quotation print. */
+  wallThicknessMm?: number | '';
+  /** e.g. 6063-T5 — always shown on quotation print. */
+  aluminiumAlloy?: string;
+  /** Lock / hardware brand — always shown on quotation print. */
+  hardwareBrand?: string;
+  /** Hardware type (e.g. Multi Point Lock) — always shown on quotation print. */
+  hardwareType?: string;
+  /** Hardware finish / color — always shown on quotation print. */
+  hardwareColor?: string;
+  /** Special note for this window — prints with item details. */
+  notes?: string;
 }
 
 import type { QuotationLine } from './railing/types';

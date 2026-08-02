@@ -11,7 +11,7 @@ import {
 export const OG_IMAGE_URL = 'https://window.woodenmax.in/logo.jpg';
 
 const DEFAULT_DESCRIPTION =
-  'WoodenMax Window Designer — free PWA for aluminium & uPVC sliding & casement windows, glass partitions, louvers, ventilators, corner glazing & mirrors. Sizes, PDF quotations & BOM for uPVC window projects. Works online & offline at window.woodenmax.in.';
+  'WEOS by WoodenMax — free PWA for aluminium & uPVC sliding & casement windows, glass partitions, louvers, ventilators, corner glazing & mirrors. Sizes, PDF quotations & BOM. window.woodenmax.in · allukraft.com.';
 
 export const DEFAULT_PAGE_DESCRIPTION = DEFAULT_DESCRIPTION;
 

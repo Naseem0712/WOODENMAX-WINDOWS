@@ -786,7 +786,7 @@ const DEFAULT_QUOTATION_SETTINGS: QuotationSettings = {
     customer: { name: '', address: '', contactPerson: '', email: '', website: '', gstNumber: '', architectName: '' },
     financials: { gstPercentage: 18, discount: 0, discountType: 'percentage' },
     bankDetails: { name: '', accountNumber: '', ifsc: '', branch: '', accountType: 'current' },
-    title: 'Quotation - WoodenMax Window Designer',
+    title: 'Quotation - WEOS by WoodenMax',
     terms: '1. 50% advance payment required.\n2. Prices are exclusive of taxes.\n3. Delivery within 4-6 weeks.',
     description: 'Supply and installation of premium aluminium windows and partitions as per the agreed specifications.',
     materialRates: DEFAULT_MATERIAL_RATES,
@@ -879,6 +879,12 @@ const initialConfig: ConfigState = {
         archInnerRingCount: 0,
         archInnerRingGapMm: 16,
     },
+    wallThicknessMm: '',
+    aluminiumAlloy: '6063-T5',
+    hardwareBrand: '',
+    hardwareType: '',
+    hardwareColor: '',
+    notes: '',
 };
 
 const SERIES_MAP: Record<WindowType, ProfileSeries> = {
@@ -1634,24 +1640,34 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
       {/* One flex child for app shell; keeps fixed mobile layers from breaking flex-1 on this scroller. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden">
       {!isEmbedded && (
-      <header className="no-print z-40 flex shrink-0 flex-col gap-1 border-b border-slate-200/90 bg-gradient-to-b from-white to-slate-100 px-2.5 py-1.5 shadow-sm sm:flex-row sm:items-center sm:gap-2">
-            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
-              {/* Long SEO headings: Tailwind `sr-only` = visually hidden (not shown on screen). Visible line is the <p> tagline below. */}
+      <header className="no-print z-40 flex shrink-0 flex-row items-center gap-1.5 border-b border-slate-200/90 bg-gradient-to-b from-white to-slate-100 px-2 py-1 shadow-sm sm:gap-2 sm:px-2.5 sm:py-1.5">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2.5">
+              {/* Long SEO headings: Tailwind `sr-only` = visually hidden (not shown on screen). */}
               <div className="sr-only">
-                <h1>WoodenMax Window Designer — system window calculators, aluminium &amp; uPVC online design, instant window quotations, profile optimizers, PDF &amp; BOM</h1>
+                <h1>WEOS by WoodenMax — system window calculators, aluminium &amp; uPVC online design, instant window quotations, profile optimizers, PDF &amp; BOM</h1>
                 <h2>Window design &amp; costing: sliding 2/3 track, casement, ventilators, glass partitions, louvers, L-corner, mirrors</h2>
                 <h3>Window quotation generator, cutting list &amp; material packing for fabricators, architects &amp; project teams</h3>
               </div>
-              <div className="shrink-0 rounded-md bg-white px-1.5 py-1 shadow-sm ring-1 ring-slate-200/90">
-                <Logo className="h-7 w-auto max-h-7 max-w-[min(100%,180px)] object-contain sm:h-8 sm:max-h-8" alt="WoodenMax logo" />
+              <div className="shrink-0 rounded-md bg-white px-1 py-0.5 shadow-sm ring-1 ring-slate-200/90 sm:px-1.5 sm:py-1">
+                <Logo className="h-6 w-auto max-h-6 max-w-[min(100%,120px)] object-contain sm:h-8 sm:max-h-8 sm:max-w-[min(100%,180px)]" alt="WoodenMax logo" />
               </div>
-              <p className="min-w-0 flex-1 text-[11px] font-medium leading-tight text-slate-700 sm:text-xs">
+              <p className="shrink-0 text-[11px] font-semibold leading-none text-slate-900 sm:hidden">
+                WEOS
+              </p>
+              <p className="hidden min-w-0 flex-1 truncate text-xs font-medium leading-tight text-slate-700 lg:block">
+                <span className="font-semibold text-slate-900">WEOS</span>
+                <span className="text-slate-500"> by WoodenMax</span>
+                <span className="mx-1 text-slate-400">·</span>
                 Reshaping spaces — free window &amp; door design with instant quotations.
               </p>
+              <p className="hidden min-w-0 flex-1 truncate text-xs font-medium text-slate-700 sm:block lg:hidden">
+                <span className="font-semibold text-slate-900">WEOS</span>
+                <span className="text-slate-500"> by WoodenMax</span>
+              </p>
             </div>
-            <div className="flex min-h-9 shrink-0 items-center justify-end gap-1.5 sm:ml-auto sm:min-h-0">
+            <div className="flex min-h-8 shrink-0 items-center justify-end gap-1 sm:min-h-9 sm:gap-1.5">
               <WoodenMaxCatalogMenu />
-              <div className="hidden items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200/90 sm:inline-flex">
+              <div className="hidden items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200/90 md:inline-flex">
                 <span className="text-[11px] text-slate-500">Mode</span>
                 <select
                   value={userModeState.mode}
@@ -1664,16 +1680,16 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
                   <option value="manufacturer">Manufacturer</option>
                 </select>
               </div>
-              <Button onClick={onOpenGuides} variant="secondary" className="hidden px-2.5 py-1 text-xs sm:inline-flex">
+              <Button onClick={onOpenGuides} variant="secondary" className="hidden px-2.5 py-1 text-xs md:inline-flex">
                 <DocumentTextIcon className="mr-1.5 h-4 w-4" /> Features &amp; Guides
               </Button>
-              <Button onClick={onOpenShortcuts} variant="secondary" className="hidden px-2.5 py-1 text-xs sm:inline-flex">
+              <Button onClick={onOpenShortcuts} variant="secondary" className="hidden px-2.5 py-1 text-xs lg:inline-flex">
                 Keyboard
               </Button>
               <Button
                 onClick={() => setShowOpenViewModal(true)}
                 variant="secondary"
-                className="hidden px-2.5 py-1 text-xs sm:inline-flex"
+                className="hidden px-2.5 py-1 text-xs lg:inline-flex"
                 disabled={!openViewAvailable}
                 title={openViewAvailable ? 'Customer open view — sliding / fold / openable' : 'Open view: sliding, casement, ventilator, or operable partition only'}
               >
@@ -1682,7 +1698,7 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
               <Button
                 onClick={() => setShow3DPreview(true)}
                 variant="secondary"
-                className="hidden px-2.5 py-1 text-xs sm:inline-flex"
+                className="hidden px-2.5 py-1 text-xs lg:inline-flex"
                 title="3D preview — orbit and slide open"
               >
                 3D Preview
@@ -1690,14 +1706,14 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
               <Button
                 onClick={onOpenGuides}
                 variant="secondary"
-                className="inline-flex min-h-10 min-w-10 items-center justify-center p-0 sm:hidden"
+                className="inline-flex min-h-9 min-w-9 items-center justify-center p-0 md:hidden"
                 aria-label="Features and guides"
               >
                 <DocumentTextIcon className="h-5 w-5" />
               </Button>
               <button
                 type="button"
-                className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md bg-white/10 text-[10px] font-bold text-slate-100 ring-1 ring-white/15 sm:hidden"
+                className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-md bg-white/10 text-[10px] font-bold text-slate-100 ring-1 ring-white/15 md:hidden"
                 onClick={() => {
                   const next = userModeState.mode === 'homeowner' ? 'architect' : userModeState.mode === 'architect' ? 'manufacturer' : 'homeowner'
                   setUserMode(next)
@@ -1743,7 +1759,7 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
                 ref={canvasViewportRef}
                 className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain custom-scrollbar touch-pan-y"
               >
-                <div className="box-border flex w-full min-h-full flex-col items-center justify-center gap-2 px-4 py-6">
+                <div className="box-border flex w-full min-h-full flex-col items-center justify-center gap-1 px-2 py-2 sm:gap-2 sm:px-4 sm:py-6">
                   {layoutCompanions.length > 0 ? (
                     <p className="text-center text-[11px] text-slate-400">
                       Window par click karein ya 1,2,3… select karein —{' '}
@@ -1808,6 +1824,8 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
                   onPrintElevationPhotoChange={onPrintElevationPhotoChange}
                   printVisualWidthMm={printVisualWidthMm}
                   printVisualHeightMm={printVisualHeightMm}
+                  windowNotes={windowConfig.notes ?? ''}
+                  setWindowNotes={(v) => commonControlProps.setConfig('notes', v)}
                 />
               </div>
               <div className="no-print grid grid-cols-2 gap-2 border-t border-slate-700 bg-slate-800 px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:hidden">
@@ -1853,7 +1871,7 @@ const DesignerView: React.FC<DesignerViewProps> = React.memo((props) => {
               <div className="h-1.5 w-12 rounded-full bg-slate-600" />
             </div>
             <SpringScrollArea className="min-h-0 flex-1 overflow-y-auto custom-scrollbar touch-pan-y">
-              <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quotationOpeningMm2={quotationOpeningMm2} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} onClose={handleCloseMobilePanels} bulkCorrectionLineCount={bulkCorrectionLineCount} onApplyBulkCorrection={onApplyBulkCorrection} layoutEstimate={layoutEstimate} activeLayoutUnitId={activeLayoutUnitId} onLayoutUnitRateChange={onLayoutUnitRateChange} onSaveLayoutAll={onSaveLayoutAllToQuotation} printElevationPhoto={printElevationPhoto} onPrintElevationPhotoChange={onPrintElevationPhotoChange} printVisualWidthMm={printVisualWidthMm} printVisualHeightMm={printVisualHeightMm} />
+              <QuotationPanel idPrefix="mobile-" width={Number(windowConfig.width) || 0} height={Number(windowConfig.height) || 0} quotationOpeningMm2={quotationOpeningMm2} quantity={quantity} setQuantity={setQuantity} areaType={areaType} setAreaType={setAreaType} rate={rate} setRate={setRate} onSave={onSave} onUpdate={onUpdate} onCancelEdit={onCancelEdit} editingItemId={editingItemId} onBatchAdd={onBatchAdd} windowTitle={windowTitle} setWindowTitle={setWindowTitle} hardwareCostPerWindow={hardwareCostPerWindow} quotationItemCount={quotationItemCount} onViewQuotation={onViewQuotation} onClose={handleCloseMobilePanels} bulkCorrectionLineCount={bulkCorrectionLineCount} onApplyBulkCorrection={onApplyBulkCorrection} layoutEstimate={layoutEstimate} activeLayoutUnitId={activeLayoutUnitId} onLayoutUnitRateChange={onLayoutUnitRateChange} onSaveLayoutAll={onSaveLayoutAllToQuotation} printElevationPhoto={printElevationPhoto} onPrintElevationPhotoChange={onPrintElevationPhotoChange} printVisualWidthMm={printVisualWidthMm} printVisualHeightMm={printVisualHeightMm} windowNotes={windowConfig.notes ?? ''} setWindowNotes={(v) => commonControlProps.setConfig('notes', v)} />
             </SpringScrollArea>
         </div>
     </div>
@@ -2256,7 +2274,7 @@ const App: React.FC = () => {
         [WindowType.MIRROR]: 'Online Mirror Design Tool | Round, Square, Capsule & Custom Shapes',
     };
     
-    let pageTitle = 'WoodenMax Window Designer | Aluminium & uPVC Window & Door Design + Quotations';
+    let pageTitle = 'WEOS by WoodenMax | Aluminium & uPVC Window & Door Design + Quotations';
 
     let pageKind: 'design' | 'guide' | 'home' = 'home';
     let breadcrumbLabel: string | undefined;
@@ -2266,15 +2284,15 @@ const App: React.FC = () => {
         const guideLabel = getGuideDisplayTitle(guideSlug);
         breadcrumbLabel = guideLabel;
         if (guideSlug === 'index') {
-          pageTitle = 'Features & Guides | WoodenMax Window Designer';
+          pageTitle = 'Features & Guides | WEOS by WoodenMax';
         } else {
-          pageTitle = `${guideLabel} | Guides & Help | WoodenMax Window Designer`;
+          pageTitle = `${guideLabel} | Guides & Help | WEOS by WoodenMax`;
         }
         canonicalUrl = `${SITE_ORIGIN}/guides/${guideSlug}`;
     } else if (appView === 'railing') {
         pageKind = 'design';
         pageTitle =
-          'Glass & SS Railing Designer | Staircase & Balcony Layouts — Combined quotations | WoodenMax';
+          'Glass & SS Railing Designer | Staircase & Balcony Layouts — Combined quotations | WEOS by WoodenMax';
         breadcrumbLabel = 'Glass railing';
         canonicalUrl = `${SITE_ORIGIN}/design/railing`;
     } else if (windowType) {
@@ -2282,9 +2300,9 @@ const App: React.FC = () => {
         const mapped = titleMap[windowType];
         breadcrumbLabel = mapped ?? windowType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
         if (mapped) {
-            pageTitle = `${mapped} | WoodenMax`;
+            pageTitle = `${mapped} | WEOS by WoodenMax`;
         } else {
-            pageTitle = `${breadcrumbLabel} Design Tool | WoodenMax Window Designer`;
+            pageTitle = `${breadcrumbLabel} Design Tool | WEOS by WoodenMax`;
         }
         canonicalUrl = `${SITE_ORIGIN}/design/${windowType}`;
     }

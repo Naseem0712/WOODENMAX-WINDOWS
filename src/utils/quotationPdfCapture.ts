@@ -1,15 +1,25 @@
+import {
+  PRINT_WATERMARK,
+  PRINT_WATERMARK_BRAND,
+  PRINT_WATERMARK_PREFIX,
+  PRINT_WATERMARK_URL,
+} from '../constants/site';
+
 type PdfDoc = {
   internal: {
     getNumberOfPages: () => number;
     pageSize: { getWidth: () => number; getHeight: () => number };
   };
   setPage: (n: number) => void;
-  setFillColor: (n: number) => void;
+  setFillColor: (...n: number[]) => void;
   rect: (...args: number[]) => void;
-  setTextColor: (n: number) => void;
+  setTextColor: (...n: number[]) => void;
   setFont: (a: string, b: string) => void;
   setFontSize: (n: number) => void;
   text: (t: string, x: number, y: number, o?: { align: string }) => void;
+  getTextWidth?: (t: string) => number;
+  link?: (x: number, y: number, w: number, h: number, o: { url: string }) => void;
+  textWithLink?: (t: string, x: number, y: number, o: { url: string }) => void;
   output: (type: 'blob') => Blob;
   save: () => Promise<void>;
 };
@@ -108,17 +118,61 @@ export function stampWoodenMaxPageNumbers(pdf: PdfDoc): void {
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.setTextColor(110);
+    pdf.setFontSize(7.5);
+    const y = pageH - 6;
+    const x = 10;
     for (let i = 1; i <= totalPages; i++) {
       pdf.setPage(i);
+      // Full-width white band — keeps page edge clean (no grey bleed).
       pdf.setFillColor(255, 255, 255);
-      pdf.rect(pageW - 42, pageH - 12, 38, 8, 'F');
-      pdf.setTextColor(110);
-      pdf.text(`Page ${i} of ${totalPages}`, pageW - 8, pageH - 6, { align: 'right' });
+      pdf.rect(0, pageH - 14, pageW, 14, 'F');
+
+      pdf.setTextColor(100);
+      const prefix = PRINT_WATERMARK_PREFIX;
+      const brand = PRINT_WATERMARK_BRAND;
+      let prefixW = prefix.length * 1.7;
+      let brandW = brand.length * 1.9;
+      try {
+        if (typeof pdf.getTextWidth === 'function') {
+          prefixW = pdf.getTextWidth(prefix);
+          brandW = pdf.getTextWidth(brand);
+        }
+      } catch {
+        /* keep estimates */
+      }
+
+      pdf.text(prefix, x, y, { align: 'left' });
+      pdf.setTextColor(37, 99, 235);
+      if (typeof pdf.textWithLink === 'function') {
+        pdf.textWithLink(brand, x + prefixW, y, { url: PRINT_WATERMARK_URL });
+      } else {
+        pdf.text(brand, x + prefixW, y, { align: 'left' });
+        if (typeof pdf.link === 'function') {
+          pdf.link(x + prefixW, y - 4, brandW + 2, 6, { url: PRINT_WATERMARK_URL });
+        }
+      }
+
+      pdf.setTextColor(100);
+      pdf.text(`Page ${i} of ${totalPages}`, pageW - 8, y, { align: 'right' });
     }
   } catch {
-    /* optional */
+    try {
+      const totalPages = pdf.internal.getNumberOfPages();
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, pageH - 14, pageW, 14, 'F');
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(100);
+        pdf.text(PRINT_WATERMARK, 10, pageH - 6, { align: 'left' });
+        pdf.text(`Page ${i} of ${totalPages}`, pageW - 8, pageH - 6, { align: 'right' });
+      }
+    } catch {
+      /* optional */
+    }
   }
 }
 

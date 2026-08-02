@@ -124,8 +124,12 @@ const INACTIVE_CANVAS_CALLBACKS = {
 const mmToPx = (mm: number, scale: number) => Math.round(mm * scale * 100) / 100;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-const ZOOM_MIN = 0.2;
-const ZOOM_MAX = 5;
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 4;
+/** Gentler than ×1.2 — avoids jumping from tiny → huge on mobile. */
+const ZOOM_BUTTON_FACTOR = 1.12;
+/** Ctrl/trackpad pinch sensitivity (multiplicative). */
+const ZOOM_WHEEL_SENSITIVITY = 0.0012;
 
 function adjustHexColor(hex: string, delta: number): string {
     if (!hex || !hex.startsWith('#')) return hex;
@@ -2562,10 +2566,11 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   const fitWidthMm = compositeBounds?.widthMm ?? numWidth;
   const fitHeightMm = compositeBounds?.heightMm ?? numHeight;
 
-  /** px reserved for dimension labels drawn outside the frame bbox */
-  const LABEL_LEFT_PX = 72;
-  const LABEL_TOP_PX = 40;
-  const CANVAS_PAD_PX = 24;
+  /** px reserved for dimension labels drawn outside the frame bbox (tighter on phones). */
+  const isNarrowViewport = (viewportSize.w || (typeof window !== 'undefined' ? window.innerWidth : 1024)) < 640;
+  const LABEL_LEFT_PX = isNarrowViewport ? 40 : 72;
+  const LABEL_TOP_PX = isNarrowViewport ? 26 : 40;
+  const CANVAS_PAD_PX = isNarrowViewport ? 8 : 24;
 
   const dims = useMemo(() => ({
     outerFrame: Number(series.dimensions.outerFrame) || 0, outerFrameVertical: Number(series.dimensions.outerFrameVertical) || 0, fixedFrame: Number(series.dimensions.fixedFrame) || 0, shutterHandle: Number(series.dimensions.shutterHandle) || 0, shutterInterlock: Number(series.dimensions.shutterInterlock) || 0, shutterTop: Number(series.dimensions.shutterTop) || 0, shutterBottom: Number(series.dimensions.shutterBottom) || 0, shutterMeeting: Number(series.dimensions.shutterMeeting) || 0, casementShutter: Number(series.dimensions.casementShutter) || 0, mullion: Number(series.dimensions.mullion) || 0, louverBlade: Number(series.dimensions.louverBlade) || 0, topTrack: Number(series.dimensions.topTrack) || 0, bottomTrack: Number(series.dimensions.bottomTrack) || 0
@@ -2607,7 +2612,9 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
     const handleWheel = (e: WheelEvent) => {
         if (e.ctrlKey) {
             e.preventDefault();
-            setZoom((prev) => clamp(prev - e.deltaY * 0.001, ZOOM_MIN, ZOOM_MAX));
+            // Multiplicative zoom stays smooth across trackpad / mouse wheel magnitudes.
+            const factor = Math.exp(-e.deltaY * ZOOM_WHEEL_SENSITIVITY);
+            setZoom((prev) => clamp(prev * factor, ZOOM_MIN, ZOOM_MAX));
         }
     };
     const currentRef = fitViewportRef?.current ?? containerRef.current;
@@ -2618,22 +2625,25 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
   const fitScale = useMemo(() => {
     if (fitWidthMm <= 0 || fitHeightMm <= 0) return 1;
     const vpH = window.visualViewport?.height ?? window.innerHeight;
+    const narrow = (viewportSize.w || window.innerWidth) < 640;
     const cw = Math.max(
       160,
       viewportSize.w ||
         fitViewportRef?.current?.clientWidth ||
-        Math.min(window.innerWidth, 1400) * 0.45,
+        (narrow ? window.innerWidth : Math.min(window.innerWidth, 1400) * 0.45),
     );
     const ch = Math.max(
       180,
       viewportSize.h ||
         fitViewportRef?.current?.clientHeight ||
-        vpH * 0.52,
+        (narrow ? vpH * 0.62 : vpH * 0.52),
     );
     const drawW = Math.max(80, cw - CANVAS_PAD_PX * 2 - LABEL_LEFT_PX);
     const drawH = Math.max(80, ch - CANVAS_PAD_PX * 2 - LABEL_TOP_PX);
-    return Math.min(drawW / fitWidthMm, drawH / fitHeightMm);
-  }, [fitWidthMm, fitHeightMm, viewportSize.w, viewportSize.h, fitViewportRef]);
+    // Fill most of the viewport; leave a little air so labels aren't clipped.
+    const fill = narrow ? 0.98 : 0.94;
+    return Math.min(drawW / fitWidthMm, drawH / fitHeightMm) * fill;
+  }, [fitWidthMm, fitHeightMm, viewportSize.w, viewportSize.h, fitViewportRef, LABEL_LEFT_PX, LABEL_TOP_PX, CANVAS_PAD_PX]);
 
   const scale = fitScale * zoom;
 
@@ -2737,7 +2747,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
                 ctx.textBaseline = 'middle';
                 ctx.font = `bold ${Math.min(outCanvas.width, outCanvas.height) / 8}px Arial`;
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.10)';
-                ctx.fillText('WoodenMax', 0, 0);
+                ctx.fillText('WEOS', 0, 0);
                 ctx.restore();
 
                 const link = document.createElement('a');
@@ -2768,9 +2778,9 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
         className="pointer-events-auto absolute right-4 flex flex-col gap-2 touch-manipulation"
         style={{ bottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}
       >
-        <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => setZoom((z) => clamp(z * 1.2, ZOOM_MIN, ZOOM_MAX))} className="w-11 h-11 sm:w-10 sm:h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><PlusIcon className="w-6 h-6"/></button>
+        <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => setZoom((z) => clamp(z * ZOOM_BUTTON_FACTOR, ZOOM_MIN, ZOOM_MAX))} className="w-11 h-11 sm:w-10 sm:h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><PlusIcon className="w-6 h-6"/></button>
         <button type="button" title="Fit view (reset zoom)" aria-label="Fit view" onClick={() => setZoom(1)} className="w-11 h-11 sm:w-10 sm:h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><ArrowsPointingInIcon className="w-5 h-5"/></button>
-        <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => setZoom((z) => clamp(z / 1.2, ZOOM_MIN, ZOOM_MAX))} className="w-11 h-11 sm:w-10 sm:h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><MinusIcon className="w-6 h-6"/></button>
+        <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => setZoom((z) => clamp(z / ZOOM_BUTTON_FACTOR, ZOOM_MIN, ZOOM_MAX))} className="w-11 h-11 sm:w-10 sm:h-10 bg-slate-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><MinusIcon className="w-6 h-6"/></button>
       </div>
     </div>
   );
@@ -2788,7 +2798,7 @@ export const WindowCanvas: React.FC<WindowCanvasProps> = React.memo((props) => {
       ref={containerRef}
       className="relative flex w-full min-w-0 shrink-0 flex-col items-center justify-center overflow-visible bg-transparent"
     >
-      <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none no-print"> WoodenMax </div>
+      <div className="absolute bottom-4 left-4 text-white text-3xl font-black opacity-10 pointer-events-none no-print"> WEOS </div>
        <div ref={renderedWindowRef} className="flex shrink-0 flex-col items-center justify-center">
             {isCompositeLayout && compositeElements && compositeBounds ? (
               <div

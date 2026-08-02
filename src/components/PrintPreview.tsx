@@ -27,6 +27,14 @@ import {
 import { effectiveFourGlassMeetingMm } from '../utils/slidingGeometry';
 import { getFixedPanelVerticalDivisionsMm } from '../utils/fixedPanelDivisions';
 import { getElevationDimensionsMm, type ElevationSegment } from '../utils/elevationDimensions';
+import {
+  displaySpecOrDash,
+  getDoorShutterSizesLabel,
+  getFrameSectionLabel,
+  getOverallSizeLabel,
+  getWallThicknessLabel,
+} from '../utils/windowPrintSpecs';
+import { PrintWeosCredit } from './PrintWeosCredit';
 import { getQuotationHardwareUnitMultiplier } from '../utils/quotationHardwareCost';
 import { resolveFoldFrameEdges } from '../utils/foldDoorFrame';
 import { FoldDoorOpeningGraphic } from './FoldDoorOpeningVisual';
@@ -115,6 +123,46 @@ function isQuotationLockHardware(name: string): boolean {
 function isShutterElevationColumn(col: ElevationSegment): boolean {
   return col.label === 'S' || col.label === 'M';
 }
+
+/** Always-printed specification rows for each window line. */
+const PrintWindowSpecRows: React.FC<{
+  config: WindowConfig;
+  colorLabel: string;
+  isFrameless?: boolean;
+  compact?: boolean;
+}> = ({ config, colorLabel, isFrameless, compact }) => {
+  const labelClass = compact ? undefined : 'pr-2 font-semibold';
+  const note = (config.notes ?? '').trim();
+  const rows: { label: string; value: string; hideArch?: boolean }[] = [
+    { label: 'Overall', value: getOverallSizeLabel(config) },
+    { label: 'Frame', value: getFrameSectionLabel(config) },
+    { label: 'Door / shutter', value: getDoorShutterSizesLabel(config) },
+    { label: 'Wall thickness', value: getWallThicknessLabel(config) },
+    { label: 'Aluminium alloy', value: displaySpecOrDash(config.aluminiumAlloy) },
+    ...(isFrameless
+      ? []
+      : [{ label: compact ? 'Color' : 'Profile Color', value: colorLabel || '—' }]),
+    { label: 'Hardware brand', value: displaySpecOrDash(config.hardwareBrand) },
+    { label: 'Hardware type', value: displaySpecOrDash(config.hardwareType) },
+    { label: 'Hardware color', value: displaySpecOrDash(config.hardwareColor) },
+  ];
+  return (
+    <>
+      {rows.map((row) => (
+        <tr key={row.label}>
+          <td className={labelClass}>{row.label}{compact ? '' : ':'}</td>
+          <td>{row.value}</td>
+        </tr>
+      ))}
+      {note ? (
+        <tr>
+          <td className={compact ? undefined : 'pr-2 font-semibold pt-1 align-top'}>Note{compact ? '' : ':'}</td>
+          <td className={compact ? undefined : 'pt-1 whitespace-pre-wrap'}>{note}</td>
+        </tr>
+      ) : null}
+    </>
+  );
+};
 
 const numWords = {
     a: ['', 'one ', 'two ', 'three ', 'four ', 'five ', 'six ', 'seven ', 'eight ', 'nine ', 'ten ', 'eleven ', 'twelve ', 'thirteen ', 'fourteen ', 'fifteen ', 'sixteen ', 'seventeen ', 'eighteen ', 'nineteen '],
@@ -558,6 +606,14 @@ const PrintWindowSizeChart: React.FC<{ config: WindowConfig }> = ({ config }) =>
           <tr>
             <td>Overall</td>
             <td>{w} × {h}</td>
+          </tr>
+          <tr>
+            <td>Frame</td>
+            <td>{getFrameSectionLabel(config).replace(' mm', '')}</td>
+          </tr>
+          <tr>
+            <td>Wall thk.</td>
+            <td>{getWallThicknessLabel(config).replace(' mm', '')}</td>
           </tr>
           {widthSegs.length > 1 ? (
             <tr>
@@ -2405,7 +2461,11 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
                 <div className="print-header" style={{height: 'auto'}}>
                     <div className="flex justify-between items-start">
                         <div className="flex items-start gap-4">
-                            <img src={settings.company.logo || '/logo.jpg'} alt="Company Logo" className="w-20 h-20 object-contain" />
+                            <img
+                              src={settings.company.logo || '/logo.jpg'}
+                              alt="Company Logo"
+                              className="print-company-logo"
+                            />
                             <div>
                                 <h2 className="text-2xl font-bold text-black">{settings.company.name}</h2>
                                 <p className="text-xs whitespace-pre-wrap">{settings.company.address}</p>
@@ -2599,10 +2659,11 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
                                                               <td>Series</td>
                                                               <td>{unit.config.series?.name ?? '—'}</td>
                                                             </tr>
-                                                            <tr>
-                                                              <td>Color</td>
-                                                              <td>{colorLabel}</td>
-                                                            </tr>
+                                                            <PrintWindowSpecRows
+                                                              config={unit.config}
+                                                              colorLabel={colorLabel}
+                                                              compact
+                                                            />
                                                             <tr>
                                                               <td>Glass</td>
                                                               <td>{glassDescription}</td>
@@ -2720,9 +2781,11 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
                                                         <tr><td className='pr-2 font-semibold'>Series:</td><td>{item.config.series.name}</td></tr>
                                                         <tr><td className='pr-2 font-semibold'>Area:</td><td>{totalArea.toFixed(2)} {item.areaType}</td></tr>
                                                         <tr className="hide-for-arch"><td className='pr-2 font-semibold'>Unit Amount:</td><td>₹{Math.round(unitAmount).toLocaleString('en-IN')}</td></tr>
-                                                        {!isFrameless && (
-                                                            <tr><td className='pr-2 font-semibold'>Profile Color:</td><td>{getColorName(item)}</td></tr>
-                                                        )}
+                                                        <PrintWindowSpecRows
+                                                          config={item.config}
+                                                          colorLabel={getColorName(item)}
+                                                          isFrameless={isFrameless}
+                                                        />
                                                         <tr><td className='pr-2 font-semibold'>Glass:</td><td>{glassDescription}</td></tr>
                                                         {Object.entries(panelCounts).map(([name, count]) => count > 0 && (<tr key={name}><td className='pr-2 font-semibold'>{name}:</td><td>{count} Nos.</td></tr>))}
                                                         {relevantHardware.length > 0 && (
@@ -2812,6 +2875,9 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
 
                     <div className="print-footer-container">
                         <div className="print-footer">
+                            <div className="print-footer-watermark">
+                              <PrintWeosCredit />
+                            </div>
                             <div className="text-right text-[7pt] self-end">
                                 Page <span className="page-counter"></span>
                             </div>

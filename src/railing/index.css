@@ -3393,6 +3393,14 @@ body.pdf-export-active .quotation-print-root.pdf-export-mode .qdoc-header-panels
   display: none !important;
 }
 
+.quotation-print-root.pdf-export-mode .quotation-doc,
+.quotation-print-root.pdf-export-mode .qdoc-panel,
+.quotation-print-root.pdf-export-mode .qdoc-intro,
+.quotation-print-root.pdf-export-mode .qdoc-final-totals,
+.quotation-print-root.pdf-export-mode .quote-item-block {
+  background: #ffffff !important;
+}
+
 body.pdf-export-active:not(.quotation-capture-active) .no-print,
 body.pdf-export-active:not(.quotation-capture-active) .workspace-main,
 body.pdf-export-active:not(.quotation-capture-active) .drawer-root {
@@ -3408,7 +3416,7 @@ body.quotation-capture-active .quotation-print-root.quotation-print-capture {
 .quotation-doc {
   font-family: Georgia, 'Times New Roman', 'Palatino Linotype', Times, serif;
   color: #1a2332;
-  background: #fff;
+  background: #ffffff;
   width: 198mm;
   max-width: 198mm;
   box-sizing: border-box;
@@ -3473,10 +3481,10 @@ body.quotation-capture-active .quotation-print-root.quotation-print-capture {
 
 .qdoc-logo-head {
   display: block;
-  width: auto;
-  max-width: 100%;
-  max-height: 64px;
-  height: auto;
+  width: auto !important;
+  max-width: 58mm;
+  height: 26mm !important;
+  max-height: 26mm !important;
   object-fit: contain;
   object-position: left center;
 }
@@ -3742,6 +3750,23 @@ body.quotation-capture-active .quotation-print-root.quotation-print-capture {
 
 .qdoc-print-footer {
   display: none;
+}
+
+.qdoc-print-watermark {
+  flex: 1;
+  text-align: left;
+  font-size: 7pt;
+  color: #888;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.qdoc-print-watermark .print-weos-link {
+  color: #2563eb;
+  text-decoration: underline;
+  font-weight: 600;
 }
 
 .qdoc-terms-list {
@@ -4490,7 +4515,24 @@ body.quotation-capture-active .quotation-print-root.quotation-print-capture {
   }
 
   body:has(.railing-designer) .qdoc-print-footer {
-    display: none !important;
+    display: flex !important;
+    position: fixed;
+    bottom: 0;
+    left: 15mm;
+    right: 15mm;
+    height: 12mm;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 4mm;
+    border-top: 0.2mm solid #ccc;
+    padding-top: 1.5mm;
+    font-size: 7.5pt;
+    color: #666;
+    background: #fff;
+  }
+
+  body:has(.railing-designer) .qdoc-page-num::after {
+    content: counter(page) " / " counter(pages);
   }
 
   body:has(.railing-designer) .qdoc-terms-section {

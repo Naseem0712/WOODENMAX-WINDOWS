@@ -38,21 +38,26 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: null, // registered explicitly via src/pwaRegister.ts
       // Service worker in dev expects generated files under dev-dist/; leave off to avoid ENOENT on sw.js
       devOptions: {
         enabled: false,
         navigateFallbackAllowlist: [/^\/.*/],
       },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         navigateFallbackDenylist: [/^\/sitemap\.xml$/, /^\/robots\.txt$/, /^\/llms\.txt$/],
         navigateFallbackAllowlist: [/^\/.*/],
         disableDevLogs: true,
       },
       includeAssets: ['favicon.png', 'logo.jpg'],
       manifest: {
-        name: 'WoodenMax Window Designer',
-        short_name: 'WoodenMax',
-        description: 'System window calculators, design & window quotations. Profile optimizers, PDF & BOM — WoodenMax Window Designer.',
+        name: 'WEOS by WoodenMax',
+        short_name: 'WEOS',
+        description:
+          'WEOS — WoodenMax window & railing design calculator. Instant quotations, PDF, BOM. Works online & offline.',
         theme_color: '#1e293b',
         background_color: '#0f172a',
         display: 'standalone',

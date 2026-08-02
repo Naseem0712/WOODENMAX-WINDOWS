@@ -12,20 +12,20 @@ export function sanitizeFilenameSegment(input: string | null | undefined, fallba
 
 export function quotationPdfFilename(customerName: string, dateStamp: string): string {
   const customer = sanitizeFilenameSegment(customerName, 'Customer');
-  return `WoodenMax-Quotation-${customer}-${dateStamp}.pdf`;
+  return `WEOS-Quotation-${customer}-${dateStamp}.pdf`;
 }
 
 export function bomPdfFilename(customerName: string, dateStamp: string): string {
   const customer = sanitizeFilenameSegment(customerName, 'Customer');
-  return `WoodenMax-BOM-${customer}-${dateStamp}.pdf`;
+  return `WEOS-BOM-${customer}-${dateStamp}.pdf`;
 }
 
 export function printDocumentTitleForQuotation(customerName: string): string {
   const customer = sanitizeFilenameSegment(customerName, 'Customer');
-  return `WoodenMax-Quotation-${customer}`;
+  return `WEOS-Quotation-${customer}`;
 }
 
 export function printDocumentTitleForBom(customerName: string): string {
   const customer = sanitizeFilenameSegment(customerName, 'Customer');
-  return `WoodenMax-BOM-${customer}`;
+  return `WEOS-BOM-${customer}`;
 }

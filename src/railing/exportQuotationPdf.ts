@@ -1,3 +1,4 @@
+import { stampWoodenMaxPageNumbers, openPdfBlobPrintDialog, preloadHtml2Pdf } from '../utils/quotationPdfCapture';
 import {
   QDOC_CONTENT_MM,
   QDOC_CONTENT_PX,
@@ -5,7 +6,7 @@ import {
   QDOC_PDF_MARGINS_MM,
 } from './quotationPrintSheet';
 import { stampSearchableTextLayer } from './pdfSearchableTextLayer';
-import { openPdfBlobPrintDialog, preloadHtml2Pdf } from '../utils/quotationPdfCapture';
+
 
 type JsPdfDoc = {
   internal: {
@@ -13,12 +14,15 @@ type JsPdfDoc = {
     pageSize: { getWidth: () => number; getHeight: () => number };
   };
   setPage: (n: number) => void;
-  setFillColor: (n: number) => void;
+  setFillColor: (...n: number[]) => void;
   rect: (...args: number[]) => void;
-  setTextColor: (n: number) => void;
+  setTextColor: (...n: number[]) => void;
   setFont: (a: string, b: string) => void;
   setFontSize: (n: number) => void;
   text: (t: string, x: number, y: number, o?: { align: string }) => void;
+  getTextWidth?: (t: string) => number;
+  link?: (x: number, y: number, w: number, h: number, o: { url: string }) => void;
+  textWithLink?: (t: string, x: number, y: number, o: { url: string }) => void;
   output: (type: 'blob') => Blob;
 };
 
@@ -43,25 +47,8 @@ async function loadHtml2Pdf(): Promise<Html2PdfChain> {
 }
 
 function stampPdfPageNumbers(pdf: JsPdfDoc): void {
-  try {
-    const totalPages = pdf.internal.getNumberOfPages();
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.setTextColor(110);
-    for (let i = 1; i <= totalPages; i++) {
-      pdf.setPage(i);
-      pdf.setFillColor(255, 255, 255);
-      pdf.rect(pageW - 42, pageH - 12, 38, 8, 'F');
-      pdf.setTextColor(110);
-      pdf.text(`Page ${i} of ${totalPages}`, pageW - 8, pageH - 6, { align: 'right' });
-    }
-  } catch {
-    /* optional page stamp */
-  }
+  stampWoodenMaxPageNumbers(pdf as Parameters<typeof stampWoodenMaxPageNumbers>[0]);
 }
-
 function pdfCaptureOptions(element: HTMLElement, filename: string) {
   const captureW = element.offsetWidth || QDOC_CONTENT_PX;
   const captureH = element.scrollHeight || element.offsetHeight || 1123;
